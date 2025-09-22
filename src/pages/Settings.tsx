@@ -133,7 +133,7 @@ export const Settings: React.FC = () => {
 
   // Load users and store settings on component mount
   useEffect(() => {
-    loadUsers();
+      loadUsers();
     loadStoreSettings();
   }, [loadUsers, loadStoreSettings]);
 
@@ -596,7 +596,7 @@ export const Settings: React.FC = () => {
                       ? 'bg-primary-500/20 backdrop-blur-sm border border-primary-400/30'
                       : 'bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20'
                   }`}>
-                    <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4" />
                   </div>
                   <span className="hidden sm:inline">{tab.label}</span>
                 </button>

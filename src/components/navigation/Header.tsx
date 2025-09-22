@@ -7,7 +7,6 @@ import { useStore } from '../../context/StoreContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { GlassmorphismIcon } from '../ui/GlassmorphismIcon';
 import { NotificationDropdown } from '../ui/NotificationDropdown';
-import { useNotificationDemo } from '../../hooks/useNotificationDemo';
 // import { Button } from '../ui/Button';
 
 export const Header: React.FC = () => {
@@ -19,8 +18,6 @@ export const Header: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Demo notifications - remove this in production
-  useNotificationDemo();
 
   const handleLogout = () => {
     logout();
