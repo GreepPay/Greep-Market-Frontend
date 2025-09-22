@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { apiService } from '../services/api';
+import { app } from '../config/environment';
 
 interface Store {
   _id: string;
@@ -70,7 +71,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // Fallback to default store if API fails
           const fallbackStore: Store = {
             _id: user.store_id,
-            name: 'Greep Market',
+            name: app.name,
             address: 'Store Address - Update in Settings',
             phone: 'Phone - Update in Settings',
             email: 'Email - Update in Settings',

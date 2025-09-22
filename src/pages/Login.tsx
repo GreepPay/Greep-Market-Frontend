@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Eye, EyeOff, User, Lock } from 'lucide-react';
+import { Eye, EyeOff, User, Lock } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 // import { Input } from '../components/ui/Input'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { Card } from '../components/ui/Card';
 import { useAuth } from '../context/AuthContext';
+import { app } from '../config/environment';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -38,7 +39,7 @@ export const Login: React.FC = () => {
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <img src="./icons/GreepMarket-Green_BG-White.svg" alt="Greep Market" className="h-12 w-12 text-white mx-auto mb-4 justify-center" />
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Greep Market</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{app.name}</h1>
           <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
         </div>
 
@@ -127,7 +128,7 @@ export const Login: React.FC = () => {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500">
-            © 2024 Greep Market. All rights reserved.
+            © 2024 {app.name}. All rights reserved.
           </p>
         </div>
       </div>
