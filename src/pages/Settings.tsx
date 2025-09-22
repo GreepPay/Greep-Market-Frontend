@@ -7,16 +7,19 @@ import {
   Trash2,
   Edit,
   Eye,
-  EyeOff
+  EyeOff,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useStore } from '../context/StoreContext';
+import { useTheme } from '../context/ThemeContext';
 import { apiService } from '../services/api';
 import { User } from '../types';
 import { UserProfileModal } from '../components/ui/UserProfileModal';
 import { UserEditModal } from '../components/ui/UserEditModal';
 import { AuditLogs } from '../components/ui/AuditLogs';
-import { GlassmorphismIcon } from '../components/ui/GlassmorphismIcon';
 import toast from 'react-hot-toast';
 
 interface NewUser {
@@ -41,6 +44,7 @@ interface StoreSettings {
 export const Settings: React.FC = () => {
   const { user: currentUser } = useAuth();
   const { refreshStores } = useStore();
+  const { theme, setTheme, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +195,7 @@ export const Settings: React.FC = () => {
     { id: 'profile', label: 'My Profile', icon: Users },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'store', label: 'Store Settings', icon: Database },
+    { id: 'theme', label: 'Theme & Appearance', icon: Sun },
     { id: 'audit', label: 'Audit Logs', icon: Shield }
   ];
 
@@ -405,10 +410,90 @@ export const Settings: React.FC = () => {
   const renderAuditLogs = () => (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Audit Logs</h2>
-        <p className="text-sm text-gray-600">Track all user activities and system changes</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit Logs</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Track all user activities and system changes</p>
       </div>
       <AuditLogs />
+    </div>
+  );
+
+  const renderThemeSettings = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Theme & Appearance</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Customize the appearance of your application</p>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Theme Preference
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              onClick={() => setTheme('light')}
+              className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                theme === 'light'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <div className="flex flex-col items-center space-y-2">
+                <Sun className={`h-6 w-6 ${theme === 'light' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${theme === 'light' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                  Light
+                </span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => setTheme('dark')}
+              className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                theme === 'dark'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <div className="flex flex-col items-center space-y-2">
+                <Moon className={`h-6 w-6 ${theme === 'dark' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${theme === 'dark' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                  Dark
+                </span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => setTheme('auto')}
+              className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                theme === 'auto'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <div className="flex flex-col items-center space-y-2">
+                <Monitor className={`h-6 w-6 ${theme === 'auto' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} />
+                <span className={`text-sm font-medium ${theme === 'auto' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                  Auto
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <div className={`w-3 h-3 rounded-full ${isDark ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Current Theme: {isDark ? 'Dark Mode' : 'Light Mode'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {theme === 'auto' ? 'Following system preference' : `Manually set to ${theme} mode`}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -559,6 +644,8 @@ export const Settings: React.FC = () => {
         return renderUserManagement();
       case 'store':
         return renderStoreSettings();
+      case 'theme':
+        return renderThemeSettings();
       case 'audit':
         return renderAuditLogs();
       default:
