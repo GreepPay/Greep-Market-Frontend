@@ -261,8 +261,8 @@ export const Reports: React.FC = () => {
                   <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-                  <p className="text-gray-600">Analyze your business performance</p>
+                  <h1 className="text-xl font-bold text-gray-900">Reports & Analytics</h1>
+                  <p className="text-sm text-gray-600">Analyze your business performance</p>
                 </div>
               </div>
               <div className="flex items-center justify-center py-12">
@@ -290,8 +290,8 @@ export const Reports: React.FC = () => {
                     <BarChart3 className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-                    <p className="text-gray-600">Analyze your business performance with detailed insights</p>
+                    <h1 className="text-xl font-bold text-gray-900">Reports & Analytics</h1>
+                    <p className="text-sm text-gray-600">Analyze your business performance with detailed insights</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
@@ -325,7 +325,7 @@ export const Reports: React.FC = () => {
         {/* System Status Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">System Status</h2>
+            <h2 className="text-lg font-semibold text-gray-900">System Status</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Order Sources */}
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
@@ -434,7 +434,7 @@ export const Reports: React.FC = () => {
         {/* Enhanced Report Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">Report Types</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Report Types</h2>
             <div className="flex flex-wrap gap-3">
               {reportTabs.map(tab => {
                 const Icon = tab.icon;

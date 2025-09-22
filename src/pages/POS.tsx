@@ -258,8 +258,8 @@ export const POS: React.FC = () => {
               <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CreditCard className="h-8 w-8 text-primary-600" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Loading POS System</h1>
-              <p className="text-gray-600">Please wait while we verify your authentication...</p>
+              <h1 className="text-lg font-bold text-gray-900 mb-2">Loading POS System</h1>
+              <p className="text-sm text-gray-600">Please wait while we verify your authentication...</p>
             </div>
           </div>
         </div>
@@ -277,8 +277,8 @@ export const POS: React.FC = () => {
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CreditCard className="h-8 w-8 text-red-600" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Authentication Required</h1>
-              <p className="text-gray-600 mb-6">You need to be logged in to access the POS system.</p>
+              <h1 className="text-lg font-bold text-gray-900 mb-2">Authentication Required</h1>
+              <p className="text-sm text-gray-600 mb-6">You need to be logged in to access the POS system.</p>
               <Button 
                 onClick={() => window.location.href = '/login'}
                 className="bg-primary-600 hover:bg-primary-700"
@@ -306,8 +306,8 @@ export const POS: React.FC = () => {
                     <CreditCard className="h-6 w-6 text-white" />
                   </div>
       <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Point of Sale</h1>
-                    <p className="text-gray-600">Process customer transactions quickly and efficiently</p>
+                    <h1 className="text-xl font-bold text-gray-900">Point of Sale</h1>
+                    <p className="text-sm text-gray-600">Process customer transactions quickly and efficiently</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
@@ -353,7 +353,7 @@ export const POS: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Products</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Products</h2>
                   <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
                     {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
                   </span>
@@ -388,7 +388,7 @@ export const POS: React.FC = () => {
                   <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <X className="h-12 w-12 text-gray-400" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">No products found</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">No products found</h3>
                   <p className="text-gray-500 mb-8 leading-relaxed">
                     Try adjusting your search terms or scan a barcode to find products.
                   </p>

@@ -16,7 +16,7 @@ interface AppContextType extends AppState {
   addTransaction: (transaction: any) => Promise<void>;
   updateInventory: (productId: string, quantity: number) => Promise<void>;
   refreshDashboard: () => Promise<void>;
-  loadProducts: (page?: number, limit?: number) => Promise<void>;
+  loadProducts: (page?: number, limit?: number, search?: string, category?: string) => Promise<void>;
   loadAllProducts: () => Promise<void>;
   loadTransactions: () => Promise<void>;
   loadInventoryAlerts: () => Promise<void>;
@@ -127,7 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Load data sequentially to avoid overwhelming the server
-      await loadProducts();
+      await loadProducts(1, 20);
       await loadTransactions();
       await loadInventoryAlerts();
       await refreshDashboard();
@@ -148,17 +148,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
-  const loadProducts = useCallback(async (page: number = 1, limit: number = 20) => {
+  const loadProducts = useCallback(async (page: number = 1, limit: number = 20, search?: string, category?: string) => {
     if (!isAuthenticated || !user) {
       console.log('User not authenticated, skipping products load');
       return;
     }
     try {
-      const response = await apiService.getProducts({
+      const params: any = {
         store_id: user?.store_id,
         page,
         limit
-      });
+      };
+      
+      // Add search parameter if provided
+      if (search && search.trim()) {
+        params.search = search.trim();
+      }
+      
+      // Add category parameter if provided and not 'all'
+      if (category && category !== 'all') {
+        params.category = category;
+      }
+      
+      const response = await apiService.getProducts(params);
       console.log('Products loaded successfully:', response);
       dispatch({ type: 'SET_PRODUCTS', payload: response.products });
       dispatch({ 
@@ -438,7 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quantity,
         reason: 'Manual adjustment',
       });
-      await loadProducts(); // Reload products to get updated quantities
+      await loadProducts(1, 20); // Reload products to get updated quantities
       toast.success('Inventory updated');
     } catch (error) {
       console.error('Failed to update inventory:', error);

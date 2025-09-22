@@ -8,8 +8,9 @@ import {
   DashboardMetrics,
   PriceHistory 
 } from '../types';
+import { api } from '../config/environment';
 
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+const API_BASE_URL = api.baseUrl;
 
 class ApiService {
   private accessToken: string | null = null;

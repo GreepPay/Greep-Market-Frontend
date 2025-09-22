@@ -304,8 +304,8 @@ export const Expenses: React.FC = () => {
                   <DollarSign className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Expense Management</h1>
-                  <p className="text-gray-600">Track and manage your business expenses</p>
+                  <h1 className="text-xl font-bold text-gray-900">Expense Management</h1>
+                  <p className="text-sm text-gray-600">Track and manage your business expenses</p>
                 </div>
               </div>
               <div className="flex items-center justify-center py-12">
@@ -333,8 +333,8 @@ export const Expenses: React.FC = () => {
                     <DollarSign className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Expense Management</h1>
-                    <p className="text-gray-600">Track and manage your business expenses efficiently</p>
+                    <h1 className="text-xl font-bold text-gray-900">Expense Management</h1>
+                    <p className="text-sm text-gray-600">Track and manage your business expenses efficiently</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
@@ -517,7 +517,7 @@ export const Expenses: React.FC = () => {
               <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <DollarSign className="h-12 w-12 text-gray-400" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">No expenses found</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-3">No expenses found</h3>
               <p className="text-gray-500 mb-8 leading-relaxed">
                 {searchTerm || filterCategory || filterPaymentMethod || filterDateRange
                   ? 'Try adjusting your search terms or filter criteria to find expenses.'
@@ -597,7 +597,7 @@ export const Expenses: React.FC = () => {
             <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">Add New Expense</h2>
+                  <h2 className="text-lg font-bold text-gray-900">Add New Expense</h2>
                   <button
                     onClick={() => setShowAddExpense(false)}
                     className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
@@ -765,7 +765,7 @@ export const Expenses: React.FC = () => {
                 <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mr-4">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900">Delete Expense</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Expense</h3>
               </div>
               <p className="text-gray-600 mb-6 leading-relaxed">
                 Are you sure you want to delete this expense? This action cannot be undone and will permanently remove the expense from your records.

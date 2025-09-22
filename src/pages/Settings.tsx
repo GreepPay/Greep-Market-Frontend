@@ -204,8 +204,8 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">My Profile</h2>
-          <p className="text-gray-600">Manage your personal information and account settings</p>
+          <h2 className="text-lg font-semibold text-gray-900">My Profile</h2>
+          <p className="text-sm text-gray-600">Manage your personal information and account settings</p>
         </div>
         <button
           onClick={() => setShowProfileModal(true)}
@@ -223,7 +223,7 @@ export const Settings: React.FC = () => {
             <Users className="h-8 w-8 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900">
               {currentUser?.first_name && currentUser?.last_name 
                 ? `${currentUser.first_name} ${currentUser.last_name}`
                 : currentUser?.email || 'User'
@@ -290,8 +290,8 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">User Management</h2>
-          <p className="text-gray-600">Manage admins, managers, and cashiers</p>
+          <h2 className="text-lg font-semibold text-gray-900">User Management</h2>
+          <p className="text-sm text-gray-600">Manage admins, managers, and cashiers</p>
         </div>
         <button
           onClick={() => setShowAddUser(true)}
@@ -405,8 +405,8 @@ export const Settings: React.FC = () => {
   const renderAuditLogs = () => (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Audit Logs</h2>
-        <p className="text-gray-600">Track all user activities and system changes</p>
+        <h2 className="text-lg font-semibold text-gray-900">Audit Logs</h2>
+        <p className="text-sm text-gray-600">Track all user activities and system changes</p>
       </div>
       <AuditLogs />
     </div>
@@ -415,8 +415,8 @@ export const Settings: React.FC = () => {
   const renderStoreSettings = () => (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Store Settings</h2>
-        <p className="text-gray-600">Configure your store information and preferences</p>
+        <h2 className="text-lg font-semibold text-gray-900">Store Settings</h2>
+        <p className="text-sm text-gray-600">Configure your store information and preferences</p>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
@@ -570,8 +570,8 @@ export const Settings: React.FC = () => {
     <div className="p-4 space-y-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-screen transition-colors duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage your application settings and preferences</p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Settings</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Manage your application settings and preferences</p>
         </div>
       </div>
 

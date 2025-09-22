@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { Bell, User, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStore } from '../../context/StoreContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { app } from '../../config/environment';
 import { GlassmorphismIcon } from '../ui/GlassmorphismIcon';
 import { NotificationDropdown } from '../ui/NotificationDropdown';
 // import { Button } from '../ui/Button';
 
 export const Header: React.FC = () => {
-  const { inventoryAlerts } = useApp();
   const { user, logout, isLoading } = useAuth();
   const { currentStore } = useStore();
   const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount } = useNotifications();
@@ -38,7 +37,7 @@ export const Header: React.FC = () => {
           
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              {currentStore?.name || 'Greep Market'}
+              {currentStore?.name || app.name}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {currentStore?.address || 'Retail Management System'}

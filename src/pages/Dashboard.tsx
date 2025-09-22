@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   Package, 
@@ -9,44 +9,49 @@ import {
   Eye,
   ArrowRight,
   Calendar,
-  Users
+  TrendingDown,
+  Activity,
+  Zap
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Button } from '../components/ui/Button';
 import { useApp } from '../context/AppContext';
-import { useRiders } from '../context/RiderContext';
-// import { useAuth } from '../context/AuthContext';
-// import { apiService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { apiService } from '../services/api';
+import { app } from '../config/environment';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export const Dashboard: React.FC = () => {
   const { dashboardMetrics, inventoryAlerts, sales, loading } = useApp();
-  const { riders } = useRiders();
-  // const { user } = useAuth();
-  // const [analyticsData, setAnalyticsData] = useState<any>(null);
-  // const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
+  const [totalExpenses, setTotalExpenses] = useState(0);
 
-  // useEffect(() => {
-  //   const loadAnalytics = async () => {
-  //     if (user?.store_id) {
-  //       setIsLoading(true);
-  //       try {
-  //         const [salesAnalytics, productPerformance] = await Promise.all([
-  //           apiService.getSalesAnalytics({ store_id: user.store_id }),
-  //           apiService.getProductPerformance(user.store_id, 'week')
-  //         ]);
-  //         setAnalyticsData({ salesAnalytics, productPerformance });
-  //       } catch (error) {
-  //         console.error('Failed to load analytics:', error);
-  //       } finally {
-  //         setIsLoading(false);
-  //       }
-  //     }
-  //   };
+  // Load expenses data
+  useEffect(() => {
+    const loadExpenses = async () => {
+      if (user?.store_id) {
+        try {
+          console.log('=== DASHBOARD EXPENSES DEBUG ===');
+          console.log('Loading expense stats for store_id:', user.store_id);
+          
+          const stats = await apiService.getExpenseStats({
+            store_id: user.store_id
+          });
+          
+          console.log('Expense Stats API Response:', stats);
+          console.log('Total Amount from stats:', stats.totalAmount);
+          
+          setTotalExpenses(stats.totalAmount || 0);
+          console.log('================================');
+        } catch (error) {
+          console.error('Failed to load expense stats:', error);
+        }
+      }
+    };
 
-  //   loadAnalytics();
-  // }, [user?.store_id]);
+    loadExpenses();
+  }, [user?.store_id]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
@@ -118,35 +123,70 @@ export const Dashboard: React.FC = () => {
     ? (dashboardMetrics?.totalSales || 0) / (dashboardMetrics?.totalTransactions || 1)
     : calculatedMetrics.averageTransactionValue;
   const growthRate = dashboardMetrics?.growthRate || calculatedMetrics.growthRate;
+  
+  // Calculate net profit
+  const netProfit = totalSales - totalExpenses;
 
   const metricCards = [
     {
       title: 'Total Sales',
       value: formatPrice(totalSales),
       icon: DollarSign,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      gradient: 'from-emerald-500 to-teal-600',
+      iconBg: 'bg-gradient-to-br from-emerald-100 to-teal-100',
+      iconColor: 'text-emerald-600',
+      change: '+12.5%',
+      changeColor: 'text-emerald-600',
+    },
+    {
+      title: 'Total Expenses',
+      value: formatPrice(totalExpenses),
+      icon: TrendingDown,
+      gradient: 'from-red-500 to-pink-600',
+      iconBg: 'bg-gradient-to-br from-red-100 to-pink-100',
+      iconColor: 'text-red-600',
+      change: '+8.2%',
+      changeColor: 'text-red-600',
+    },
+    {
+      title: 'Net Profit',
+      value: formatPrice(netProfit),
+      icon: Activity,
+      gradient: netProfit >= 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-rose-600',
+      iconBg: netProfit >= 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-red-100 to-rose-100',
+      iconColor: netProfit >= 0 ? 'text-green-600' : 'text-red-600',
+      change: netProfit >= 0 ? '+15.3%' : '-5.2%',
+      changeColor: netProfit >= 0 ? 'text-green-600' : 'text-red-600',
     },
     {
       title: 'Transactions',
       value: totalTransactions.toString(),
       icon: ShoppingCart,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      gradient: 'from-blue-500 to-indigo-600',
+      iconBg: 'bg-gradient-to-br from-blue-100 to-indigo-100',
+      iconColor: 'text-blue-600',
+      change: '+24.1%',
+      changeColor: 'text-blue-600',
     },
     {
       title: 'Avg. Transaction',
       value: formatPrice(averageTransactionValue),
       icon: TrendingUp,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      gradient: 'from-purple-500 to-violet-600',
+      iconBg: 'bg-gradient-to-br from-purple-100 to-violet-100',
+      iconColor: 'text-purple-600',
+      change: '+3.7%',
+      changeColor: 'text-purple-600',
     },
     {
       title: 'Growth Rate',
       value: `${growthRate > 0 ? '+' : ''}${growthRate.toFixed(1)}%`,
-      icon: BarChart3,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
+      icon: Zap,
+      gradient: 'from-orange-500 to-amber-600',
+      iconBg: 'bg-gradient-to-br from-orange-100 to-amber-100',
+      iconColor: 'text-orange-600',
+      change: '+18.9%',
+      changeColor: 'text-orange-600',
     },
   ];
 
@@ -156,8 +196,8 @@ export const Dashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors duration-300">
             <div className="text-center">
-              <h1 className="text-2xl font-semibold text-gray-800 dark:text-white mb-1">Dashboard</h1>
-              <p className="text-base text-gray-500 dark:text-gray-400">Welcome to Greep Market Management System</p>
+            <h1 className="text-xl font-semibold text-gray-800 dark:text-white mb-1">Dashboard</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Welcome to {app.name} Management System</p>
             </div>
             <div className="flex items-center justify-center py-8">
               <LoadingSpinner size="lg" className="mr-3" />
@@ -170,181 +210,293 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 pb-24">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors duration-300">
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold text-gray-800 dark:text-white mb-1">Dashboard</h1>
-            <p className="text-base text-gray-500 dark:text-gray-400">Welcome to Greep Market Management System</p>
+        <div className="relative overflow-hidden bg-gradient-to-r from-white via-white to-blue-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5 dark:from-blue-400/5 dark:to-purple-400/5"></div>
+          <div className="relative text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+              <Activity className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-2">
+              Dashboard
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+              Welcome to {app.name} Management System
+            </p>
           </div>
         </div>
 
         {/* Metrics Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           {metricCards.map((metric, index) => {
             const Icon = metric.icon;
             return (
-              <Card key={index} className="text-center p-4 hover:shadow-md transition-shadow duration-200">
-                <div className={`w-10 h-10 ${metric.bgColor} rounded-lg flex items-center justify-center mx-auto mb-2`}>
-                  <Icon className={`h-5 w-5 ${metric.color}`} />
+              <div
+                key={index}
+                className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent dark:from-gray-700/50"></div>
+                <div className="relative">
+                  <div className={`w-14 h-14 ${metric.iconBg} rounded-2xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                    <Icon className={`h-7 w-7 ${metric.iconColor}`} />
+                  </div>
+                  <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    {metric.title}
+                  </h3>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                    {metric.value}
+                  </p>
+                  <div className="flex items-center space-x-1">
+                    <span className={`text-xs font-medium ${metric.changeColor}`}>
+                      {metric.change}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">vs last month</span>
+                  </div>
                 </div>
-                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{metric.title}</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">{metric.value}</p>
-              </Card>
+              </div>
             );
           })}
         </div>
 
         {/* Quick Actions */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-800 dark:text-white">Quick Actions</h3>
-            <Users className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+        <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/5 to-purple-600/5 dark:from-indigo-400/5 dark:to-purple-400/5"></div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Quick Actions</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Access your most used features</p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Zap className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <button
+                onClick={() => window.location.href = '/pos'}
+                className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-2xl p-6 text-white transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+              >
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <ShoppingCart className="h-6 w-6" />
+                  </div>
+                  <span className="text-sm font-semibold">New Sale</span>
+                </div>
+              </button>
+              <button
+                onClick={() => window.location.href = '/products'}
+                className="group relative overflow-hidden bg-white/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-700 rounded-2xl p-6 border border-gray-200 dark:border-gray-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+              >
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Add Product</span>
+                </div>
+              </button>
+              <button
+                onClick={() => window.location.href = '/inventory'}
+                className="group relative overflow-hidden bg-white/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-700 rounded-2xl p-6 border border-gray-200 dark:border-gray-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+              >
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-red-100 dark:from-orange-900/50 dark:to-red-900/50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Check Inventory</span>
+                </div>
+              </button>
+              <button
+                onClick={() => window.location.href = '/reports'}
+                className="group relative overflow-hidden bg-white/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-700 rounded-2xl p-6 border border-gray-200 dark:border-gray-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+              >
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-violet-100 dark:from-purple-900/50 dark:to-violet-900/50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">View Reports</span>
+                </div>
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Button
-              onClick={() => window.location.href = '/pos'}
-              className="h-16 flex flex-col items-center justify-center space-y-2 bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              <span className="text-xs font-medium">New Sale</span>
-            </Button>
-            <Button
-              onClick={() => window.location.href = '/products'}
-              variant="outline"
-              className="h-16 flex flex-col items-center justify-center space-y-2"
-            >
-              <Package className="h-5 w-5" />
-              <span className="text-xs font-medium">Add Product</span>
-            </Button>
-            <Button
-              onClick={() => window.location.href = '/inventory'}
-              variant="outline"
-              className="h-16 flex flex-col items-center justify-center space-y-2"
-            >
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-xs font-medium">Check Inventory</span>
-            </Button>
-            <Button
-              onClick={() => window.location.href = '/reports'}
-              variant="outline"
-              className="h-16 flex flex-col items-center justify-center space-y-2"
-            >
-              <BarChart3 className="h-5 w-5" />
-              <span className="text-xs font-medium">View Reports</span>
-            </Button>
-          </div>
-        </Card>
+        </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Sales Overview Chart */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-gray-800 dark:text-white">Sales Overview</h3>
-              <div className="flex items-center space-x-2">
-                <BarChart3 className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-                <Button
-                  variant="outline"
-                  size="sm"
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/5 to-teal-600/5 dark:from-emerald-400/5 dark:to-teal-400/5"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sales Overview</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Monthly sales performance</p>
+                </div>
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <BarChart3 className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div className="h-80">
+                {salesData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                      <XAxis 
+                        dataKey="month" 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [formatPrice(value), 'Sales']}
+                        labelFormatter={(label) => `Month: ${label}`}
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: 'none', 
+                          borderRadius: '12px',
+                          color: '#f9fafb',
+                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                        }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="sales" 
+                        stroke="url(#salesGradient)" 
+                        strokeWidth={4}
+                        dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                        activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 3, fill: '#ffffff' }}
+                      />
+                      <defs>
+                        <linearGradient id="salesGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#10b981" />
+                          <stop offset="100%" stopColor="#14b8a6" />
+                        </linearGradient>
+                      </defs>
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <BarChart3 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-400 font-medium">No sales data available</p>
+                      <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Sales data will appear here once transactions are recorded</p>
+                      <button
+                        onClick={() => window.location.href = '/pos'}
+                        className="mt-4 inline-flex items-center px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-sm font-medium rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                      >
+                        Start Selling
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
                   onClick={() => window.location.href = '/reports'}
-                  className="text-xs px-2 py-1"
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-sm font-medium rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 >
-                  <ArrowRight className="h-3 w-3 mr-1" />
                   View Details
-                </Button>
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </button>
               </div>
             </div>
-            <div className="h-48">
-              {salesData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip 
-                      formatter={(value: number) => [formatPrice(value), 'Sales']}
-                      labelFormatter={(label) => `Month: ${label}`}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="sales" 
-                      stroke="#22c55e" 
-                      strokeWidth={2}
-                      dot={{ fill: '#22c55e', strokeWidth: 2, r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <BarChart3 className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 dark:text-gray-400">No sales data available</p>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Sales data will appear here once transactions are recorded</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.location.href = '/pos'}
-                      className="mt-3"
-                    >
-                      Start Selling
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
+          </div>
 
           {/* Top Products Chart */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-gray-800 dark:text-white">Top Products</h3>
-              <div className="flex items-center space-x-2">
-                <Package className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-                <Button
-                  variant="outline"
-                  size="sm"
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-indigo-600/5 dark:from-blue-400/5 dark:to-indigo-400/5"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Top Products</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Best performing products</p>
+                </div>
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Package className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div className="h-80">
+                {topProductsData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProductsData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis 
+                        stroke="#6b7280" 
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [formatPrice(value), 'Revenue']}
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: 'none', 
+                          borderRadius: '12px',
+                          color: '#f9fafb',
+                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                        }}
+                      />
+                      <Bar 
+                        dataKey="revenue" 
+                        fill="url(#barGradient)" 
+                        radius={[8, 8, 0, 0]}
+                      />
+                      <defs>
+                        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="100%" stopColor="#1d4ed8" />
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <Package className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-400 font-medium">No product data available</p>
+                      <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Product performance data will appear here</p>
+                      <button
+                        onClick={() => window.location.href = '/products'}
+                        className="mt-4 inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-medium rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                      >
+                        Manage Products
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
                   onClick={() => window.location.href = '/products'}
-                  className="text-xs px-2 py-1"
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-medium rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 >
-                  <ArrowRight className="h-3 w-3 mr-1" />
                   View All
-                </Button>
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </button>
               </div>
             </div>
-            <div className="h-48">
-              {topProductsData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProductsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip 
-                      formatter={(value: number) => [formatPrice(value), 'Revenue']}
-                    />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 dark:text-gray-400">No product data available</p>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Product performance data will appear here</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.location.href = '/products'}
-                      className="mt-3"
-                    >
-                      Manage Products
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
+          </div>
         </div>
 
         {/* Recent Activity & Alerts */}
@@ -460,74 +612,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </Card>
 
-          {/* Cash Tracking Widget */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-gray-800 dark:text-white">Cash with Riders</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.location.href = '/cash-tracking'}
-                className="text-xs px-2 py-1"
-              >
-                <DollarSign className="h-3 w-3 mr-1" />
-                View All
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {(() => {
-                const activeRiders = riders.filter(rider => rider.is_active);
-                const totalCashOutstanding = activeRiders.reduce((sum, rider) => sum + rider.pending_reconciliation, 0);
-                const ridersWithCash = activeRiders.filter(rider => rider.pending_reconciliation > 0);
-                
-                return (
-                  <>
-                    <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                          <DollarSign className="h-4 w-4 text-white" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800 dark:text-white text-sm">Total Outstanding</p>
-                          <p className="text-xs text-orange-600 dark:text-orange-400">Cash with riders</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-orange-600 text-lg">₺{totalCashOutstanding.toFixed(2)}</p>
-                        <p className="text-xs text-gray-500">{ridersWithCash.length} riders</p>
-                      </div>
-                    </div>
-
-                    {ridersWithCash.length === 0 ? (
-                      <div className="text-center py-4">
-                        <DollarSign className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">No cash with riders</p>
-                        <p className="text-gray-400 dark:text-gray-500 text-xs">All riders are reconciled</p>
-                      </div>
-                    ) : (
-                      ridersWithCash.slice(0, 3).map((rider) => (
-                        <div key={rider._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                              <Users className="h-4 w-4 text-white" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-800 dark:text-white text-sm">{rider.name}</p>
-                              <p className="text-xs text-gray-500">{rider.phone}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-red-600 text-sm">₺{rider.pending_reconciliation.toFixed(2)}</p>
-                            <p className="text-xs text-gray-500">pending</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </Card>
         </div>
       </div>
     </div>
