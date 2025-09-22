@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 
 interface AppContextType extends AppState {
   addProduct: (product: Omit<Product, '_id' | 'created_at' | 'updated_at'>, images?: File[]) => Promise<void>;
-  updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Product>, images?: File[], replaceImages?: boolean) => Promise<void>;
   updateProductPrice: (productId: string, newPrice: number, reason?: string) => Promise<void>;
   getProductPriceHistory: (productId: string) => Promise<PriceHistory[]>;
   deleteProduct: (id: string) => Promise<void>;
@@ -172,6 +172,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const response = await apiService.getProducts(params);
       console.log('Products loaded successfully:', response);
+      console.log('=== PRODUCTS TAGS DEBUG ===');
+      console.log('Sample product:', response.products[0]);
+      if (response.products[0]) {
+        console.log('Sample product tags:', response.products[0].tags);
+        console.log('Sample product tags type:', typeof response.products[0].tags);
+        console.log('Sample product tags is array:', Array.isArray(response.products[0].tags));
+      }
+      console.log('============================');
       dispatch({ type: 'SET_PRODUCTS', payload: response.products });
       dispatch({ 
         type: 'SET_PRODUCTS_PAGINATION', 
@@ -272,9 +280,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateProduct = async (id: string, updates: Partial<Product>) => {
+  const updateProduct = async (id: string, updates: Partial<Product>, images?: File[], replaceImages: boolean = true) => {
     try {
-      const updatedProduct = await apiService.updateProduct(id, updates);
+      const updatedProduct = await apiService.updateProduct(id, updates, images, replaceImages);
       dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates: updatedProduct } });
       toast.success('Product updated');
     } catch (error) {

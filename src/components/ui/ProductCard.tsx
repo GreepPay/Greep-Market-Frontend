@@ -1,6 +1,5 @@
 import React from 'react';
-import { Package, AlertTriangle, CheckSquare, Square, DollarSign, History } from 'lucide-react';
-import { Card } from './Card';
+import { Package, AlertTriangle, CheckSquare, Square, DollarSign, History, Edit3, Trash2, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { Product } from '../../types';
 
@@ -44,22 +43,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   };
 
   return (
-    <div className={`group relative bg-white rounded-2xl shadow-lg border transition-all duration-300 overflow-hidden ${
+    <div className={`group relative bg-white rounded-2xl border-0 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1 ${
       isSelected 
-        ? 'border-primary-500 shadow-primary-200 shadow-lg' 
-        : 'border-gray-100 hover:shadow-xl hover:border-primary-200'
+        ? 'ring-2 ring-primary-500/50 shadow-primary-200/50' 
+        : 'hover:shadow-gray-200/50'
     }`}>
       {/* Selection Checkbox */}
       {showSelection && (
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-4 left-4 z-20">
           <button
             onClick={() => onSelect?.(product._id)}
-            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            className={`p-2 rounded-full backdrop-blur-md transition-all duration-200 ${
+              isSelected 
+                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30' 
+                : 'bg-white/70 text-gray-400 hover:bg-white/90 hover:text-gray-600'
+            }`}
           >
             {isSelected ? (
-              <CheckSquare className="h-5 w-5 text-primary-600" />
+              <CheckSquare className="h-4 w-4" />
             ) : (
-              <Square className="h-5 w-5 text-gray-400" />
+              <Square className="h-4 w-4" />
             )}
           </button>
         </div>
@@ -67,121 +70,132 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       
       {/* Stock Alert Badge */}
       {showStockAlert && (isLowStock || isOutOfStock) && (
-        <div className={`absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+        <div className={`absolute top-4 right-4 z-20 px-3 py-1.5 rounded-full text-xs font-semibold shadow-lg backdrop-blur-md ${
           isOutOfStock 
-            ? 'bg-red-500 text-white' 
-            : 'bg-yellow-500 text-white'
+            ? 'bg-red-500/90 text-white shadow-red-500/30' 
+            : 'bg-amber-500/90 text-white shadow-amber-500/30'
         }`}>
           <AlertTriangle className="inline h-3 w-3 mr-1" />
           {isOutOfStock ? 'Out of Stock' : 'Low Stock'}
         </div>
       )}
       
-      {/* Product Image */}
-      <div className="relative h-48 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      {/* Product Image with Overlay */}
+      <div className="relative h-48 bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 overflow-hidden">
         {product.images && product.images.length > 0 ? (
-          <img
-            src={product.images.find(img => img.is_primary)?.url || product.images[0].url}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          <>
+            <img
+              src={product.images.find(img => img.is_primary)?.url || product.images[0].url}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </>
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="h-16 w-16 text-gray-300" />
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+            <Package className="h-16 w-16 text-gray-400" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        
+        {/* Quick Actions Overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
+            {onAddToCart && !isOutOfStock && (
+              <button
+                onClick={() => onAddToCart(product)}
+                className="bg-white/90 backdrop-blur-sm text-gray-900 px-4 py-2 rounded-full font-medium shadow-lg hover:bg-white hover:scale-105 transition-all duration-200"
+              >
+                <Plus className="h-4 w-4 inline mr-2" />
+                Quick Add
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       
       {/* Product Info */}
-      <div className="p-5">
-        <div className="space-y-3">
-          {/* Product Name & Category */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-1">
-              {product.name}
-            </h3>
-            <div className="flex items-center space-x-2">
-              <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded-lg text-xs font-medium">
-                {product.category}
-              </span>
-              <span className="text-xs text-gray-500">•</span>
-              <span className="text-xs text-gray-500">{product.unit}</span>
-            </div>
-          </div>
-          
-          {/* Description */}
-          {product.description && (
-            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-              {product.description}
-            </p>
-          )}
-          
-          {/* Price */}
+      <div className="p-5 space-y-3">
+        {/* Header */}
+        <div className="space-y-2">
+          <h3 className="text-lg font-bold text-gray-900 line-clamp-2 leading-tight group-hover:text-primary-600 transition-colors duration-200">
+            {product.name}
+          </h3>
           <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold text-primary-600">
-              {formatPrice(product.price)}
+            <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-xs font-semibold shadow-sm">
+              {product.category}
             </span>
-            <div className="text-right">
-              <div className="text-sm text-gray-500">Stock</div>
-              <span className={`text-sm font-semibold ${
-                isOutOfStock 
-                  ? 'text-red-600' 
-                  : isLowStock 
-                    ? 'text-yellow-600' 
-                    : 'text-green-600'
-              }`}>
-                {product.stock_quantity} {product.unit}
+            <span className="text-xs text-gray-500 font-medium">{product.unit}</span>
+          </div>
+        </div>
+        
+        {/* Price & Stock */}
+        <div className="flex items-center justify-between">
+          <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
+            {formatPrice(product.price)}
+          </span>
+          <div className="text-right">
+            <div className="text-xs text-gray-500 font-medium mb-1">Stock</div>
+            <span className={`text-sm font-bold px-2 py-1 rounded-full ${
+              isOutOfStock 
+                ? 'bg-red-100 text-red-700' 
+                : isLowStock 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : 'bg-green-100 text-green-700'
+            }`}>
+              {product.stock_quantity}
+            </span>
+          </div>
+        </div>
+        
+        {/* Barcode */}
+        {product.barcode && (
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 font-medium">Barcode</span>
+              <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded-md text-gray-700">
+                {product.barcode}
               </span>
             </div>
           </div>
-          
-          {/* Barcode */}
-          {product.barcode && (
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Barcode:</span>
-                <span className="text-xs text-gray-600 font-mono bg-gray-50 px-2 py-1 rounded">
-                  {product.barcode}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
         
         {/* Action Buttons */}
         {showActions && (
-          <div className="mt-5 pt-4 border-t border-gray-100">
-            <div className="flex space-x-2">
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex gap-2">
               {onAddToCart && (
-                <Button
-                  size="sm"
+                <button
                   onClick={() => onAddToCart(product)}
                   disabled={isOutOfStock}
-                  className="flex-1 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700"
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                    isOutOfStock
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30 transform hover:scale-105'
+                  }`}
                 >
+                  <Plus className="h-4 w-4" />
                   Add to Cart
-                </Button>
+                </button>
               )}
               {onEdit && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => onEdit(product)}
-                  className="px-4 border-gray-200 hover:border-primary-300 hover:text-primary-600"
+                  className="px-3 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 hover:scale-105"
+                  aria-label="Edit product"
+                  title="Edit product"
                 >
-                  Edit
-                </Button>
+                  <Edit3 className="h-4 w-4" />
+                </button>
               )}
               {onDelete && (
-                <Button
-                  variant="danger"
-                  size="sm"
+                <button
                   onClick={() => onDelete(product)}
-                  className="px-4 bg-red-500 hover:bg-red-600"
+                  className="px-3 py-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all duration-200 hover:scale-105"
+                  aria-label="Delete product"
+                  title="Delete product"
                 >
-                  Delete
-                </Button>
+                  <Trash2 className="h-4 w-4" />
+                </button>
               )}
             </div>
           </div>
@@ -189,29 +203,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Price Action Buttons */}
         {showPriceActions && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="flex space-x-2">
+          <div className="pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-2">
               {onPriceUpdate && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => onPriceUpdate(product)}
-                  className="flex-1 border-blue-200 text-blue-600 hover:border-blue-300 hover:bg-blue-50"
+                  className="flex items-center justify-center gap-2 px-3 py-2 border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 text-sm font-medium hover:scale-105"
                 >
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Update Price
-                </Button>
+                  <DollarSign className="h-4 w-4" />
+                  Price
+                </button>
               )}
               {onPriceHistory && (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => onPriceHistory(product)}
-                  className="flex-1 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  className="flex items-center justify-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-sm font-medium hover:scale-105"
                 >
-                  <History className="h-4 w-4 mr-1" />
-                  Price History
-                </Button>
+                  <History className="h-4 w-4" />
+                  History
+                </button>
               )}
             </div>
           </div>
