@@ -22,6 +22,7 @@ import { Expenses } from './pages/Expenses';
 import { Audit } from './pages/Audit';
 import { RiderManagementPage } from './pages/RiderManagement';
 import { CashTrackingPage } from './pages/CashTracking';
+import { SalesHistory } from './pages/SalesHistory';
 
 function App() {
   return (
@@ -77,6 +78,15 @@ function App() {
                   <Header />
                   <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Inventory />
+                  </main>
+                  <MobileNavigation />
+                </ProtectedRoute>
+              } />
+              <Route path="/sales-history" element={
+                <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
+                  <Header />
+                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                    <SalesHistory />
                   </main>
                   <MobileNavigation />
                 </ProtectedRoute>

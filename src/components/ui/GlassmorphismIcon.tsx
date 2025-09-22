@@ -172,12 +172,14 @@ export const GlassmorphismButton: React.FC<{
         transition-all duration-300 ease-in-out
         hover:scale-102 active:scale-98
         min-w-0 flex-1 mx-1
+        relative overflow-hidden
         ${isSpecial 
           ? 'bg-gradient-to-br from-green-500/8 to-emerald-500/8 backdrop-blur-md border border-green-400/20 shadow-sm shadow-green-500/10 hover:shadow-md hover:shadow-green-500/15' 
           : isActive 
             ? getColorClasses(color, true)
             : getColorClasses(color, false)
         }
+        ${isActive ? 'ring-2 ring-primary-400/30 ring-offset-2 ring-offset-white/50' : ''}
         ${className}
       `.trim()}
     >
@@ -185,18 +187,18 @@ export const GlassmorphismButton: React.FC<{
         isSpecial 
           ? 'bg-green-500/10 backdrop-blur-sm border border-green-400/20' 
           : getIconContainerClasses(color, isActive || false)
-      }`}>
+      } ${isActive ? 'bg-primary-500/20 shadow-lg shadow-primary-500/20' : ''}`}>
         <Icon className={`h-5 w-5 transition-colors duration-200 drop-shadow-sm ${
           isSpecial 
             ? 'text-green-600 dark:text-green-400' 
             : getIconColorClasses(color, isActive || false)
-        }`} />
+        } ${isActive ? 'scale-110' : ''}`} />
       </div>
-      <span className={`text-xs font-semibold leading-tight transition-colors duration-200 ${
+      <span className={`text-xs leading-tight transition-colors duration-200 ${
         isSpecial 
           ? 'text-green-600 dark:text-green-300 font-semibold' 
           : getTextColorClasses(color, isActive || false)
-      }`}>
+      } ${isActive ? 'font-bold' : 'font-semibold'}`}>
         {label}
       </span>
     </button>

@@ -1,12 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CreditCard, Banknote, Smartphone, X } from 'lucide-react';
+import { CreditCard, X, Users, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { Card } from '../components/ui/Card';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { SearchBar } from '../components/ui/SearchBar';
 import { ProductCard } from '../components/ui/ProductCard';
 import { ShoppingCartComponent } from '../components/ui/ShoppingCart';
-import { Modal } from '../components/ui/Modal';
 import { BarcodeScanner } from '../components/ui/BarcodeScanner';
 import { EnhancedPaymentModal, PaymentData } from '../components/ui/EnhancedPaymentModal';
 import { useApp } from '../context/AppContext';
@@ -18,6 +17,7 @@ export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts } = useApp();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { riders, loadRiders } = useRiders();
+  const navigate = useNavigate();
   
   // Debug user information
   console.log('POS - User info:', { user, isAuthenticated, isLoading });
@@ -306,7 +306,7 @@ export const POS: React.FC = () => {
                     <CreditCard className="h-6 w-6 text-white" />
                   </div>
       <div>
-                    <h1 className="text-xl font-bold text-gray-900">Point of Sale</h1>
+                    <h1 className="text-xl font-bold text-gray-900">Sales</h1>
                     <p className="text-sm text-gray-600">Process customer transactions quickly and efficiently</p>
                   </div>
                 </div>
@@ -322,6 +322,22 @@ export const POS: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  onClick={() => navigate('/riders')}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Riders
+                </Button>
+                <Button 
+                  onClick={() => navigate('/cash-tracking')}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Cash Tracking
+                </Button>
                 <Button 
                   onClick={() => setIsScannerOpen(true)}
                   variant="outline"

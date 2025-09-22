@@ -350,10 +350,52 @@ class ApiService {
     }
   }
 
-  async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
-    const response = await this.privateRequest<Product>(`/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
+  async updateProduct(id: string, updates: Partial<Product>, images?: File[], replaceImages: boolean = true): Promise<Product> {
+    // If there are images, use FormData, otherwise use JSON
+    if (images && images.length > 0) {
+      console.log('Using FormData for image update', { replaceImages });
+      const formData = new FormData();
+      
+      // Add all the product updates as form data
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (key === 'tags' && Array.isArray(value)) {
+            // Handle tags array
+            formData.append('tags', JSON.stringify(value));
+          } else {
+            formData.append(key, value.toString());
+          }
+        }
+      });
+      
+      // Add flag to indicate image replacement behavior
+      formData.append('replace_images', replaceImages.toString());
+      
+      // Add images
+      images.forEach((image, index) => {
+        formData.append('images', image);
+      });
+      
+      const response = await this.rawRequest(`/products/${id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+      
+      return await response.json();
+    } else {
+      // No images, use regular JSON request
+      const response = await this.privateRequest<Product>(`/products/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      return response.data;
+    }
+  }
+
+  // Method to delete all images from a product
+  async deleteProductImages(productId: string): Promise<Product> {
+    const response = await this.privateRequest<Product>(`/products/${productId}/images`, {
+      method: 'DELETE',
     });
     return response.data;
   }

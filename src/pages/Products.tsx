@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Filter, Grid, List, Package, Upload, Trash2, CheckSquare, Square, Download, FileText } from 'lucide-react';
+import { Plus, Filter, Grid, List, Package, Upload, Trash2, CheckSquare, Square, Download, FileText, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { SearchBar } from '../components/ui/SearchBar';
 import { ProductCard } from '../components/ui/ProductCard';
@@ -17,6 +18,7 @@ import { Product, PriceHistory } from '../types';
 
 export const Products: React.FC = () => {
   const { products, addProduct, updateProduct, updateProductPrice, getProductPriceHistory, deleteProduct, exportProducts, importProducts, loading, loadProducts, productsPagination } = useApp();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -39,6 +41,7 @@ export const Products: React.FC = () => {
     tags: [] as string[],
   });
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [editingImages, setEditingImages] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -65,7 +68,7 @@ export const Products: React.FC = () => {
   // Load products on initial mount
   useEffect(() => {
     loadProducts(1, 20, searchQuery, selectedCategory);
-  }, [loadProducts]); // Load initial page on mount
+  }, [loadProducts, searchQuery, selectedCategory]); // Load initial page on mount
 
   // Load products when search query or category changes
   useEffect(() => {
@@ -275,6 +278,7 @@ export const Products: React.FC = () => {
       sku: product.sku,
       tags: product.tags,
     });
+    setEditingImages([]); // Reset editing images
     setIsEditModalOpen(true);
   };
 
@@ -297,10 +301,11 @@ export const Products: React.FC = () => {
         min_stock_level: parseInt(newProduct.min_stock_level) || 5,
         unit: newProduct.unit,
         tags: newProduct.tags,
-      });
+      }, editingImages.length > 0 ? editingImages : undefined);
 
       setIsEditModalOpen(false);
       setEditingProduct(null);
+      setEditingImages([]);
       toast.success('Product updated successfully!');
     } catch (error) {
       console.error('Failed to update product:', error);
@@ -357,6 +362,18 @@ export const Products: React.FC = () => {
 
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const fileArray = Array.from(files);
+      setEditingImages(prev => [...prev, ...fileArray].slice(0, 5)); // Max 5 images
+    }
+  };
+
+  const removeEditImage = (index: number) => {
+    setEditingImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const resetForm = () => {
@@ -434,6 +451,15 @@ export const Products: React.FC = () => {
               <div className="flex flex-row gap-3 items-center">
                 {/* Secondary Actions */}
                 <div className="flex gap-2">
+                <Button 
+                    onClick={() => navigate('/inventory')}
+                  variant="outline"
+                    size="md"
+                  className="flex-shrink-0"
+                >
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Inventory
+                </Button>
                 <Button 
                     onClick={() => setIsExcelImportOpen(true)}
                   variant="outline"
@@ -937,6 +963,7 @@ export const Products: React.FC = () => {
         onClose={() => {
           setIsEditModalOpen(false);
           setEditingProduct(null);
+          setEditingImages([]);
         }}
         title="Edit Product"
         size="xl"
@@ -1061,6 +1088,85 @@ export const Products: React.FC = () => {
             />
           </div>
 
+          {/* Current Images */}
+          {editingProduct?.images && editingProduct.images.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                Current Images
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {editingProduct.images.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={image.url}
+                      alt={`Current ${index + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                        Current Image
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Image Upload */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
+              Update Images
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-center w-full">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                    </svg>
+                    <p className="mb-2 text-sm text-gray-500">
+                      <span className="font-semibold">Click to upload</span> new product images
+                    </p>
+                    <p className="text-xs text-gray-500">PNG, JPG or WEBP (MAX. 5 images)</p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept="image/*"
+                    onChange={handleEditImageUpload}
+                  />
+                </label>
+              </div>
+              
+              {editingImages.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {editingImages.map((image, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={URL.createObjectURL(image)}
+                        alt={`New Preview ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEditImage(index)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 transition-colors"
+                        title="Remove image"
+                      >
+                        ×
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-green-500 text-white text-xs text-center py-1 rounded-b-lg">
+                        New
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Form Actions */}
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
             <Button
@@ -1068,6 +1174,7 @@ export const Products: React.FC = () => {
               onClick={() => {
                 setIsEditModalOpen(false);
                 setEditingProduct(null);
+                setEditingImages([]);
               }}
               disabled={isSubmitting}
             >

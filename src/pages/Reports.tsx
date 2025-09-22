@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
-  Calendar,
   Download,
   DollarSign,
   ShoppingCart,
   Package,
-  Target,
-  Trophy
+  Trophy,
+  Shield,
+  History
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -37,6 +38,7 @@ import {
 export const Reports: React.FC = () => {
   const { products, dashboardMetrics, sales, loading } = useApp();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedPeriod, setSelectedPeriod] = useState<string>('30d');
   const [periodStartDate, setPeriodStartDate] = useState<Date | undefined>();
   const [periodEndDate, setPeriodEndDate] = useState<Date | undefined>();
@@ -311,6 +313,22 @@ export const Reports: React.FC = () => {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button 
+                  onClick={() => navigate('/audit')}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  Audit
+                </Button>
+                <Button 
+                  onClick={() => navigate('/sales-history')}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <History className="h-4 w-4 mr-2" />
+                  Sales Summary
+                </Button>
+                <Button 
                   variant="outline"
                   className="w-full sm:w-auto"
                 >
@@ -322,114 +340,7 @@ export const Reports: React.FC = () => {
           </div>
         </div>
 
-        {/* System Status Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">System Status</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Order Sources */}
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                    <ShoppingCart className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Order Sources</h3>
-                    <p className="text-sm text-green-700">✅ In-Store & Online</p>
-                  </div>
-                </div>
-              </div>
 
-              {/* Payment Methods */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <DollarSign className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Split Payments</h3>
-                    <p className="text-sm text-blue-700">✅ Cash + Transfer</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rider Management */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Rider Management</h3>
-                    <p className="text-sm text-purple-700">✅ Complete CRUD</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Tracking */}
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Financial Tracking</h3>
-                    <p className="text-sm text-orange-700">✅ Balances & Reconciliation</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Enhanced POS */}
-              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 border border-indigo-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Enhanced POS</h3>
-                    <p className="text-sm text-indigo-700">✅ Multiple Payment Methods</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* System Health */}
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-                    <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">System Health</h3>
-                    <p className="text-sm text-emerald-700">✅ All Systems Operational</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Updates */}
-            <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-              <h4 className="font-semibold text-gray-900 mb-3">Recent Updates</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">✅ TypeScript errors resolved in RiderContext and EnhancedPaymentModal</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">✅ Simplified order sources to In-Store and Online only</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">✅ Split payment functionality fully operational</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">✅ Build successful with no TypeScript errors</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Enhanced Report Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
