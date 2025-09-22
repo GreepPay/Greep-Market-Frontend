@@ -10,6 +10,7 @@ interface RiderContextType {
   addRider: (rider: Omit<Rider, '_id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateRider: (id: string, updates: Partial<Rider>) => Promise<void>;
   reconcileRider: (id: string, amount: number) => Promise<void>;
+  giveCashToRider: (id: string, amount: number) => Promise<void>;
   loadRiders: () => Promise<void>;
 }
 
@@ -99,6 +100,33 @@ export const RiderProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
+  const giveCashToRider = useCallback(async (id: string, amount: number) => {
+    try {
+      await apiService.request(`/riders/${id}/give-cash`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      });
+      
+      setRiders(prev => prev.map(rider => {
+        if (rider._id === id) {
+          return {
+            ...rider,
+            current_balance: rider.current_balance + amount,
+            pending_reconciliation: rider.pending_reconciliation + amount,
+            updated_at: new Date(),
+          };
+        }
+        return rider;
+      }));
+      
+      toast.success(`Gave ₺${amount.toFixed(2)} to rider`);
+    } catch (err) {
+      console.error('Failed to give cash to rider:', err);
+      toast.error('Failed to give cash to rider');
+      throw err;
+    }
+  }, []);
+
   const value: RiderContextType = {
     riders,
     isLoading,
@@ -106,6 +134,7 @@ export const RiderProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     addRider,
     updateRider,
     reconcileRider,
+    giveCashToRider,
     loadRiders,
   };
 

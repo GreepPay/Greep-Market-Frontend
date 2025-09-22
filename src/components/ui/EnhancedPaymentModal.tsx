@@ -57,14 +57,23 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     { id: 'transfer', label: 'Transfer', icon: Smartphone, color: 'purple' },
   ];
 
+  // Calculate remaining amount based on current payments
   useEffect(() => {
-    setRemainingAmount(totalAmount);
+    const totalPaid = getTotalPaid();
+    setRemainingAmount(totalAmount - totalPaid);
   }, [totalAmount, paymentMethods]);
 
   const addPaymentMethod = () => {
     if (paymentMethods.length >= 3) return;
     
-    setPaymentMethods([...paymentMethods, { type: 'cash', amount: 0 }]);
+    const currentTotalPaid = getTotalPaid();
+    const remaining = totalAmount - currentTotalPaid;
+    
+    // If this is the first payment method, set it to the full amount
+    // If there are existing payments, set it to the remaining amount
+    const newAmount = paymentMethods.length === 0 ? totalAmount : remaining;
+    
+    setPaymentMethods([...paymentMethods, { type: 'cash', amount: newAmount }]);
   };
 
   const removePaymentMethod = (index: number) => {
@@ -74,7 +83,29 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const updatePaymentMethod = (index: number, field: keyof PaymentMethod, value: any) => {
     const newMethods = [...paymentMethods];
-    newMethods[index] = { ...newMethods[index], [field]: value };
+    
+    if (field === 'amount') {
+      const newAmount = parseFloat(value) || 0;
+      newMethods[index] = { ...newMethods[index], [field]: newAmount };
+      
+      // Smart adjustment: if this is the last payment method and it's being edited,
+      // automatically adjust it to cover the remaining amount
+      if (index === newMethods.length - 1 && newMethods.length > 1) {
+        const otherPaymentsTotal = newMethods
+          .filter((_, i) => i !== index)
+          .reduce((sum, method) => sum + (method.amount || 0), 0);
+        const remaining = totalAmount - otherPaymentsTotal;
+        
+        // If the user is trying to set an amount that would exceed the total,
+        // automatically adjust it to the remaining amount
+        if (newAmount > remaining) {
+          newMethods[index] = { ...newMethods[index], amount: remaining };
+        }
+      }
+    } else {
+      newMethods[index] = { ...newMethods[index], [field]: value };
+    }
+    
     setPaymentMethods(newMethods);
   };
 
@@ -89,6 +120,17 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const canProcessPayment = () => {
     return isPaymentComplete();
+  };
+
+  const getPaymentButtonText = () => {
+    if (!paymentMethods.length) return 'Add Payment Method';
+    if (isPaymentComplete()) {
+      if (remainingAmount < 0) {
+        return `Process Payment (Overpaid: ₺${Math.abs(remainingAmount).toFixed(2)})`;
+      }
+      return 'Process Payment';
+    }
+    return `Pay ₺${remainingAmount.toFixed(2)} More`;
   };
 
   const handleProcessPayment = async () => {
@@ -191,17 +233,37 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Payment Methods
             </label>
-            {paymentMethods.length < 3 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={addPaymentMethod}
-                className="flex items-center space-x-1"
-              >
-                <Plus className="h-3 w-3" />
-                <span>Add Payment</span>
-              </Button>
-            )}
+            <div className="flex items-center space-x-2">
+              {paymentMethods.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const evenAmount = totalAmount / paymentMethods.length;
+                    const newMethods = paymentMethods.map(method => ({
+                      ...method,
+                      amount: evenAmount
+                    }));
+                    setPaymentMethods(newMethods);
+                  }}
+                  className="text-xs px-2 py-1"
+                  title="Split total evenly across all payment methods"
+                >
+                  Split Evenly
+                </Button>
+              )}
+              {paymentMethods.length < 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addPaymentMethod}
+                  className="flex items-center space-x-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Add Payment</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           {paymentMethods.length === 0 ? (
@@ -209,6 +271,13 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
               <CreditCard className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
               <p>No payment methods added yet</p>
               <p className="text-sm">Click "Add Payment" to add a payment method</p>
+              <Button
+                onClick={addPaymentMethod}
+                className="mt-4"
+                size="sm"
+              >
+                Add Payment Method (₺{totalAmount.toFixed(2)})
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -236,13 +305,29 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       ))}
                     </select>
                     
-                    <Input
-                      type="number"
-                      value={method.amount}
-                      onChange={(e) => updatePaymentMethod(index, 'amount', parseFloat(e.target.value) || 0)}
-                      placeholder="Amount"
-                      className="flex-1"
-                    />
+                    <div className="flex-1 flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        value={method.amount}
+                        onChange={(e) => updatePaymentMethod(index, 'amount', parseFloat(e.target.value) || 0)}
+                        placeholder="Amount"
+                        className="flex-1"
+                        min="0"
+                        max={totalAmount}
+                        step="0.01"
+                      />
+                      {remainingAmount > 0 && index === paymentMethods.length - 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updatePaymentMethod(index, 'amount', remainingAmount)}
+                          className="text-xs px-2 py-1"
+                          title="Fill remaining amount"
+                        >
+                          Fill
+                        </Button>
+                      )}
+                    </div>
                     
                     <Button
                       variant="outline"
@@ -273,6 +358,22 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   ₺{remainingAmount.toFixed(2)}
                 </span>
               </div>
+              {remainingAmount < 0 && (
+                <div className="flex justify-between items-center text-sm mt-1">
+                  <span className="text-gray-600 dark:text-gray-400">Overpaid:</span>
+                  <span className="font-semibold text-blue-600">
+                    ₺{Math.abs(remainingAmount).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {isPaymentComplete() && (
+                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-center text-green-600 text-sm font-medium">
+                    <span className="mr-1">✓</span>
+                    Payment Complete
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -313,7 +414,7 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             disabled={!canProcessPayment()}
             className="flex-1"
           >
-            {isPaymentComplete() ? 'Process Payment' : `Pay ₺${remainingAmount.toFixed(2)} More`}
+            {getPaymentButtonText()}
           </Button>
         </div>
       </div>
