@@ -3,7 +3,7 @@ import { RiderManagement } from '../components/ui/RiderManagement';
 import { useRiders } from '../context/RiderContext';
 
 export const RiderManagementPage: React.FC = () => {
-  const { riders, addRider, updateRider, reconcileRider, loadRiders, isLoading } = useRiders();
+  const { riders, addRider, updateRider, reconcileRider, giveCashToRider, loadRiders, isLoading } = useRiders();
 
   useEffect(() => {
     loadRiders();
@@ -17,6 +17,7 @@ export const RiderManagementPage: React.FC = () => {
           onAddRider={addRider}
           onUpdateRider={updateRider}
           onReconcileRider={reconcileRider}
+          onGiveCashToRider={giveCashToRider}
         />
       </div>
     </div>

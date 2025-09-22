@@ -13,6 +13,7 @@ interface RiderManagementProps {
   onAddRider: (rider: Omit<Rider, '_id' | 'created_at' | 'updated_at'>) => Promise<void>;
   onUpdateRider: (id: string, updates: Partial<Rider>) => Promise<void>;
   onReconcileRider: (id: string, amount: number) => Promise<void>;
+  onGiveCashToRider: (id: string, amount: number) => Promise<void>;
 }
 
 export const RiderManagement: React.FC<RiderManagementProps> = ({
@@ -20,10 +21,12 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
   onAddRider,
   onUpdateRider,
   onReconcileRider,
+  onGiveCashToRider,
 }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isReconcileModalOpen, setIsReconcileModalOpen] = useState(false);
+  const [isGiveCashModalOpen, setIsGiveCashModalOpen] = useState(false);
   const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -36,6 +39,7 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
   });
 
   const [reconcileAmount, setReconcileAmount] = useState('');
+  const [giveCashAmount, setGiveCashAmount] = useState('');
 
   const filteredRiders = riders.filter(rider =>
     rider.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -99,6 +103,26 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
     }
   };
 
+  const handleGiveCash = async () => {
+    if (!selectedRider || !giveCashAmount) return;
+
+    const amount = parseFloat(giveCashAmount);
+    if (amount <= 0) {
+      toast.error('Cash amount must be positive');
+      return;
+    }
+
+    try {
+      await onGiveCashToRider(selectedRider._id, amount);
+      setGiveCashAmount('');
+      setIsGiveCashModalOpen(false);
+      setSelectedRider(null);
+      toast.success(`Gave ₺${amount.toFixed(2)} to ${selectedRider.name}`);
+    } catch (error) {
+      toast.error('Failed to give cash to rider');
+    }
+  };
+
   const openEditModal = (rider: Rider) => {
     setSelectedRider(rider);
     setRiderForm({
@@ -114,6 +138,12 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
     setSelectedRider(rider);
     setReconcileAmount(rider.pending_reconciliation.toString());
     setIsReconcileModalOpen(true);
+  };
+
+  const openGiveCashModal = (rider: Rider) => {
+    setSelectedRider(rider);
+    setGiveCashAmount('');
+    setIsGiveCashModalOpen(true);
   };
 
   return (
@@ -216,11 +246,20 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
                 </Button>
                 <Button
                   size="sm"
+                  onClick={() => openGiveCashModal(rider)}
+                  className="flex-1"
+                  disabled={!rider.is_active}
+                >
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  Give Cash
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => openReconcileModal(rider)}
                   className="flex-1"
                   disabled={rider.pending_reconciliation <= 0}
                 >
-                  <DollarSign className="h-3 w-3 mr-1" />
+                  <Eye className="h-3 w-3 mr-1" />
                   Reconcile
                 </Button>
               </div>
@@ -383,6 +422,70 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Give Cash Modal */}
+      {isGiveCashModalOpen && selectedRider && (
+        <Modal
+          isOpen={isGiveCashModalOpen}
+          onClose={() => {
+            setIsGiveCashModalOpen(false);
+            setSelectedRider(null);
+            setGiveCashAmount('');
+          }}
+          title={`Give Cash to ${selectedRider.name}`}
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-2">Current Status</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-600 dark:text-blue-400">Current Balance:</span>
+                  <span className="font-semibold">₺{selectedRider.current_balance.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-600 dark:text-blue-400">Pending Reconciliation:</span>
+                  <span className="font-semibold text-orange-600">₺{selectedRider.pending_reconciliation.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            
+            <Input
+              label="Amount to Give"
+              type="number"
+              value={giveCashAmount}
+              onChange={(e) => setGiveCashAmount(e.target.value)}
+              placeholder="Enter amount to give"
+              title="Enter amount to give to rider"
+            />
+            
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This will increase the rider's current balance and pending reconciliation by the specified amount.
+            </p>
+            
+            <div className="flex space-x-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsGiveCashModalOpen(false);
+                  setSelectedRider(null);
+                  setGiveCashAmount('');
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGiveCash}
+                disabled={!giveCashAmount || parseFloat(giveCashAmount) <= 0}
+                className="flex-1"
+              >
+                Give Cash
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
