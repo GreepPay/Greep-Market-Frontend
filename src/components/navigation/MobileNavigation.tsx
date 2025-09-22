@@ -7,7 +7,8 @@ import {
   BarChart3, 
   AlertTriangle,
   Receipt,
-  Shield
+  Shield,
+  DollarSign
 } from 'lucide-react';
 import { GlassmorphismButton } from '../ui/GlassmorphismIcon';
 
@@ -16,6 +17,7 @@ const navigationItems = [
   { path: '/products', icon: Package, label: 'Products', color: 'blue' as const },
   { path: '/pos', icon: ShoppingCart, label: 'POS', isSpecial: true, color: 'green' as const },
   { path: '/inventory', icon: AlertTriangle, label: 'Inventory', color: 'red' as const },
+  { path: '/cash-tracking', icon: DollarSign, label: 'Cash', color: 'green' as const },
   { path: '/expenses', icon: Receipt, label: 'Expenses', color: 'pink' as const },
   { path: '/reports', icon: BarChart3, label: 'Reports', color: 'purple' as const },
   { path: '/audit', icon: Shield, label: 'Audit', color: 'blue' as const },

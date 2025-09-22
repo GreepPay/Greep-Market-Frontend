@@ -7,6 +7,7 @@ import { StoreProvider } from './context/StoreContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { RiderProvider } from './context/RiderContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Header } from './components/navigation/Header';
 import { MobileNavigation } from './components/navigation/MobileNavigation';
@@ -19,15 +20,18 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Expenses } from './pages/Expenses';
 import { Audit } from './pages/Audit';
+import { RiderManagementPage } from './pages/RiderManagement';
+import { CashTrackingPage } from './pages/CashTracking';
 
 function App() {
   return (
     <ThemeProvider>
       <SettingsProvider>
         <NotificationProvider>
-          <AuthProvider>
-            <StoreProvider>
-              <AppProvider>
+          <RiderProvider>
+            <AuthProvider>
+              <StoreProvider>
+                <AppProvider>
             <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
             <Routes>
@@ -113,6 +117,24 @@ function App() {
                   <MobileNavigation />
                 </ProtectedRoute>
               } />
+              <Route path="/riders" element={
+                <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
+                  <Header />
+                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                    <RiderManagementPage />
+                  </main>
+                  <MobileNavigation />
+                </ProtectedRoute>
+              } />
+              <Route path="/cash-tracking" element={
+                <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
+                  <Header />
+                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                    <CashTrackingPage />
+                  </main>
+                  <MobileNavigation />
+                </ProtectedRoute>
+              } />
             </Routes>
             <Toaster
               position="top-right"
@@ -138,9 +160,10 @@ function App() {
             />
               </div>
             </Router>
-                </AppProvider>
-              </StoreProvider>
-            </AuthProvider>
+                  </AppProvider>
+                </StoreProvider>
+              </AuthProvider>
+            </RiderProvider>
           </NotificationProvider>
         </SettingsProvider>
       </ThemeProvider>

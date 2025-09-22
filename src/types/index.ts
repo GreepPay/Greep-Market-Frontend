@@ -42,6 +42,26 @@ export interface Product {
   price_history?: PriceHistory[];
 }
 
+export interface PaymentMethod {
+  type: 'cash' | 'card' | 'transfer';
+  amount: number;
+}
+
+export interface Rider {
+  _id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  is_active: boolean;
+  current_balance: number; // Amount of money the rider currently has
+  total_delivered: number; // Total amount of deliveries made
+  total_reconciled: number; // Total amount reconciled
+  pending_reconciliation: number; // Amount pending reconciliation
+  store_id: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface Transaction {
   _id: string;
   store_id: string;
@@ -51,9 +71,12 @@ export interface Transaction {
   discount_amount: number;
   tax_amount: number;
   total_amount: number;
-  payment_method: 'cash' | 'card' | 'transfer';
+  payment_method: 'cash' | 'card' | 'transfer' | 'pos'; // Single payment method
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   status: 'pending' | 'completed' | 'cancelled' | 'voided';
+  order_source: 'in_store' | 'online' ;
+  rider_id?: string; // Optional rider for delivery orders
+  delivery_fee?: number;
   cashier_id: string;
   notes?: string;
   created_at: Date;

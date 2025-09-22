@@ -8,30 +8,32 @@ import { ProductCard } from '../components/ui/ProductCard';
 import { ShoppingCartComponent } from '../components/ui/ShoppingCart';
 import { Modal } from '../components/ui/Modal';
 import { BarcodeScanner } from '../components/ui/BarcodeScanner';
+import { EnhancedPaymentModal, PaymentData } from '../components/ui/EnhancedPaymentModal';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useRiders } from '../context/RiderContext';
 import { TransactionItem } from '../types';
 
 export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts } = useApp();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { riders, loadRiders } = useRiders();
   
   // Debug user information
   console.log('POS - User info:', { user, isAuthenticated, isLoading });
   
-  // Load all products when POS component mounts
+  // Load all products and riders when POS component mounts
   useEffect(() => {
     if (isAuthenticated && user) {
       loadAllProducts();
+      loadRiders();
     }
-  }, [isAuthenticated, user, loadAllProducts]);
+  }, [isAuthenticated, user, loadAllProducts, loadRiders]);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState<TransactionItem[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'pos' | 'transfer'>('cash');
-  const [customerId, setCustomerId] = useState('');
   const [discount, setDiscount] = useState('');
 
   const filteredProducts = useMemo(() => {
@@ -177,7 +179,7 @@ export const POS: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const processPayment = async () => {
+  const processPayment = async (paymentData: PaymentData) => {
     if (cartItems.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -193,52 +195,58 @@ export const POS: React.FC = () => {
     const storeId = user?.store_id || 'default-store';
 
     try {
-      // Create transaction record with all required fields
-      const transaction = {
+      // Create enhanced transaction record with all required fields
+      // Extract primary payment method (the one with the highest amount)
+      const primaryPaymentMethod = paymentData.payment_methods.reduce((prev, current) => 
+        (current.amount > prev.amount) ? current : prev
+      );
+
+    const transaction = {
         store_id: storeId,
         cashier_id: user.id,
-        items: cartItems.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
-        discount_amount: parseFloat(discount) || 0,
-        payment_method: selectedPaymentMethod,
-        customer_id: customerId || undefined,
+      items: cartItems.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
+      discount_amount: parseFloat(discount) || 0,
+        payment_method: primaryPaymentMethod.type,
+        order_source: paymentData.order_source,
+        rider_id: paymentData.rider_id,
+        delivery_fee: paymentData.delivery_fee,
+        customer_id: paymentData.customer_id,
+        notes: paymentData.notes,
       };
 
-      console.log('Creating transaction:', transaction);
+      console.log('Creating enhanced transaction:', transaction);
       await addTransaction(transaction);
 
       // Update inventory - reduce stock for sold items
       if (products && Array.isArray(products)) {
         for (const item of cartItems) {
-          const product = products.find(p => p._id === item.product_id);
-          if (product) {
+      const product = products.find(p => p._id === item.product_id);
+      if (product) {
             await updateInventoryForSale(item.product_id, item.quantity);
           }
         }
       }
 
-      // Clear cart and close modal
-      clearCart();
-      setIsPaymentModalOpen(false);
-      setCustomerId('');
-      setDiscount('');
-      setSelectedPaymentMethod('cash');
+    // Clear cart and close modal
+    clearCart();
+    setIsPaymentModalOpen(false);
+    setDiscount('');
 
-      toast.success(`Sale completed! Total: ₺${finalTotal.toFixed(2)}`);
+      const paymentMethodsText = paymentData.payment_methods.map(pm => 
+        `${pm.type.charAt(0).toUpperCase() + pm.type.slice(1)}: ₺${pm.amount.toFixed(2)}`
+      ).join(', ');
+
+      toast.success(`Sale completed! Total: ₺${finalTotal.toFixed(2)} (${paymentMethodsText})`);
     } catch (error) {
       console.error('Payment processing failed:', error);
       toast.error('Failed to process payment. Please try again.');
     }
   };
 
-  const paymentMethods = [
-    { id: 'cash', label: 'Cash', icon: Banknote, color: 'text-green-600' },
-    { id: 'pos', label: 'POS/Card', icon: CreditCard, color: 'text-blue-600' },
-    { id: 'transfer', label: 'Transfer', icon: Smartphone, color: 'text-purple-600' },
-  ];
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -297,7 +305,7 @@ export const POS: React.FC = () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
                     <CreditCard className="h-6 w-6 text-white" />
                   </div>
-                  <div>
+      <div>
                     <h1 className="text-3xl font-bold text-gray-900">Point of Sale</h1>
                     <p className="text-gray-600">Process customer transactions quickly and efficiently</p>
                   </div>
@@ -335,11 +343,11 @@ export const POS: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+      </div>
 
         {/* Search and Products Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Products Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Products Section */}
           <div className="lg:col-span-2 space-y-6">
             {/* Enhanced Search Bar */}
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
@@ -350,30 +358,30 @@ export const POS: React.FC = () => {
                     {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
                   </span>
                 </div>
-                <SearchBar
-                  placeholder="Search products or scan barcode..."
-                  onSearch={handleSearch}
-                  onBarcodeScan={() => setIsScannerOpen(true)}
+            <SearchBar
+              placeholder="Search products or scan barcode..."
+              onSearch={handleSearch}
+              onBarcodeScan={() => setIsScannerOpen(true)}
                   enableRealTime={true}
                   debounceMs={200}
                   showBarcodeButton={true}
-                />
+            />
               </div>
             </div>
 
-            {/* Products Grid */}
+          {/* Products Grid */}
             {filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredProducts.map(product => (
-                  <ProductCard
-                    key={product._id}
-                    product={product}
-                    onAddToCart={addToCart}
+            {filteredProducts.map(product => (
+              <ProductCard
+                key={product._id}
+                product={product}
+                onAddToCart={addToCart}
                     showActions={true}
-                    showStockAlert={true}
-                  />
-                ))}
-              </div>
+                showStockAlert={true}
+              />
+            ))}
+          </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12">
                 <div className="text-center max-w-md mx-auto">
@@ -403,133 +411,36 @@ export const POS: React.FC = () => {
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+          )}
+        </div>
 
           {/* Shopping Cart Section - Sticky */}
-          <div className="lg:col-span-1">
+        <div className="lg:col-span-1">
             <div className="sticky top-20 bottom-20">
-              <ShoppingCartComponent
-                items={cartItems}
-                onUpdateQuantity={updateCartItemQuantity}
-                onRemoveItem={removeFromCart}
-                onClearCart={clearCart}
-                onCheckout={handleCheckout}
-              />
+          <ShoppingCartComponent
+            items={cartItems}
+            onUpdateQuantity={updateCartItemQuantity}
+            onRemoveItem={removeFromCart}
+            onClearCart={clearCart}
+            onCheckout={handleCheckout}
+          />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Payment Modal */}
-      <Modal
+      {/* Enhanced Payment Modal */}
+      <EnhancedPaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        title="Payment"
-        size="md"
-      >
-        <div className="space-y-6">
-          {/* Order Summary */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h4 className="font-semibold text-gray-900 mb-3">Order Summary</h4>
-            <div className="space-y-2">
-              {cartItems.map(item => (
-                <div key={item.product_id} className="flex justify-between text-sm">
-                  <span>{item.product_name} x {item.quantity}</span>
-                  <span>₺{item.total_price.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-gray-200 pt-2 mt-3">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal:</span>
-                <span>₺{cartTotal.toFixed(2)}</span>
-              </div>
-              {parseFloat(discount) > 0 && (
-                <div className="flex justify-between text-sm text-red-600">
-                  <span>Discount:</span>
-                  <span>-₺{parseFloat(discount).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-semibold text-lg">
-                <span>Total:</span>
-                <span>₺{finalTotal.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Discount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Discount (₺)
-            </label>
-            <input
-              type="number"
-              value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Customer ID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Customer ID (Optional)
-            </label>
-            <input
-              type="text"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              placeholder="Enter customer ID"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Payment Method */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Payment Method
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              {paymentMethods.map(method => {
-                const Icon = method.icon;
-                return (
-                  <button
-                    key={method.id}
-                    onClick={() => setSelectedPaymentMethod(method.id as any)}
-                    className={`p-3 border-2 rounded-lg text-center transition-colors ${
-                      selectedPaymentMethod === method.id
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <Icon className={`h-6 w-6 mx-auto mb-2 ${method.color}`} />
-                    <span className="text-sm font-medium">{method.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsPaymentModalOpen(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={processPayment}
-              className="flex-1"
-            >
-              Process Payment
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onProcessPayment={processPayment}
+        cartItems={cartItems}
+        subtotal={cartTotal}
+        taxAmount={0} // TODO: Calculate tax
+        discountAmount={parseFloat(discount) || 0}
+        totalAmount={finalTotal}
+        riders={riders}
+      />
 
       {/* Barcode Scanner */}
       <BarcodeScanner

@@ -15,12 +15,14 @@ import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Button } from '../components/ui/Button';
 import { useApp } from '../context/AppContext';
+import { useRiders } from '../context/RiderContext';
 // import { useAuth } from '../context/AuthContext';
 // import { apiService } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export const Dashboard: React.FC = () => {
   const { dashboardMetrics, inventoryAlerts, sales, loading } = useApp();
+  const { riders } = useRiders();
   // const { user } = useAuth();
   // const [analyticsData, setAnalyticsData] = useState<any>(null);
   // const [isLoading, setIsLoading] = useState(false);
@@ -385,7 +387,9 @@ export const Dashboard: React.FC = () => {
                             {new Date(sale.created_at).toLocaleDateString()}
                           </span>
                           <span>•</span>
-                          <span className="capitalize">{sale.payment_method || 'N/A'}</span>
+                          <span className="capitalize">
+                            {sale.payment_method || 'N/A'}
+                          </span>
                         </div>
                       </div>
                       <div className="text-right ml-3">
@@ -453,6 +457,75 @@ export const Dashboard: React.FC = () => {
                   </div>
                 ))
               )}
+            </div>
+          </Card>
+
+          {/* Cash Tracking Widget */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-white">Cash with Riders</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.href = '/cash-tracking'}
+                className="text-xs px-2 py-1"
+              >
+                <DollarSign className="h-3 w-3 mr-1" />
+                View All
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {(() => {
+                const activeRiders = riders.filter(rider => rider.is_active);
+                const totalCashOutstanding = activeRiders.reduce((sum, rider) => sum + rider.pending_reconciliation, 0);
+                const ridersWithCash = activeRiders.filter(rider => rider.pending_reconciliation > 0);
+                
+                return (
+                  <>
+                    <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                          <DollarSign className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800 dark:text-white text-sm">Total Outstanding</p>
+                          <p className="text-xs text-orange-600 dark:text-orange-400">Cash with riders</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-orange-600 text-lg">₺{totalCashOutstanding.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">{ridersWithCash.length} riders</p>
+                      </div>
+                    </div>
+
+                    {ridersWithCash.length === 0 ? (
+                      <div className="text-center py-4">
+                        <DollarSign className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">No cash with riders</p>
+                        <p className="text-gray-400 dark:text-gray-500 text-xs">All riders are reconciled</p>
+                      </div>
+                    ) : (
+                      ridersWithCash.slice(0, 3).map((rider) => (
+                        <div key={rider._id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                              <Users className="h-4 w-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-800 dark:text-white text-sm">{rider.name}</p>
+                              <p className="text-xs text-gray-500">{rider.phone}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-600 text-sm">₺{rider.pending_reconciliation.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">pending</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </Card>
         </div>

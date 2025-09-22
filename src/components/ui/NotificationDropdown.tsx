@@ -99,6 +99,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           )}
           <button
             onClick={onClose}
+            title="Close notifications"
+            aria-label="Close notifications"
             className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
           >
             <X className="h-4 w-4" />
