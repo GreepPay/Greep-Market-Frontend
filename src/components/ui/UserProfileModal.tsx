@@ -80,7 +80,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         phone: formData.phone || undefined,
       };
 
-      const updatedUser = await apiService.updateUser(user.id, updateData);
+      const updatedUser = await apiService.updateProfile(updateData);
       onProfileUpdated(updatedUser);
       toast.success('Profile updated');
       onClose();

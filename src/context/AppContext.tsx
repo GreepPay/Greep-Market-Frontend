@@ -3,6 +3,7 @@ import { AppState, Product, Transaction, InventoryAlert, DashboardMetrics, Price
 import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-hot-toast';
+import { cleanTagsInput } from '../utils/tagUtils';
 
 interface AppContextType extends AppState {
   addProduct: (product: Omit<Product, '_id' | 'created_at' | 'updated_at'>, images?: File[]) => Promise<void>;
@@ -15,8 +16,15 @@ interface AppContextType extends AppState {
   importProducts: (file: File) => Promise<{ imported: number; errors: string[] }>;
   addTransaction: (transaction: any) => Promise<void>;
   updateInventory: (productId: string, quantity: number) => Promise<void>;
-  refreshDashboard: () => Promise<void>;
-  loadProducts: (page?: number, limit?: number, search?: string, category?: string) => Promise<void>;
+  refreshDashboard: (filters?: {
+    dateRange?: string;
+    paymentMethod?: string;
+    orderSource?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => Promise<void>;
+  loadProducts: (search?: string, category?: string) => Promise<void>;
   loadAllProducts: () => Promise<void>;
   loadTransactions: () => Promise<void>;
   loadInventoryAlerts: () => Promise<void>;
@@ -62,7 +70,11 @@ const initialState: AppState = {
     todaySales: 0,
     monthlySales: 0,
     totalTransactions: 0,
+    averageTransactionValue: 0,
     growthRate: 0,
+    totalExpenses: 0,
+    monthlyExpenses: 0,
+    netProfit: 0,
     topProducts: [],
     recentTransactions: [],
     salesByMonth: [],
@@ -126,11 +138,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsLoadingData(true);
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      // Load data sequentially to avoid overwhelming the server
-      await loadProducts(1, 20);
-      await loadTransactions();
-      await loadInventoryAlerts();
-      await refreshDashboard();
+      // Load only essential data - Dashboard handles its own data loading
+      await loadProducts(); // Load all products (no pagination)
+      await loadInventoryAlerts(); // Inventory alerts are needed globally
+      // Transactions and dashboard data are handled by individual components
     } catch (error) {
       console.error('Failed to load initial data:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load data' });
@@ -148,16 +159,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
-  const loadProducts = useCallback(async (page: number = 1, limit: number = 20, search?: string, category?: string) => {
+  const loadProducts = useCallback(async (search?: string, category?: string) => {
     if (!isAuthenticated || !user) {
       console.log('User not authenticated, skipping products load');
       return;
     }
     try {
       const params: any = {
-        store_id: user?.store_id,
-        page,
-        limit
+        store_id: user?.store_id
       };
       
       // Add search parameter if provided
@@ -172,22 +181,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const response = await apiService.getProducts(params);
       console.log('Products loaded successfully:', response);
-      console.log('=== PRODUCTS TAGS DEBUG ===');
-      console.log('Sample product:', response.products[0]);
-      if (response.products[0]) {
-        console.log('Sample product tags:', response.products[0].tags);
-        console.log('Sample product tags type:', typeof response.products[0].tags);
-        console.log('Sample product tags is array:', Array.isArray(response.products[0].tags));
-      }
-      console.log('============================');
-      dispatch({ type: 'SET_PRODUCTS', payload: response.products });
+      
+      // Clean tags data for all products
+      const cleanedProducts = response.products.map(product => ({
+        ...product,
+        tags: cleanTagsInput(product.tags)
+      }));
+      
+      dispatch({ type: 'SET_PRODUCTS', payload: cleanedProducts });
       dispatch({ 
         type: 'SET_PRODUCTS_PAGINATION', 
         payload: {
-          currentPage: response.page,
-          totalPages: response.pages,
+          currentPage: 1,
+          totalPages: 1,
           totalProducts: response.total,
-          limit: response.limit
+          limit: response.total
         }
       });
     } catch (error) {
@@ -198,50 +206,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, user]);
 
   const loadAllProducts = useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      console.log('User not authenticated, skipping all products load');
-      return;
-    }
-    try {
-      // Load all products by setting a very high limit
-      const response = await apiService.getProducts({
-        store_id: user?.store_id,
-        page: 1,
-        limit: 1000 // Set high limit to get all products
-      });
-      console.log('=== LOAD ALL PRODUCTS DEBUG ===');
-      console.log('API Response:', response);
-      console.log('Products count:', response.products.length);
-      console.log('Total from API:', response.total);
-      console.log('Store ID:', user?.store_id);
-      console.log('Request params:', { store_id: user?.store_id, page: 1, limit: 1000 });
-      console.log('================================');
-      dispatch({ type: 'SET_PRODUCTS', payload: response.products });
-      dispatch({ 
-        type: 'SET_PRODUCTS_PAGINATION', 
-        payload: {
-          currentPage: 1,
-          totalPages: 1,
-          totalProducts: response.products.length,
-          limit: response.products.length
-        }
-      });
-    } catch (error) {
-      console.error('Failed to load all products:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load all products';
-      toast.error(errorMessage);
-    }
-  }, [isAuthenticated, user]);
+    // Since pagination is removed, loadAllProducts is the same as loadProducts
+    await loadProducts();
+  }, [loadProducts]);
 
   const loadTransactions = async () => {
     if (!isAuthenticated || !user) {
-      console.log('User not authenticated, skipping transactions load');
       return;
     }
     try {
       const response = await apiService.getTransactions({ 
         store_id: user?.store_id,
-        limit: 50 
+        limit: 200 // Increased from 50 to 200 for better data coverage
       });
       dispatch({ type: 'SET_TRANSACTIONS', payload: response.transactions });
     } catch (error) {
@@ -268,10 +244,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const newProduct = await apiService.createProduct({
         ...productData,
+        tags: cleanTagsInput(productData.tags), // Clean tags before sending to API
         store_id: user?.store_id || '',
         created_by: user?.id || '',
       }, images);
-      dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
+      dispatch({ type: 'ADD_PRODUCT', payload: { ...newProduct, tags: cleanTagsInput(newProduct.tags) } });
       toast.success('Product added');
     } catch (error) {
       console.error('Failed to add product:', error);
@@ -282,8 +259,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProduct = async (id: string, updates: Partial<Product>, images?: File[], replaceImages: boolean = true) => {
     try {
-      const updatedProduct = await apiService.updateProduct(id, updates, images, replaceImages);
-      dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates: updatedProduct } });
+      const cleanedUpdates = {
+        ...updates,
+        tags: updates.tags ? cleanTagsInput(updates.tags) : undefined
+      };
+      const updatedProduct = await apiService.updateProduct(id, cleanedUpdates, images, replaceImages);
+      dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates: { ...updatedProduct, tags: cleanTagsInput(updatedProduct.tags) } } });
       toast.success('Product updated');
     } catch (error) {
       console.error('Failed to update product:', error);
@@ -410,7 +391,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('Import products result:', result);
       
       // Refresh products list
-      await loadProducts(1, 20);
+      await loadProducts();
       
       if (result.imported > 0 && result.errors.length === 0) {
         toast.success(`Successfully imported ${result.imported} products!`);
@@ -458,7 +439,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         quantity,
         reason: 'Manual adjustment',
       });
-      await loadProducts(1, 20); // Reload products to get updated quantities
+      await loadProducts(); // Reload products to get updated quantities
       toast.success('Inventory updated');
     } catch (error) {
       console.error('Failed to update inventory:', error);
@@ -467,14 +448,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshDashboard = async () => {
+  const refreshDashboard = async (filters?: {
+    dateRange?: string;
+    paymentMethod?: string;
+    orderSource?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
     if (!isAuthenticated || !user) {
       console.log('User not authenticated, skipping dashboard refresh');
       return;
     }
     
     try {
-      const metrics = await apiService.getDashboardAnalytics(user?.store_id);
+      const metrics = await apiService.getDashboardAnalytics({
+        store_id: user?.store_id,
+        ...filters
+      });
       dispatch({ type: 'SET_DASHBOARD_METRICS', payload: metrics });
     } catch (error) {
       console.error('Failed to refresh dashboard:', error);

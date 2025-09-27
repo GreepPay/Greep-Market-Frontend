@@ -1,27 +1,36 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CreditCard, X, Users, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { SearchBar } from '../components/ui/SearchBar';
 import { ProductCard } from '../components/ui/ProductCard';
 import { ShoppingCartComponent } from '../components/ui/ShoppingCart';
 import { BarcodeScanner } from '../components/ui/BarcodeScanner';
 import { EnhancedPaymentModal, PaymentData } from '../components/ui/EnhancedPaymentModal';
+import { SmartNavButton } from '../components/ui/SmartNavButton';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useRiders } from '../context/RiderContext';
+import { useGoals } from '../context/GoalContext';
 import { TransactionItem } from '../types';
+import { usePageRefresh } from '../hooks/usePageRefresh';
 
 export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts } = useApp();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { riders, loadRiders } = useRiders();
-  const navigate = useNavigate();
+  const { updateGoalProgress } = useGoals();
   
-  // Debug user information
-  console.log('POS - User info:', { user, isAuthenticated, isLoading });
   
+  // Enable automatic refresh for POS (conservative settings)
+  usePageRefresh({
+    refreshOnMount: true,
+    refreshOnFocus: false, // Disabled to prevent excessive refreshing
+    refreshInterval: 30000, // Refresh every 30 seconds (increased from 15)
+    refreshOnVisibilityChange: false, // Disabled to prevent excessive refreshing
+    silent: true
+  });
+
   // Load all products and riders when POS component mounts
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -122,9 +131,9 @@ export const POS: React.FC = () => {
   const updateCartItemQuantity = (productId: string, quantity: number) => {
     console.log('Updating cart item quantity:', productId, quantity);
     
+    // Prevent quantity from going to 0 - set minimum to 0.01
     if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
+      quantity = 0.01;
     }
 
     if (!products || !Array.isArray(products)) {
@@ -221,6 +230,9 @@ export const POS: React.FC = () => {
       console.log('Creating enhanced transaction:', transaction);
       await addTransaction(transaction);
 
+      // Update goal progress after successful transaction
+      await updateGoalProgress();
+
       // Update inventory - reduce stock for sold items
       if (products && Array.isArray(products)) {
         for (const item of cartItems) {
@@ -251,15 +263,15 @@ export const POS: React.FC = () => {
   // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 pb-24">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-12">
             <div className="text-center">
-              <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CreditCard className="h-8 w-8 text-primary-600" />
+              <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CreditCard className="h-8 w-8 text-primary-600 dark:text-primary-400" />
               </div>
-              <h1 className="text-lg font-bold text-gray-900 mb-2">Loading POS System</h1>
-              <p className="text-sm text-gray-600">Please wait while we verify your authentication...</p>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Loading POS System</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Please wait while we verify your authentication...</p>
             </div>
           </div>
         </div>
@@ -270,15 +282,15 @@ export const POS: React.FC = () => {
   // Show error if not authenticated
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 pb-24">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-12">
             <div className="text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CreditCard className="h-8 w-8 text-red-600" />
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CreditCard className="h-8 w-8 text-red-600 dark:text-red-400" />
               </div>
-              <h1 className="text-lg font-bold text-gray-900 mb-2">Authentication Required</h1>
-              <p className="text-sm text-gray-600 mb-6">You need to be logged in to access the POS system.</p>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Authentication Required</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">You need to be logged in to access the POS system.</p>
               <Button 
                 onClick={() => window.location.href = '/login'}
                 className="bg-primary-600 hover:bg-primary-700"
@@ -293,11 +305,11 @@ export const POS: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Modern Header */}
-        <div className="relative overflow-hidden bg-white rounded-2xl shadow-lg border border-gray-100">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-50 to-blue-50 opacity-50"></div>
+        <div className="relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+          <div className="absolute inset-0 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 opacity-50"></div>
           <div className="relative p-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
               <div className="space-y-2">
@@ -306,11 +318,11 @@ export const POS: React.FC = () => {
                     <CreditCard className="h-6 w-6 text-white" />
                   </div>
       <div>
-                    <h1 className="text-xl font-bold text-gray-900">Sales</h1>
-                    <p className="text-sm text-gray-600">Process customer transactions quickly and efficiently</p>
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white">Sales</h1>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Process customer transactions quickly and efficiently</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
                   <span className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span>{filteredProducts.length} products available</span>
@@ -322,22 +334,22 @@ export const POS: React.FC = () => {
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button 
-                  onClick={() => navigate('/riders')}
+                <SmartNavButton 
+                  to="/riders"
                   variant="outline"
                   className="w-full sm:w-auto"
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Riders
-                </Button>
-                <Button 
-                  onClick={() => navigate('/cash-tracking')}
+                </SmartNavButton>
+                <SmartNavButton 
+                  to="/cash-tracking"
                   variant="outline"
                   className="w-full sm:w-auto"
                 >
                   <DollarSign className="h-4 w-4 mr-2" />
                   Cash Tracking
-                </Button>
+                </SmartNavButton>
                 <Button 
                   onClick={() => setIsScannerOpen(true)}
                   variant="outline"
@@ -366,11 +378,11 @@ export const POS: React.FC = () => {
         {/* Products Section */}
           <div className="lg:col-span-2 space-y-6">
             {/* Enhanced Search Bar */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Products</h2>
-                  <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Products</h2>
+                  <span className="px-3 py-1 bg-primary-100 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 rounded-full text-sm font-medium">
                     {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
                   </span>
                 </div>
@@ -399,13 +411,13 @@ export const POS: React.FC = () => {
             ))}
           </div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-12">
                 <div className="text-center max-w-md mx-auto">
-                  <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                    <X className="h-12 w-12 text-gray-400" />
+                  <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <X className="h-12 w-12 text-gray-400 dark:text-gray-500" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-3">No products found</h3>
-                  <p className="text-gray-500 mb-8 leading-relaxed">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">No products found</h3>
+                  <p className="text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
                     Try adjusting your search terms or scan a barcode to find products.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">

@@ -10,8 +10,8 @@ import {
 
 const navigationItems = [
   { path: '/dashboard', icon: Home, label: 'Dashboard', color: 'orange' as const },
-  { path: '/pos', icon: ShoppingCart, label: 'Sales', isSpecial: true, color: 'green' as const },
   { path: '/products', icon: Package, label: 'Products', color: 'blue' as const },
+  { path: '/pos', icon: ShoppingCart, label: 'Sales', isSpecial: true, color: 'green' as const },
   { path: '/expenses', icon: Receipt, label: 'Expenses', color: 'pink' as const },
   { path: '/reports', icon: BarChart3, label: 'Reports', color: 'purple' as const },
 ];

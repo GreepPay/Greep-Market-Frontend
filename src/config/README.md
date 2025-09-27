@@ -32,8 +32,8 @@ console.log(`Running ${app.name} v${app.version} in ${app.environment} mode`);
 
 The following environment variables are supported:
 
-- `REACT_APP_API_URL`: Backend API base URL (default: http://localhost:3001/api/v1)
-- `REACT_APP_SOCKET_URL`: WebSocket URL for real-time communication (default: http://localhost:3001)
+- `REACT_APP_API_URL`: Backend API base URL (default: http://localhost:5000/api/v1)
+- `REACT_APP_SOCKET_URL`: WebSocket URL for real-time communication (default: http://localhost:5000)
 - `REACT_APP_CLOUDINARY_CLOUD_NAME`: Cloudinary cloud name (default: dwrbtwtn5)
 - `REACT_APP_CLOUDINARY_UPLOAD_PRESET`: Cloudinary upload preset (default: market_upload)
 - `REACT_APP_VAPID_PUBLIC_KEY`: VAPID public key for push notifications

@@ -32,8 +32,7 @@ export const Header: React.FC = () => {
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-white/20 dark:border-gray-700/50 px-4 py-3 shadow-sm transition-colors duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-    
-            <img src="./icons/GreepMarket-Green_BG-White.svg" alt="Greep Market" className="h-12 w-12 text-white" />
+          <img src="./icons/GreepMarket-Green_BG-White.svg" alt="Greep Market" className="h-12 w-12 text-white" />
           
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">

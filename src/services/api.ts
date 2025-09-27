@@ -110,7 +110,6 @@ class ApiService {
       });
       
       clearTimeout(timeoutId);
-      console.log(`API response received: ${response.status} ${response.statusText}`);
       
       // Check if response has content before trying to parse JSON
       let data;
@@ -259,26 +258,22 @@ class ApiService {
     store_id?: string;
     search?: string;
     category?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ products: Product[]; total: number; page: number; pages: number; limit: number }> {
+  }): Promise<{ products: Product[]; total: number }> {
     const queryParams = new URLSearchParams();
     if (params?.store_id) queryParams.append('store_id', params.store_id);
     if (params?.search) queryParams.append('search', params.search);
     if (params?.category) queryParams.append('category', params.category);
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
 
-    const response = await this.privateRequest<{ success: boolean; data: { products: Product[]; total: number; page: number; pages: number } }>(`/products?${queryParams}`) as any;
+    const response = await this.privateRequest<{ success: boolean; data: { products: Product[]; total: number } }>(`/products?${queryParams}`) as any;
     
     
     // Handle response structure
     let data;
     if (response.data?.products) {
-      // Structure: { success: true, data: { products: [...], total: 897, ... } }
+      // Structure: { success: true, data: { products: [...], total: 897 } }
       data = response.data;
     } else if (response.products) {
-      // Structure: { products: [...], total: 897, ... } directly
+      // Structure: { products: [...], total: 897 } directly
       data = response;
     } else {
       throw new Error('Invalid API response structure - no products data found');
@@ -286,10 +281,7 @@ class ApiService {
     
     return {
       products: data.products || [],
-      total: data.total || 0,
-      page: data.page || 1, // Back to 1-based indexing
-      pages: data.pages || 1,
-      limit: params?.limit || 20,
+      total: data.total || 0
     };
   }
 
@@ -304,31 +296,24 @@ class ApiService {
   }
 
   async createProduct(productData: Partial<Product>, images?: File[]): Promise<Product> {
-    console.log('Creating product with images:', images?.length || 0);
-    
     // If there are images, use FormData, otherwise use JSON
     if (images && images.length > 0) {
-      console.log('Using FormData for image upload');
       const formData = new FormData();
       
       // Add each product field individually to FormData
-      console.log('Product data being sent:', productData);
       Object.keys(productData).forEach(key => {
         const value = productData[key as keyof Product];
         if (value !== undefined && value !== null) {
           if (typeof value === 'object') {
             formData.append(key, JSON.stringify(value));
-            console.log(`Added ${key} as JSON:`, JSON.stringify(value));
           } else {
             formData.append(key, String(value));
-            console.log(`Added ${key} as string:`, String(value));
           }
         }
       });
       
       // Add each image file
-      images.forEach((image, index) => {
-        console.log(`Adding image ${index + 1}:`, image.name, image.size, 'bytes');
+      images.forEach((image) => {
         formData.append(`images`, image);
       });
       
@@ -336,16 +321,13 @@ class ApiService {
         method: 'POST',
         body: formData,
       });
-      console.log('Product created with images:', response.data);
       return response.data;
     } else {
-      console.log('Using JSON request (no images)');
       // No images, use regular JSON request
       const response = await this.privateRequest<Product>('/products', {
         method: 'POST',
         body: JSON.stringify(productData),
       });
-      console.log('Product created without images:', response.data);
       return response.data;
     }
   }
@@ -556,6 +538,9 @@ class ApiService {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    
+    // Add cache-busting parameter to ensure fresh data when filters change
+    queryParams.append('_t', Date.now().toString());
 
     const response = await this.privateRequest<Transaction[]>(`/transactions?${queryParams}`);
     return {
@@ -576,7 +561,7 @@ class ApiService {
       discount_amount?: number;
     }>;
     discount_amount?: number;
-    payment_method: 'cash' | 'card' | 'transfer' | 'pos';
+    payment_method: 'cash' | 'card' | 'transfer' | 'crypto';
     notes?: string;
     cashier_id: string;
   }): Promise<Transaction> {
@@ -594,14 +579,69 @@ class ApiService {
     return response.data;
   }
 
-  // Analytics
-  async getDashboardAnalytics(store_id?: string, period?: string): Promise<DashboardMetrics> {
-    const queryParams = new URLSearchParams();
-    if (store_id) queryParams.append('store_id', store_id);
-    if (period) queryParams.append('period', period);
+  async updateTransaction(transactionId: string, updates: {
+    items?: Array<{
+      product_id: string;
+      quantity: number;
+      unit_price: number;
+    }>;
+    payment_method?: string;
+    customer_id?: string;
+    notes?: string;
+  }): Promise<Transaction> {
+    try {
+      const response = await this.privateRequest<Transaction>(`/transactions/${transactionId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Update transaction error:', error);
+      if (error.message?.includes('Access denied') || error.message?.includes('Cannot manage')) {
+        throw new Error('Transaction update not supported by backend yet. Please contact your administrator.');
+      }
+      throw error;
+    }
+  }
 
-    const response = await this.privateRequest<DashboardMetrics>(`/analytics/dashboard?${queryParams}`);
-    return response.data;
+  async deleteTransaction(transactionId: string): Promise<void> {
+    try {
+      await this.privateRequest(`/transactions/${transactionId}`, {
+        method: 'DELETE',
+      });
+    } catch (error: any) {
+      console.error('Delete transaction error:', error);
+      if (error.message?.includes('Access denied') || error.message?.includes('Cannot manage')) {
+        throw new Error('Transaction deletion not supported by backend yet. Please contact your administrator.');
+      }
+      throw error;
+    }
+  }
+
+  // Analytics
+  async getDashboardAnalytics(params?: {
+    store_id?: string;
+    dateRange?: string;
+    paymentMethod?: string;
+    orderSource?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<DashboardMetrics> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.dateRange) queryParams.append('dateRange', params.dateRange);
+    if (params?.paymentMethod) queryParams.append('paymentMethod', params.paymentMethod);
+    if (params?.orderSource) queryParams.append('orderSource', params.orderSource);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+
+    // Add cache-busting parameter to ensure fresh data when filters change
+    queryParams.append('_t', Date.now().toString());
+    
+    const response = await this.privateRequest<{ success: boolean; data: DashboardMetrics }>(`/analytics/dashboard?${queryParams}`);
+    return (response as any).data;
   }
 
   async getSalesAnalytics(params?: {
@@ -687,6 +727,20 @@ class ApiService {
     store_id?: string;
   }): Promise<User> {
     const response = await this.privateRequest<{ success: boolean; data: User }>(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+    return (response as any).data;
+  }
+
+  // Update current user's own profile (for self-editing)
+  async updateProfile(userData: {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+  }): Promise<User> {
+    const response = await this.privateRequest<{ success: boolean; data: User }>('/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(userData),
     });

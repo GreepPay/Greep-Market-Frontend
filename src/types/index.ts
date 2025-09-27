@@ -43,7 +43,7 @@ export interface Product {
 }
 
 export interface PaymentMethod {
-  type: 'cash' | 'card' | 'transfer';
+  type: 'cash' | 'card' | 'transfer' | 'crypto';
   amount: number;
 }
 
@@ -62,6 +62,20 @@ export interface Rider {
   updated_at: Date;
 }
 
+export interface RiderCashTransaction {
+  _id: string;
+  rider_id: string;
+  rider_name: string;
+  type: 'give_cash' | 'reconcile' | 'delivery_payment';
+  amount: number;
+  description?: string;
+  given_by: string; // User who gave the cash
+  given_by_name: string;
+  store_id: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface Transaction {
   _id: string;
   store_id: string;
@@ -71,7 +85,8 @@ export interface Transaction {
   discount_amount: number;
   tax_amount: number;
   total_amount: number;
-  payment_method: 'cash' | 'card' | 'transfer' | 'pos'; // Single payment method
+  payment_methods: PaymentMethod[]; // Multiple payment methods
+  payment_method?: 'cash' | 'card' | 'transfer' | 'crypto'; // Legacy single payment method (for backward compatibility)
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   status: 'pending' | 'completed' | 'cancelled' | 'voided';
   order_source: 'in_store' | 'online' ;
@@ -147,7 +162,11 @@ export interface DashboardMetrics {
   todaySales: number;
   monthlySales: number;
   totalTransactions: number;
+  averageTransactionValue: number;
   growthRate: number;
+  totalExpenses: number;
+  monthlyExpenses: number;
+  netProfit: number;
   topProducts: Array<{
     productId: string;
     productName: string;

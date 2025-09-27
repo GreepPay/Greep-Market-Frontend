@@ -119,7 +119,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="h-8 w-8 animate-spin text-primary-500" />
-        <span className="ml-2 text-gray-600">Loading analytics...</span>
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading analytics...</span>
       </div>
     );
   }
@@ -127,7 +127,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
   if (error) {
     return (
       <Card className="p-6">
-        <div className="text-center text-red-600">
+        <div className="text-center text-red-600 dark:text-red-400">
           <BarChart3 className="h-12 w-12 mx-auto mb-4" />
           <p>{error}</p>
           <Button onClick={loadAnalytics} className="mt-4">
@@ -142,7 +142,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
   if (!stats) {
     return (
       <Card className="p-6">
-        <div className="text-center text-gray-600">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <BarChart3 className="h-12 w-12 mx-auto mb-4" />
           <p>No analytics data available</p>
         </div>
@@ -173,8 +173,8 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Audit Analytics</h2>
-          <p className="text-gray-600">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Audit Analytics</h2>
+          <p className="text-gray-600 dark:text-gray-400">
             Advanced analytics and reporting for audit logs
           </p>
         </div>
@@ -182,7 +182,9 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            title="Select time range"
+            aria-label="Select time range"
           >
             <option value="7d">Last 7 Days</option>
             <option value="30d">Last 30 Days</option>
@@ -200,24 +202,24 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Activity className="h-6 w-6 text-blue-600" />
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+              <Activity className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Actions</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total_actions}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Actions</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total_actions}</p>
             </div>
           </div>
         </Card>
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Users className="h-6 w-6 text-green-600" />
+            <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
+              <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Users</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Users</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {Object.keys(stats.actions_by_user).length}
               </p>
             </div>
@@ -226,12 +228,12 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Shield className="h-6 w-6 text-purple-600" />
+            <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+              <Shield className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Security Events</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Security Events</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {(stats.actions_by_type.LOGIN || 0) + (stats.actions_by_type.LOGOUT || 0)}
               </p>
             </div>
@@ -240,12 +242,12 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Clock className="h-6 w-6 text-orange-600" />
+            <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
+              <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Avg Actions/Day</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Actions/Day</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.round(stats.total_actions / (timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365))}
               </p>
             </div>
@@ -257,7 +259,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Actions by Type */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions by Type</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions by Type</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -274,20 +276,24 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </Card>
 
         {/* Actions by Resource */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions by Resource</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions by Resource</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={resourceData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="resource" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="resource" stroke="#9CA3AF" />
+              <YAxis stroke="#9CA3AF" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+              />
               <Bar dataKey="count" fill="#3B82F6" />
             </BarChart>
           </ResponsiveContainer>
@@ -296,13 +302,15 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
 
       {/* Most Active Users */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Most Active Users</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Active Users</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={userData} layout="horizontal">
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" />
-            <YAxis dataKey="user" type="category" width={80} />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis type="number" stroke="#9CA3AF" />
+            <YAxis dataKey="user" type="category" width={80} stroke="#9CA3AF" />
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+            />
             <Bar dataKey="count" fill="#10B981" />
           </BarChart>
         </ResponsiveContainer>
@@ -310,29 +318,29 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
 
       {/* Recent Activity */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h3>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Action
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Resource
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Time
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {stats.recent_activity.slice(0, 10).map((activity) => (
-                <tr key={activity._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={activity._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {activity.user_email}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -343,10 +351,10 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
                       {activity.action}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                     {activity.resource_type}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {formatDate(activity.created_at)}
                   </td>
                 </tr>
@@ -358,44 +366,44 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
 
       {/* Security Insights */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Insights</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Security Insights</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
             <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Shield className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-green-800">Login Events</p>
-                <p className="text-2xl font-bold text-green-900">
+                <p className="text-sm font-medium text-green-800 dark:text-green-300">Login Events</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-400">
                   {stats.actions_by_type.LOGIN || 0}
                 </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
             <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Activity className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-blue-800">Data Changes</p>
-                <p className="text-2xl font-bold text-blue-900">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Data Changes</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-400">
                   {(stats.actions_by_type.CREATE || 0) + (stats.actions_by_type.UPDATE || 0) + (stats.actions_by_type.DELETE || 0)}
                 </p>
               </div>
             </div>
           </div>
           
-          <div className="bg-purple-50 p-4 rounded-lg">
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
             <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-purple-800">Export/Import</p>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-300">Export/Import</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-400">
                   {(stats.actions_by_type.EXPORT || 0) + (stats.actions_by_type.IMPORT || 0)}
                 </p>
               </div>
