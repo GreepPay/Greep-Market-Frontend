@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 import { X, Camera, AlertCircle, Smartphone, Wifi } from 'lucide-react';
 import { Button } from './Button';
 
@@ -21,8 +21,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isHttps, setIsHttps] = useState(true);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
+  const [errorCount, setErrorCount] = useState(0);
+  const [lastErrorTime, setLastErrorTime] = useState(0);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
 
-  // Check HTTPS requirement
+  // Check HTTPS requirement and enumerate cameras
   useEffect(() => {
     const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
     setIsHttps(isSecure);
@@ -35,7 +39,42 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         setCameraPermission('unknown');
       });
     }
+
+    // Enumerate available cameras
+    const enumerateCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(cameras);
+        
+        // Auto-select back camera if available, otherwise first camera
+        const backCamera = cameras.find(camera => 
+          camera.label.toLowerCase().includes('back') || 
+          camera.label.toLowerCase().includes('rear') ||
+          camera.label.toLowerCase().includes('environment')
+        );
+        
+        if (backCamera) {
+          setSelectedCamera(backCamera.deviceId);
+        } else if (cameras.length > 0) {
+          setSelectedCamera(cameras[0].deviceId);
+        }
+      } catch (error) {
+        console.warn('Could not enumerate cameras:', error);
+      }
+    };
+
+    enumerateCameras();
   }, []);
+
+  // Reset error state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setError(null);
+      setErrorCount(0);
+      setLastErrorTime(0);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && !scannerRef.current && isHttps) {
@@ -48,17 +87,25 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           return;
         }
 
-        // Mobile-optimized configuration
+        // Mobile-optimized configuration with better error handling
         const config = {
-          fps: 10,
+          fps: 10, // Good balance for webcam and mobile
           qrbox: { width: 280, height: 280 }, // Larger for mobile
           aspectRatio: 1.0,
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
           defaultZoomValueIfSupported: 2,
-          useBarCodeDetectorIfSupported: true,
+          useBarCodeDetectorIfSupported: true, // Enable for better barcode detection
           experimentalFeatures: {
             useBarCodeDetectorIfSupported: true
+          },
+          rememberLastUsedCamera: true,
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+          // Camera constraints for better device selection
+          videoConstraints: selectedCamera ? {
+            deviceId: { exact: selectedCamera }
+          } : {
+            facingMode: "environment" // Prefer back camera on mobile, webcam on desktop
           }
         };
 
@@ -76,8 +123,28 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               onClose();
             },
             (error) => {
+              const now = Date.now();
+              const timeSinceLastError = now - lastErrorTime;
+              
+              // Throttle error handling to prevent spam
+              if (timeSinceLastError < 1000) { // Only process errors once per second
+                return;
+              }
+              
+              setLastErrorTime(now);
+              setErrorCount(prev => prev + 1);
+              
+              // Stop processing errors after 5 attempts to prevent spam
+              if (errorCount >= 5) {
+                setError('Camera not supported. Please use a device with a camera.');
+                onError?.('Camera not supported');
+                return;
+              }
+              
               // Handle different types of errors
-              if (error.includes('No MultiFormat Readers')) {
+              if (error.includes('No MultiFormat Readers') || 
+                  error.includes('Camera not supported') ||
+                  error.includes('QR code parse error')) {
                 setError('Camera not supported. Please use a device with a camera.');
                 onError?.('Camera not supported');
               } else if (error.includes('Permission denied')) {
@@ -92,7 +159,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               } else if (error.includes('NotReadableError')) {
                 setError('Camera is already in use by another application.');
                 onError?.('Camera in use');
-              } else if (!error.includes('NotFoundException')) {
+              } else if (!error.includes('NotFoundException') && !error.includes('QR code parse error')) {
                 setError('Scanning error. Please try again.');
                 onError?.(error);
               }
@@ -121,7 +188,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         scannerRef.current = null;
       }
     };
-  }, [isOpen, onScan, onClose, onError, isHttps]);
+  }, [isOpen, onScan, onClose, onError, isHttps, errorCount, lastErrorTime, selectedCamera]);
 
   if (!isOpen) return null;
 
@@ -216,6 +283,26 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                     <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                       Camera permission denied. Please enable in browser settings.
                     </p>
+                  )}
+                  
+                  {/* Camera Selection */}
+                  {availableCameras.length > 1 && (
+                    <div className="mt-3">
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Select Camera:
+                      </label>
+                      <select
+                        value={selectedCamera}
+                        onChange={(e) => setSelectedCamera(e.target.value)}
+                        className="w-full text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        {availableCameras.map((camera) => (
+                          <option key={camera.deviceId} value={camera.deviceId}>
+                            {camera.label || `Camera ${camera.deviceId.slice(0, 8)}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
                 <div 
