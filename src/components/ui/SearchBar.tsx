@@ -85,14 +85,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     <form onSubmit={handleSubmit} className={`relative ${className}`}>
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+          <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
         </div>
         <input
           type="text"
           value={query}
           onChange={handleInputChange}
           placeholder={placeholder}
-          className="w-full pl-10 pr-20 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
+          className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
         />
         <div className="absolute inset-y-0 right-0 flex items-center pr-2 space-x-1">
           {/* Loading indicator */}
@@ -107,7 +107,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+              className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors duration-200"
               title="Clear search"
             >
               <X className="h-4 w-4" />
@@ -132,7 +132,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       
       {/* Real-time search indicator */}
       {enableRealTime && query && (
-        <div className="absolute top-full left-0 right-0 mt-1 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg p-2 shadow-lg z-10">
+        <div className="absolute top-full left-0 right-0 mt-1 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 shadow-lg z-10">
           <div className="flex items-center space-x-2">
             <Search className="h-3 w-3" />
             <span>Searching for "{query}"...</span>

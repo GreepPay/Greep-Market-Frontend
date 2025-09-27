@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Banknote, Smartphone, Plus, X, Package, ShoppingBag } from 'lucide-react';
+import { CreditCard, Banknote, Smartphone, Plus, X, Package, ShoppingBag, Coins } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Modal } from './Modal';
@@ -53,8 +53,9 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const paymentTypes = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
-    { id: 'card', label: 'Card/POS', icon: CreditCard, color: 'blue' },
-    { id: 'transfer', label: 'Transfer', icon: Smartphone, color: 'purple' },
+    { id: 'card', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
+    { id: 'transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
+    { id: 'crypto', label: 'Crypto Payment', icon: Coins, color: 'orange' },
   ];
 
   // Calculate remaining amount based on current payments
@@ -177,20 +178,20 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Items ({cartItems.length}):</span>
-              <span className="font-semibold">₺{subtotal.toFixed(2)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">₺{subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Discount:</span>
-              <span className="font-semibold text-green-600">-₺{discountAmount.toFixed(2)}</span>
+              <span className="font-semibold text-green-600 dark:text-green-400">-₺{discountAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Tax:</span>
-              <span className="font-semibold">₺{taxAmount.toFixed(2)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">₺{taxAmount.toFixed(2)}</span>
             </div>
             <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
               <div className="flex justify-between">
                 <span className="font-semibold text-gray-900 dark:text-white">Total:</span>
-                <span className="font-bold text-lg">₺{totalAmount.toFixed(2)}</span>
+                <span className="font-bold text-lg text-gray-900 dark:text-white">₺{totalAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -210,8 +211,8 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   onClick={() => setOrderSource(source.id as any)}
                   className={`p-3 border-2 rounded-lg text-center transition-all duration-200 ${
                     orderSource === source.id
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   <GlassmorphismIcon
@@ -269,8 +270,8 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           {paymentMethods.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <CreditCard className="h-12 w-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-              <p>No payment methods added yet</p>
-              <p className="text-sm">Click "Add Payment" to add a payment method</p>
+              <p className="text-gray-500 dark:text-gray-400">No payment methods added yet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Click "Add Payment" to add a payment method</p>
               <Button
                 onClick={addPaymentMethod}
                 className="mt-4"
@@ -286,7 +287,7 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 const Icon = paymentType?.icon || Banknote;
                 
                 return (
-                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                     <GlassmorphismIcon
                       icon={Icon}
                       size="sm"
@@ -298,7 +299,7 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       onChange={(e) => updatePaymentMethod(index, 'type', e.target.value)}
                       title="Select payment method type"
                       aria-label="Payment method type"
-                      className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
                       {paymentTypes.map((pt) => (
                         <option key={pt.id} value={pt.id}>{pt.label}</option>
@@ -348,27 +349,27 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Total Paid:</span>
-                <span className={`font-semibold ${isPaymentComplete() ? 'text-green-600' : 'text-orange-600'}`}>
+                <span className={`font-semibold ${isPaymentComplete() ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                   ₺{getTotalPaid().toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm mt-1">
                 <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
-                <span className={`font-semibold ${remainingAmount <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <span className={`font-semibold ${remainingAmount <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   ₺{remainingAmount.toFixed(2)}
                 </span>
               </div>
               {remainingAmount < 0 && (
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-gray-600 dark:text-gray-400">Overpaid:</span>
-                  <span className="font-semibold text-blue-600">
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
                     ₺{Math.abs(remainingAmount).toFixed(2)}
                   </span>
                 </div>
               )}
               {isPaymentComplete() && (
                 <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-center text-green-600 text-sm font-medium">
+                  <div className="flex items-center justify-center text-green-600 dark:text-green-400 text-sm font-medium">
                     <span className="mr-1">✓</span>
                     Payment Complete
                   </div>

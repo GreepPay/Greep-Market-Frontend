@@ -64,10 +64,28 @@ export const Settings: React.FC = () => {
   const [storeSettingsLoading, setStoreSettingsLoading] = useState(false);
 
   const loadUsers = useCallback(async () => {
+    // Only load users if user has permission (admin, owner, manager)
+    if (!currentUser || !['admin', 'owner', 'manager'].includes(currentUser.role)) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await apiService.getUsers();
-      setUsers(response?.users || []);
+      let allUsers = response?.users || [];
+      
+      // Filter users based on current user's role
+      if (currentUser?.role === 'manager') {
+        // Managers can only see other managers and cashiers
+        allUsers = allUsers.filter(user => 
+          user.role === 'manager' || user.role === 'cashier'
+        );
+      }
+      // Admins and owners can see all users (no filtering)
+      
+      setUsers(allUsers);
     } catch (error) {
       console.error('Failed to load users:', error);
       toast.error('Failed to load users');
@@ -75,7 +93,7 @@ export const Settings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser?.role]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,13 +209,22 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const tabs = [
-    { id: 'profile', label: 'My Profile', icon: Users },
-    { id: 'users', label: 'User Management', icon: Users },
-    { id: 'store', label: 'Store Settings', icon: Database },
-    { id: 'theme', label: 'Theme & Appearance', icon: Sun },
-    { id: 'audit', label: 'Audit Logs', icon: Shield }
-  ];
+  // Define tabs based on user role
+  const getAvailableTabs = () => {
+    const allTabs = [
+      { id: 'profile', label: 'My Profile', icon: Users, roles: ['admin', 'owner', 'manager', 'cashier'] },
+      { id: 'users', label: 'User Management', icon: Users, roles: ['admin', 'owner', 'manager'] },
+      { id: 'store', label: 'Store Settings', icon: Database, roles: ['admin', 'owner'] },
+      { id: 'theme', label: 'Theme & Appearance', icon: Sun, roles: ['admin', 'owner', 'manager', 'cashier'] },
+      { id: 'audit', label: 'Audit Logs', icon: Shield, roles: ['admin', 'owner', 'manager'] }
+    ];
+
+    if (!currentUser) return [];
+    
+    return allTabs.filter(tab => tab.roles.includes(currentUser.role));
+  };
+
+  const tabs = getAvailableTabs();
 
   const handleProfileUpdated = (updatedUser: User) => {
     // Update the current user in the auth context
@@ -209,8 +236,8 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">My Profile</h2>
-          <p className="text-sm text-gray-600">Manage your personal information and account settings</p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">My Profile</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Manage your personal information and account settings</p>
         </div>
         <button
           onClick={() => setShowProfileModal(true)}
@@ -222,19 +249,19 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* Current User Info Display */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors duration-300">
         <div className="flex items-center space-x-4 mb-6">
           <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
             <Users className="h-8 w-8 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {currentUser?.first_name && currentUser?.last_name 
                 ? `${currentUser.first_name} ${currentUser.last_name}`
                 : currentUser?.email || 'User'
               }
             </h3>
-            <p className="text-gray-600">{currentUser?.email}</p>
+            <p className="text-gray-600 dark:text-gray-400">{currentUser?.email}</p>
             <div className="flex items-center space-x-4 mt-2">
               <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                 currentUser?.role === 'admin' ? 'bg-red-100 text-red-800' :
@@ -257,30 +284,30 @@ export const Settings: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-medium text-gray-900 mb-3">Contact Information</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3">Contact Information</h4>
             <div className="space-y-2 text-sm">
               <div>
-                <span className="text-gray-500">Email:</span>
-                <span className="ml-2 text-gray-900">{currentUser?.email || 'Not available'}</span>
+                <span className="text-gray-500 dark:text-gray-400">Email:</span>
+                <span className="ml-2 text-gray-900 dark:text-white">{currentUser?.email || 'Not available'}</span>
               </div>
               <div>
-                <span className="text-gray-500">Phone:</span>
-                <span className="ml-2 text-gray-900">{currentUser?.phone || 'Not provided'}</span>
+                <span className="text-gray-500 dark:text-gray-400">Phone:</span>
+                <span className="ml-2 text-gray-900 dark:text-white">{currentUser?.phone || 'Not provided'}</span>
               </div>
             </div>
           </div>
           <div>
-            <h4 className="font-medium text-gray-900 mb-3">Account Information</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-3">Account Information</h4>
             <div className="space-y-2 text-sm">
               <div>
-                <span className="text-gray-500">Member since:</span>
-                <span className="ml-2 text-gray-900">
+                <span className="text-gray-500 dark:text-gray-400">Member since:</span>
+                <span className="ml-2 text-gray-900 dark:text-white">
                   {currentUser?.created_at ? new Date(currentUser.created_at).toLocaleDateString() : 'Account created recently'}
                 </span>
               </div>
               <div>
-                <span className="text-gray-500">Last login:</span>
-                <span className="ml-2 text-gray-900">
+                <span className="text-gray-500 dark:text-gray-400">Last login:</span>
+                <span className="ml-2 text-gray-900 dark:text-white">
                   {currentUser?.last_login ? new Date(currentUser.last_login).toLocaleDateString() : 'First login'}
                 </span>
               </div>
@@ -295,63 +322,70 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">User Management</h2>
-          <p className="text-sm text-gray-600">Manage admins, managers, and cashiers</p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">User Management</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {currentUser?.role === 'manager' 
+              ? 'Manage managers and cashiers' 
+              : 'Manage admins, managers, and cashiers'
+            }
+          </p>
         </div>
-        <button
-          onClick={() => setShowAddUser(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center space-x-2"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Add User</span>
-        </button>
+        {currentUser?.role !== 'cashier' && (
+          <button
+            onClick={() => setShowAddUser(true)}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center space-x-2"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Add User</span>
+          </button>
+        )}
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transition-colors duration-300">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Last Login
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     Loading users...
                   </td>
                 </tr>
               ) : !users || users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     No users found
                   </td>
                 </tr>
               ) : (
                 (users || []).map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
+                  <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
                           {user.first_name} {user.last_name}
                         </div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -376,7 +410,7 @@ export const Settings: React.FC = () => {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </button>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -387,7 +421,10 @@ export const Settings: React.FC = () => {
                       >
                         <Edit className="h-4 w-4" />
                       </button>
-                      {user.id !== currentUser?.id && (
+                      {user.id !== currentUser?.id && 
+                       // Managers can only delete cashiers, admins/owners can delete anyone
+                       (currentUser?.role === 'admin' || currentUser?.role === 'owner' || 
+                        (currentUser?.role === 'manager' && user.role === 'cashier')) && (
                         <button
                           onClick={() => setShowDeleteConfirm(user.id)}
                           className="text-red-600 hover:text-red-900"
@@ -411,9 +448,14 @@ export const Settings: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit Logs</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Track all user activities and system changes</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {currentUser?.role === 'manager' 
+            ? 'Track activities of managers and cashiers' 
+            : 'Track all user activities and system changes'
+          }
+        </p>
       </div>
-      <AuditLogs />
+      <AuditLogs currentUserRole={currentUser?.role} />
     </div>
   );
 
@@ -500,20 +542,20 @@ export const Settings: React.FC = () => {
   const renderStoreSettings = () => (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Store Settings</h2>
-        <p className="text-sm text-gray-600">Configure your store information and preferences</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Store Settings</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Configure your store information and preferences</p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors duration-300">
         {storeSettingsLoading && (!storeSettings || !storeSettings.name) ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-            <span className="ml-2 text-gray-600">Loading store settings...</span>
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading store settings...</span>
           </div>
         ) : !storeSettings ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
-              <p className="text-gray-500 mb-4">Failed to load store settings</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Failed to load store settings</p>
               <button
                 onClick={loadStoreSettings}
                 className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
@@ -526,23 +568,23 @@ export const Settings: React.FC = () => {
           <form onSubmit={saveStoreSettings} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Store Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Store Name</label>
               <input
                 type="text"
                 value={storeSettings?.name || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, name: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Enter your store name"
                 placeholder="Enter store name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
               <input
                 type="tel"
                 value={storeSettings?.phone || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, phone: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Enter your store phone number"
                 placeholder="Enter phone number"
               />
@@ -550,12 +592,12 @@ export const Settings: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
             <textarea
               value={storeSettings?.address || ''}
               onChange={(e) => setStoreSettings(prev => prev ? {...prev, address: e.target.value} : null)}
               rows={3}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
               title="Enter your store address"
               placeholder="Enter store address"
             />
@@ -563,22 +605,22 @@ export const Settings: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
               <input
                 type="email"
                 value={storeSettings?.email || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, email: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Enter your store email address"
                 placeholder="Enter email address"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Currency</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
               <select
                 value={storeSettings?.currency || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, currency: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Select your store currency"
               >
                 <option value="">Select Currency</option>
@@ -591,23 +633,23 @@ export const Settings: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Tax Rate (%)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tax Rate (%)</label>
               <input
                 type="number"
                 value={storeSettings?.tax_rate || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, tax_rate: Number(e.target.value)} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Enter tax rate percentage"
                 placeholder=""
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Low Stock Threshold</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Low Stock Threshold</label>
               <input
                 type="number"
                 value={storeSettings?.low_stock_threshold || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, low_stock_threshold: Number(e.target.value)} : null)}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                 title="Enter low stock threshold number"
                 placeholder=""
               />
@@ -654,46 +696,48 @@ export const Settings: React.FC = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-screen transition-colors duration-300">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Manage your application settings and preferences</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-lg shadow-lg border border-white/20 dark:border-gray-700/50 transition-all duration-300">
-        <div className="border-b border-white/20 dark:border-gray-700/50">
-          <nav className="-mb-px flex space-x-8 px-6">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? 'border-primary-500/60 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300/50 dark:hover:border-gray-600/50'
-                  }`}
-                >
-                  <div className={`p-1 rounded-lg transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? 'bg-primary-500/20 backdrop-blur-sm border border-primary-400/30'
-                      : 'bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20'
-                  }`}>
-                  <Icon className="h-4 w-4" />
-                  </div>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+    <>
+      <div className="p-4 space-y-6 bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-screen transition-colors duration-300">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Settings</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Manage your application settings and preferences</p>
+          </div>
         </div>
 
-        <div className="p-6 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm rounded-b-lg">
-          {renderTabContent()}
+        {/* Tabs */}
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-lg shadow-lg border border-white/20 dark:border-gray-700/50 transition-all duration-300">
+          <div className="border-b border-white/20 dark:border-gray-700/50">
+            <nav className="-mb-px flex space-x-8 px-6">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-all duration-200 ${
+                      activeTab === tab.id
+                        ? 'border-primary-500/60 text-primary-600 dark:text-primary-400'
+                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300/50 dark:hover:border-gray-600/50'
+                    }`}
+                  >
+                    <div className={`p-1 rounded-lg transition-all duration-200 ${
+                      activeTab === tab.id
+                        ? 'bg-primary-500/20 backdrop-blur-sm border border-primary-400/30'
+                        : 'bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20'
+                    }`}>
+                    <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="p-6 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm rounded-b-lg">
+            {renderTabContent()}
+          </div>
         </div>
       </div>
 
@@ -716,14 +760,14 @@ export const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 pr-10"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 pr-10"
                     title="Enter user password"
                     placeholder="Enter password"
                   />
@@ -738,48 +782,56 @@ export const Settings: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">First Name</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
                   <input
                     type="text"
                     value={newUser.first_name}
                     onChange={(e) => setNewUser({...newUser, first_name: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     title="Enter user first name"
                     placeholder="Enter first name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
                   <input
                     type="text"
                     value={newUser.last_name}
                     onChange={(e) => setNewUser({...newUser, last_name: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                     title="Enter user last name"
                     placeholder="Enter last name"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Role</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({...newUser, role: e.target.value as any})}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
                   title="Select user role"
                 >
-                  <option value="cashier">Cashier</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
+                  {currentUser?.role === 'manager' ? (
+                    // Managers can only create cashiers
+                    <option value="cashier">Cashier</option>
+                  ) : (
+                    // Admins and owners can create all roles
+                    <>
+                      <option value="cashier">Cashier</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setShowAddUser(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -798,13 +850,13 @@ export const Settings: React.FC = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Delete User</h3>
-            <p className="text-gray-600 mb-6">Are you sure you want to delete this user? This action cannot be undone.</p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Delete User</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this user? This action cannot be undone.</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -838,6 +890,6 @@ export const Settings: React.FC = () => {
           onUserUpdated={handleUserUpdated}
         />
       )}
-    </div>
+    </>
   );
 };

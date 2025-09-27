@@ -17,6 +17,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { AuditLogs } from '../components/ui/AuditLogs';
+import { BackButton } from '../components/ui/BackButton';
+import { Breadcrumb } from '../components/ui/Breadcrumb';
 import toast from 'react-hot-toast';
 
 interface AuditStats {
@@ -260,6 +262,14 @@ export const AuditDashboard: React.FC = () => {
 
   return (
     <div className="p-4 space-y-6">
+      {/* Back Navigation */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-4">
+          <BackButton />
+          <Breadcrumb />
+        </div>
+      </div>
+      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

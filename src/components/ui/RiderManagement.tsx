@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, DollarSign, Package, TrendingUp, Phone, Mail } from 'lucide-react';
+import { Plus, Edit, Eye, DollarSign, Package, TrendingUp, Phone, Mail, History } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from './Card';
 import { Button } from './Button';
 import { Modal } from './Modal';
 import { Input } from './Input';
 import { GlassmorphismIcon } from './GlassmorphismIcon';
-import { Rider } from '../../types';
+import { Rider, RiderCashTransaction } from '../../types';
+import { sanitizePhoneNumber, isValidPhoneNumber, formatPhoneNumber } from '../../utils/phoneUtils';
+import { RiderCashHistory } from './RiderCashHistory';
 
 interface RiderManagementProps {
   riders: Rider[];
@@ -14,6 +16,7 @@ interface RiderManagementProps {
   onUpdateRider: (id: string, updates: Partial<Rider>) => Promise<void>;
   onReconcileRider: (id: string, amount: number) => Promise<void>;
   onGiveCashToRider: (id: string, amount: number) => Promise<void>;
+  onLoadCashTransactions?: (riderId: string) => Promise<RiderCashTransaction[]>;
 }
 
 export const RiderManagement: React.FC<RiderManagementProps> = ({
@@ -22,13 +25,16 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
   onUpdateRider,
   onReconcileRider,
   onGiveCashToRider,
+  onLoadCashTransactions,
 }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isReconcileModalOpen, setIsReconcileModalOpen] = useState(false);
   const [isGiveCashModalOpen, setIsGiveCashModalOpen] = useState(false);
+  const [isCashHistoryModalOpen, setIsCashHistoryModalOpen] = useState(false);
   const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cashTransactions, setCashTransactions] = useState<RiderCashTransaction[]>([]);
 
   // Form states
   const [riderForm, setRiderForm] = useState({
@@ -52,9 +58,19 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
       return;
     }
 
+    // Sanitize the phone number to remove invisible Unicode characters
+    const sanitizedPhone = sanitizePhoneNumber(riderForm.phone);
+    
+    // Validate the sanitized phone number
+    if (!isValidPhoneNumber(sanitizedPhone)) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+
     try {
       await onAddRider({
         ...riderForm,
+        phone: sanitizedPhone, // Use the sanitized phone number
         current_balance: 0,
         total_delivered: 0,
         total_reconciled: 0,
@@ -73,8 +89,20 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
   const handleEditRider = async () => {
     if (!selectedRider) return;
 
+    // Sanitize the phone number to remove invisible Unicode characters
+    const sanitizedPhone = sanitizePhoneNumber(riderForm.phone);
+    
+    // Validate the sanitized phone number
+    if (!isValidPhoneNumber(sanitizedPhone)) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+
     try {
-      await onUpdateRider(selectedRider._id, riderForm);
+      await onUpdateRider(selectedRider._id, {
+        ...riderForm,
+        phone: sanitizedPhone, // Use the sanitized phone number
+      });
       setIsEditModalOpen(false);
       setSelectedRider(null);
       toast.success('Rider updated successfully');
@@ -94,6 +122,25 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
 
     try {
       await onReconcileRider(selectedRider._id, amount);
+      
+      // Create a cash transaction record for history tracking
+      const newTransaction: RiderCashTransaction = {
+        _id: `temp_${Date.now()}`, // Temporary ID, will be replaced by backend
+        rider_id: selectedRider._id,
+        rider_name: selectedRider.name,
+        type: 'reconcile',
+        amount: amount,
+        description: `Reconciled ₺${amount.toFixed(2)} for ${selectedRider.name}`,
+        given_by: 'current_user', // This should come from auth context
+        given_by_name: 'Current User', // This should come from auth context
+        store_id: 'default-store', // This should come from context
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      
+      // Add to local transactions for immediate UI update
+      setCashTransactions(prev => [newTransaction, ...prev]);
+      
       setReconcileAmount('');
       setIsReconcileModalOpen(false);
       setSelectedRider(null);
@@ -114,6 +161,25 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
 
     try {
       await onGiveCashToRider(selectedRider._id, amount);
+      
+      // Create a cash transaction record for history tracking
+      const newTransaction: RiderCashTransaction = {
+        _id: `temp_${Date.now()}`, // Temporary ID, will be replaced by backend
+        rider_id: selectedRider._id,
+        rider_name: selectedRider.name,
+        type: 'give_cash',
+        amount: amount,
+        description: `Cash given to ${selectedRider.name}`,
+        given_by: 'current_user', // This should come from auth context
+        given_by_name: 'Current User', // This should come from auth context
+        store_id: 'default-store', // This should come from context
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      
+      // Add to local transactions for immediate UI update
+      setCashTransactions(prev => [newTransaction, ...prev]);
+      
       setGiveCashAmount('');
       setIsGiveCashModalOpen(false);
       setSelectedRider(null);
@@ -144,6 +210,23 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
     setSelectedRider(rider);
     setGiveCashAmount('');
     setIsGiveCashModalOpen(true);
+  };
+
+  const openCashHistoryModal = (rider: Rider) => {
+    setSelectedRider(rider);
+    setIsCashHistoryModalOpen(true);
+  };
+
+  const loadCashTransactions = async (riderId: string): Promise<void> => {
+    if (onLoadCashTransactions) {
+      try {
+        const transactions = await onLoadCashTransactions(riderId);
+        setCashTransactions(transactions);
+      } catch (error) {
+        console.error('Failed to load cash transactions:', error);
+        toast.error('Failed to load cash transactions');
+      }
+    }
   };
 
   return (
@@ -183,7 +266,7 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
                   <h3 className="font-semibold text-gray-900 dark:text-white">{rider.name}</h3>
                   <div className="flex items-center space-x-1 text-sm text-gray-500">
                     <Phone className="h-3 w-3" />
-                    <span>{rider.phone}</span>
+                    <span>{formatPhoneNumber(rider.phone)}</span>
                   </div>
                 </div>
               </div>
@@ -234,21 +317,30 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
 
             {/* Action Buttons */}
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex space-x-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => openEditModal(rider)}
-                  className="flex-1"
+                  className="flex items-center justify-center"
                 >
                   <Edit className="h-3 w-3 mr-1" />
                   Edit
                 </Button>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openCashHistoryModal(rider)}
+                  className="flex items-center justify-center"
+                >
+                  <History className="h-3 w-3 mr-1" />
+                  History
+                </Button>
+                <Button
                   size="sm"
                   onClick={() => openGiveCashModal(rider)}
-                  className="flex-1"
                   disabled={!rider.is_active}
+                  className="flex items-center justify-center"
                 >
                   <DollarSign className="h-3 w-3 mr-1" />
                   Give Cash
@@ -256,8 +348,8 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
                 <Button
                   size="sm"
                   onClick={() => openReconcileModal(rider)}
-                  className="flex-1"
                   disabled={rider.pending_reconciliation <= 0}
+                  className="flex items-center justify-center"
                 >
                   <Eye className="h-3 w-3 mr-1" />
                   Reconcile
@@ -285,8 +377,11 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
           <Input
             label="Phone"
             value={riderForm.phone}
-            onChange={(e) => setRiderForm({ ...riderForm, phone: e.target.value })}
-            placeholder="Enter phone number"
+            onChange={(e) => {
+              const sanitized = sanitizePhoneNumber(e.target.value);
+              setRiderForm({ ...riderForm, phone: sanitized });
+            }}
+            placeholder="Enter phone number (e.g., +90 533 868 87 09)"
           />
           <Input
             label="Email (Optional)"
@@ -338,8 +433,11 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
           <Input
             label="Phone"
             value={riderForm.phone}
-            onChange={(e) => setRiderForm({ ...riderForm, phone: e.target.value })}
-            placeholder="Enter phone number"
+            onChange={(e) => {
+              const sanitized = sanitizePhoneNumber(e.target.value);
+              setRiderForm({ ...riderForm, phone: sanitized });
+            }}
+            placeholder="Enter phone number (e.g., +90 533 868 87 09)"
           />
           <Input
             label="Email (Optional)"
@@ -485,6 +583,21 @@ export const RiderManagement: React.FC<RiderManagementProps> = ({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Cash History Modal */}
+      {isCashHistoryModalOpen && selectedRider && (
+        <RiderCashHistory
+          riderId={selectedRider._id}
+          riderName={selectedRider.name}
+          isOpen={isCashHistoryModalOpen}
+          onClose={() => {
+            setIsCashHistoryModalOpen(false);
+            setSelectedRider(null);
+          }}
+          transactions={cashTransactions}
+          onLoadTransactions={loadCashTransactions}
+        />
       )}
     </div>
   );

@@ -51,23 +51,64 @@ export const Reports: React.FC = () => {
       if (user?.store_id) {
         setIsLoading(true);
         try {
-          // Prepare analytics parameters with date range
+          // Use explicit date ranges to avoid timezone confusion (same as Dashboard)
           const analyticsParams: any = { store_id: user.store_id };
           
           if (periodStartDate && periodEndDate) {
-            analyticsParams.start_date = periodStartDate.toISOString().split('T')[0];
-            analyticsParams.end_date = periodEndDate.toISOString().split('T')[0];
+            // Custom date range - use explicit UTC dates
+            const startDate = new Date(periodStartDate);
+            const endDate = new Date(periodEndDate);
+            endDate.setHours(23, 59, 59, 999); // End of day
+            
+            analyticsParams.startDate = startDate.toISOString();
+            analyticsParams.endDate = endDate.toISOString();
           } else {
-            analyticsParams.period = selectedPeriod;
+            // Calculate explicit date ranges based on period selection
+            const now = new Date();
+            let startDate: Date;
+            let endDate: Date;
+            
+            switch (selectedPeriod) {
+              case '7d':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                break;
+              case '30d':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                break;
+              case '90d':
+                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                break;
+              case '1y':
+                startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+                break;
+              default:
+                // Default to 30 days
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            }
+            
+            analyticsParams.startDate = startDate.toISOString();
+            analyticsParams.endDate = endDate.toISOString();
           }
 
-          // Load analytics data from backend
-          const [salesAnalytics, productPerformance, inventoryAnalytics] = await Promise.all([
-            apiService.getSalesAnalytics(analyticsParams),
+          // Load dashboard analytics data with explicit date ranges
+          const dashboardAnalytics = await apiService.getDashboardAnalytics(analyticsParams);
+          
+          // Load additional analytics for reports
+          const [productPerformance, inventoryAnalytics] = await Promise.all([
             apiService.getProductPerformance(user.store_id, selectedPeriod, periodStartDate, periodEndDate),
             apiService.getInventoryAnalytics(user.store_id)
           ]);
-          setAnalyticsData({ salesAnalytics, productPerformance, inventoryAnalytics });
+          
+          setAnalyticsData({ 
+            dashboardAnalytics, 
+            productPerformance, 
+            inventoryAnalytics 
+          });
         } catch (error) {
           console.error('Failed to load analytics:', error);
         } finally {
@@ -92,24 +133,23 @@ export const Reports: React.FC = () => {
     }).format(price);
   };
 
-  // Generate sales data from actual transactions
+  // Use dashboard analytics data first, then fallback to calculated metrics
+  const dashboardData = analyticsData?.dashboardAnalytics;
+
+  // Generate sales data from dashboard analytics or actual transactions
   const generateSalesData = () => {
+    // Use dashboard analytics data if available
+    if (dashboardData?.salesByMonth && dashboardData.salesByMonth.length > 0) {
+      return dashboardData.salesByMonth.map((item: any) => ({
+        date: item.month || item.date,
+        sales: item.sales || 0,
+        transactions: item.transactions || 0
+      }));
+    }
+    
     if (!sales || sales.length === 0) {
-      // Generate sample data when no real data exists
-      const now = new Date();
-      const data = [];
-      
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - i);
-        
-        data.push({
-          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          sales: Math.floor(Math.random() * 2000) + 500, // Sample data
-          transactions: Math.floor(Math.random() * 10) + 1
-        });
-      }
-      return data;
+      // Return empty data when no real data exists
+      return [];
     }
     
     const now = new Date();
@@ -179,7 +219,7 @@ export const Reports: React.FC = () => {
 
   const paymentMethodData = generatePaymentMethodData();
 
-  const topProductsData = dashboardMetrics?.topProducts?.map(product => ({
+  const topProductsData = analyticsData?.productPerformance?.topSellingProducts?.map((product: any) => ({
     name: product.productName.length > 15 
       ? product.productName.substring(0, 15) + '...' 
       : product.productName,
@@ -197,7 +237,7 @@ export const Reports: React.FC = () => {
   const calculateMetricsFromSales = () => {
     if (!sales || sales.length === 0) {
       return {
-        totalSales: 440, // Sample data to match your image
+        totalSales: 0,
         totalTransactions: 0,
         averageTransactionValue: 0,
         growthRate: 0
@@ -208,13 +248,30 @@ export const Reports: React.FC = () => {
     const totalTransactions = sales.length;
     const averageTransactionValue = totalTransactions > 0 ? totalSales / totalTransactions : 0;
     
-    // Calculate growth rate (month-over-month)
+    // Calculate growth rate (month-over-month and day-over-day)
     const now = new Date();
+    
+    // Today's sales
+    const today = sales.filter(sale => {
+      const saleDate = new Date(sale.created_at);
+      return saleDate.toDateString() === now.toDateString();
+    });
+    
+    // Yesterday's sales
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdaySales = sales.filter(sale => {
+      const saleDate = new Date(sale.created_at);
+      return saleDate.toDateString() === yesterday.toDateString();
+    });
+    
+    // This month's sales
     const thisMonth = sales.filter(sale => {
       const saleDate = new Date(sale.created_at);
       return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
     });
     
+    // Last month's sales
     const lastMonth = sales.filter(sale => {
       const saleDate = new Date(sale.created_at);
       const lastMonthDate = new Date(now);
@@ -222,26 +279,36 @@ export const Reports: React.FC = () => {
       return saleDate.getMonth() === lastMonthDate.getMonth() && saleDate.getFullYear() === lastMonthDate.getFullYear();
     });
     
+    const todaySales = today.reduce((sum, sale) => sum + sale.total_amount, 0);
+    const yesterdaySalesAmount = yesterdaySales.reduce((sum, sale) => sum + sale.total_amount, 0);
     const thisMonthSales = thisMonth.reduce((sum, sale) => sum + sale.total_amount, 0);
     const lastMonthSales = lastMonth.reduce((sum, sale) => sum + sale.total_amount, 0);
     
-    const growthRate = lastMonthSales > 0 ? ((thisMonthSales - lastMonthSales) / lastMonthSales) * 100 : 0;
+    const growthRate = lastMonthSales > 0 ? ((thisMonthSales - lastMonthSales) / lastMonthSales) * 100 : (thisMonthSales > 0 ? 100 : 0);
+    const todayGrowthRate = yesterdaySalesAmount > 0 ? ((todaySales - yesterdaySalesAmount) / yesterdaySalesAmount) * 100 : (todaySales > 0 ? 100 : 0);
     
     return {
       totalSales,
       totalTransactions,
       averageTransactionValue,
-      growthRate
+      growthRate,
+      todayGrowthRate,
+      todaySales,
+      yesterdaySalesAmount,
+      thisMonthSales,
+      lastMonthSales
     };
   };
 
   const calculatedMetrics = calculateMetricsFromSales();
-  const totalSales = dashboardMetrics?.totalSales || calculatedMetrics.totalSales;
-  const totalTransactions = dashboardMetrics?.totalTransactions || calculatedMetrics.totalTransactions;
-  const averageTransactionValue = dashboardMetrics?.totalTransactions > 0 
-    ? (dashboardMetrics?.totalSales || 0) / (dashboardMetrics?.totalTransactions || 1)
-    : calculatedMetrics.averageTransactionValue;
-  const growthRate = dashboardMetrics?.growthRate || calculatedMetrics.growthRate;
+  
+  const totalSales = dashboardData?.totalSales || dashboardMetrics?.totalSales || calculatedMetrics.totalSales;
+  const totalTransactions = dashboardData?.totalTransactions || dashboardMetrics?.totalTransactions || calculatedMetrics.totalTransactions;
+  const averageTransactionValue = dashboardData?.averageTransactionValue || 
+    (dashboardMetrics?.totalTransactions > 0 
+      ? (dashboardMetrics?.totalSales || 0) / (dashboardMetrics?.totalTransactions || 1)
+      : calculatedMetrics.averageTransactionValue);
+  const growthRate = dashboardData?.growthRate || dashboardMetrics?.growthRate || calculatedMetrics.growthRate;
 
   const reportTabs = [
     { id: 'performance', label: 'Performance Dashboard', icon: Trophy },
@@ -253,23 +320,23 @@ export const Reports: React.FC = () => {
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 pb-24">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="relative overflow-hidden bg-white rounded-2xl shadow-lg border border-gray-100">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary-50 to-blue-50 opacity-50"></div>
+          <div className="relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+            <div className="absolute inset-0 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 opacity-50"></div>
             <div className="relative p-6">
               <div className="flex items-center space-x-3 mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
                   <BarChart3 className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-gray-900">Reports & Analytics</h1>
-                  <p className="text-sm text-gray-600">Analyze your business performance</p>
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">Reports & Analytics</h1>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Analyze your business performance</p>
                 </div>
               </div>
               <div className="flex items-center justify-center py-12">
                 <LoadingSpinner size="lg" className="mr-4" />
-                <span className="text-gray-500 text-lg">Loading reports data...</span>
+                <span className="text-gray-500 dark:text-gray-400 text-lg">Loading reports data...</span>
               </div>
             </div>
           </div>
@@ -279,11 +346,11 @@ export const Reports: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Modern Header */}
-        <div className="relative overflow-hidden bg-white rounded-2xl shadow-lg border border-gray-100">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-50 to-blue-50 opacity-50"></div>
+        <div className="relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 opacity-50"></div>
           <div className="relative p-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
               <div className="space-y-2">
@@ -292,11 +359,11 @@ export const Reports: React.FC = () => {
                     <BarChart3 className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-xl font-bold text-gray-900">Reports & Analytics</h1>
-                    <p className="text-sm text-gray-600">Analyze your business performance with detailed insights</p>
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white">Reports & Analytics</h1>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Analyze your business performance with detailed insights</p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
                   <span className="flex items-center space-x-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span>{formatPrice(totalSales)} total sales</span>
@@ -343,9 +410,9 @@ export const Reports: React.FC = () => {
 
 
         {/* Enhanced Report Tabs */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Report Types</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Report Types</h2>
             <div className="flex flex-wrap gap-3">
               {reportTabs.map(tab => {
                 const Icon = tab.icon;
@@ -356,7 +423,7 @@ export const Reports: React.FC = () => {
                     className={`flex items-center px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
                       selectedReport === tab.id
                         ? 'bg-primary-500 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 hover:shadow-sm'
                     }`}
                   >
                     <Icon className="h-4 w-4 mr-2" />
@@ -376,7 +443,11 @@ export const Reports: React.FC = () => {
 
       {/* Performance Dashboard */}
       {selectedReport === 'performance' && (
-        <PerformanceDashboard storeId={user?.store_id || ''} />
+        <PerformanceDashboard 
+          storeId={user?.store_id || ''} 
+          analyticsData={analyticsData}
+          isLoading={isLoading}
+        />
       )}
 
       {/* Sales Report */}
@@ -385,51 +456,68 @@ export const Reports: React.FC = () => {
           {/* Key Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 mb-1">Total Sales</h3>
-              <p className="text-lg font-semibold text-gray-800">{formatPrice(totalSales)}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Total Sales</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(totalSales)}</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <ShoppingCart className="h-5 w-5 text-blue-600" />
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 mb-1">Transactions</h3>
-              <p className="text-lg font-semibold text-gray-800">{totalTransactions}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Transactions</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{totalTransactions}</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 mb-1">Avg. Transaction</h3>
-              <p className="text-lg font-semibold text-gray-800">{formatPrice(averageTransactionValue)}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Avg. Transaction</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(averageTransactionValue)}</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <BarChart3 className="h-5 w-5 text-orange-600" />
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 mb-1">Growth Rate</h3>
-              <p className="text-lg font-semibold text-gray-800">{growthRate > 0 ? '+' : ''}{growthRate.toFixed(1)}%</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Growth Rate</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{growthRate > 0 ? '+' : ''}{growthRate.toFixed(1)}%</p>
             </Card>
           </div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales Trend</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sales Trend</h3>
               <div className="h-64">
                 {salesData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" />
+                      <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                       <Tooltip 
                         formatter={(value: number) => [formatPrice(value), 'Sales']}
+                        contentStyle={{ 
+                          backgroundColor: '#1F2937', 
+                          border: '1px solid #4B5563', 
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          padding: '8px 12px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                        }}
+                        labelStyle={{ 
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          marginBottom: '4px'
+                        }}
+                        itemStyle={{ color: '#FFFFFF' }}
                       />
                       <Line 
                         type="monotone" 
@@ -441,15 +529,15 @@ export const Reports: React.FC = () => {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
                     No sales data available
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Methods</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Methods</h3>
               <div className="h-64">
                 {paymentMethodData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -467,12 +555,35 @@ export const Reports: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => [`${value}%`, 'Percentage']} />
+                      <Tooltip 
+                        formatter={(value: number, name: string, props: any) => {
+                          const percentage = props.payload?.percentage || '0.0';
+                          const paymentMethod = props.payload?.name || 'Unknown';
+                          return [`${percentage}%`, paymentMethod];
+                        }}
+                        contentStyle={{ 
+                          backgroundColor: '#1F2937', 
+                          border: '1px solid #4B5563', 
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          padding: '8px 12px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                        }}
+                        labelStyle={{ 
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          marginBottom: '4px'
+                        }}
+                        itemStyle={{ color: '#FFFFFF' }}
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
                     No payment method data available
                   </div>
                 )}
@@ -486,8 +597,8 @@ export const Reports: React.FC = () => {
         {selectedReport === 'inventory' && (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Inventory Status</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Inventory Status</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -504,15 +615,37 @@ export const Reports: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => [value, 'Products']} />
+                      <Tooltip 
+                        formatter={(value: number, name: string, props: any) => {
+                          const status = props.payload?.name || 'Unknown';
+                          return [`${value} products`, status];
+                        }}
+                        contentStyle={{ 
+                          backgroundColor: '#1F2937', 
+                          border: '1px solid #4B5563', 
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          padding: '8px 12px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                        }}
+                        labelStyle={{ 
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          marginBottom: '4px'
+                        }}
+                        itemStyle={{ color: '#FFFFFF' }}
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Stock Value by Category</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Stock Value by Category</h3>
                 <div className="h-64">
                   {(() => {
                     // Calculate real category data from products
@@ -531,17 +664,34 @@ export const Reports: React.FC = () => {
                     return categoryArray.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={categoryArray}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="category" stroke="#9CA3AF" />
+                          <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                           <Tooltip 
                             formatter={(value: number) => [formatPrice(value), 'Value']}
+                            contentStyle={{ 
+                              backgroundColor: '#1F2937', 
+                              border: '1px solid #4B5563', 
+                              borderRadius: '8px',
+                              color: '#FFFFFF',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              padding: '8px 12px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                            }}
+                            labelStyle={{ 
+                              color: '#FFFFFF',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              marginBottom: '4px'
+                            }}
+                            itemStyle={{ color: '#FFFFFF' }}
                           />
                           <Bar dataKey="value" fill="#3b82f6" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
                         No category data available
                       </div>
                     );
@@ -555,57 +705,81 @@ export const Reports: React.FC = () => {
         {/* Product Performance Report */}
         {selectedReport === 'products' && (
           <>
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Products</h3>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Performing Products</h3>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProductsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip 
-                      formatter={(value: number) => [formatPrice(value), 'Revenue']}
-                    />
-                    <Bar dataKey="revenue" fill="#8b5cf6" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {topProductsData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProductsData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="name" stroke="#9CA3AF" />
+                      <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
+                      <Tooltip 
+                        formatter={(value: number) => [formatPrice(value), 'Revenue']}
+                        contentStyle={{ 
+                          backgroundColor: '#1F2937', 
+                          border: '1px solid #4B5563', 
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          padding: '8px 12px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                        }}
+                        labelStyle={{ 
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          marginBottom: '4px'
+                        }}
+                        itemStyle={{ color: '#FFFFFF' }}
+                      />
+                      <Bar dataKey="revenue" fill="#8b5cf6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    No product performance data available
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Product Categories</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Product Categories</h3>
                 <div className="space-y-3">
                   {(() => {
-                    // Calculate real category data from products
-                    const categoryData = (products || []).reduce((acc: any, product) => {
-                      const category = product.category || 'Other';
-                      if (!acc[category]) {
-                        acc[category] = { category, count: 0, value: 0 };
-                      }
-                      acc[category].count += 1;
-                      acc[category].value += product.price * product.stock_quantity;
-                      return acc;
-                    }, {});
+                    // Use API category breakdown data if available, otherwise fallback to local calculation
+                    const categoryData = analyticsData?.productPerformance?.categoryBreakdown || 
+                      (products || []).reduce((acc: any, product) => {
+                        const category = product.category || 'Other';
+                        if (!acc[category]) {
+                          acc[category] = { category, count: 0, totalValue: 0 };
+                        }
+                        acc[category].count += 1;
+                        acc[category].totalValue += product.price * product.stock_quantity;
+                        return acc;
+                      }, {});
                     
-                    const categoryArray = Object.values(categoryData);
+                    const categoryArray = Array.isArray(categoryData) ? categoryData : Object.values(categoryData);
                     
                     return categoryArray.length > 0 ? (
                       categoryArray.map((cat: any) => (
-                        <div key={cat.category} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="font-medium text-gray-900">{cat.category}</span>
+                        <div key={cat.category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <span className="font-medium text-gray-900 dark:text-white">{cat.category}</span>
                           <div className="text-right">
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
                               {cat.count} products
                             </p>
-                            <p className="text-xs text-gray-500">
-                              {formatPrice(cat.value)} value
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatPrice(cat.totalValue || cat.value)} value
                             </p>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                         No category data available
                       </div>
                     );
@@ -613,18 +787,18 @@ export const Reports: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Low Stock Products</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Low Stock Products</h3>
                 <div className="space-y-3">
                   {(products || []).filter(p => p.stock_quantity <= p.min_stock_level).slice(0, 5).map(product => (
-                    <div key={product._id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div key={product._id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                       <div>
-                        <p className="font-medium text-gray-900">{product.name}</p>
-                        <p className="text-sm text-red-600">
+                        <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
+                        <p className="text-sm text-red-600 dark:text-red-400">
                           {product.stock_quantity} remaining (min: {product.min_stock_level})
                         </p>
                       </div>
-                      <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
+                      <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-medium rounded-full">
                         {product.stock_quantity === 0 ? 'Out of Stock' : 'Low Stock'}
                       </span>
                     </div>

@@ -117,12 +117,12 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
   };
 
   return (
-    <div className={`bg-white rounded-2xl shadow-lg border border-gray-100 p-6 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6 ${className}`}>
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <Calendar className="h-5 w-5 text-gray-400" />
-          <span className="text-lg font-semibold text-gray-700">Report Period:</span>
-          <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
+          <Calendar className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+          <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">Report Period:</span>
+          <span className="px-3 py-1 bg-primary-100 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium">
             {getSelectedPeriodLabel()}
           </span>
         </div>
@@ -156,11 +156,11 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
 
       {/* Advanced Filtering Options */}
       {showAdvanced && (
-        <div className="mt-6 pt-6 border-t border-gray-200">
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Month Selection */}
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-900">Select Month</h4>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Select Month</h4>
               <div className="grid grid-cols-2 gap-2">
                 {months.map(month => (
                   <Button
@@ -175,11 +175,13 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-600">Year:</label>
+                <label className="text-sm text-gray-600 dark:text-gray-400">Year:</label>
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  title="Select year"
+                  aria-label="Select year"
                 >
                   {years.map(year => (
                     <option key={year} value={year}>{year}</option>
@@ -190,7 +192,7 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
 
             {/* Year Selection */}
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-900">Select Year</h4>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Select Year</h4>
               <div className="grid grid-cols-1 gap-2">
                 {years.map(year => (
                   <Button
@@ -208,24 +210,28 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
 
             {/* Custom Date Range */}
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-900">Custom Range</h4>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Custom Range</h4>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Start Date</label>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Start Date</label>
                   <input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    title="Select start date"
+                    aria-label="Select start date"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">End Date</label>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">End Date</label>
                   <input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    title="Select end date"
+                    aria-label="Select end date"
                   />
                 </div>
                 <Button

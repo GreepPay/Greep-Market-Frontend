@@ -74,20 +74,20 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 w-full max-w-md mx-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-6 w-full max-w-md mx-4">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-primary-600" />
+            <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/20 rounded-lg flex items-center justify-center">
+              <DollarSign className="h-5 w-5 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Update Price</h2>
-              <p className="text-sm text-gray-500">Change product pricing</p>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Update Price</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Change product pricing</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             title="Close modal"
             aria-label="Close price update modal"
           >
@@ -96,12 +96,12 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
         </div>
 
         <div className="mb-6">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-medium text-gray-900 mb-2">{product.name}</h3>
-            <p className="text-sm text-gray-500 mb-3">SKU: {product.sku}</p>
+          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+            <h3 className="font-medium text-gray-900 dark:text-white mb-2">{product.name}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">SKU: {product.sku}</p>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Current Price:</span>
-              <span className="text-lg font-semibold text-gray-900">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Current Price:</span>
+              <span className="text-lg font-semibold text-gray-900 dark:text-white">
                 ${currentPrice.toFixed(2)}
               </span>
             </div>
@@ -110,7 +110,7 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="newPrice" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="newPrice" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               New Price
             </label>
             <Input
@@ -127,21 +127,21 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
           </div>
 
           {newPrice && !isNaN(newPriceNum) && newPriceNum !== currentPrice && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <div className="flex items-center space-x-2 mb-2">
                 {priceChange > 0 ? (
-                  <TrendingUp className="h-4 w-4 text-red-500" />
+                  <TrendingUp className="h-4 w-4 text-red-500 dark:text-red-400" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-green-500" />
+                  <TrendingDown className="h-4 w-4 text-green-500 dark:text-green-400" />
                 )}
-                <span className="text-sm font-medium text-gray-700">Price Change</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Price Change</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">
+                <span className="text-gray-600 dark:text-gray-400">
                   {priceChange > 0 ? 'Increase' : 'Decrease'}:
                 </span>
                 <span className={`font-semibold ${
-                  priceChange > 0 ? 'text-red-600' : 'text-green-600'
+                  priceChange > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                 }`}>
                   {priceChange > 0 ? '+' : ''}${Math.abs(priceChange).toFixed(2)} 
                   ({priceChangePercent > 0 ? '+' : ''}{priceChangePercent.toFixed(1)}%)
@@ -151,7 +151,7 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
           )}
 
           <div>
-            <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Reason for Change (Optional)
             </label>
             <textarea
@@ -159,15 +159,15 @@ export const PriceUpdateModal: React.FC<PriceUpdateModalProps> = ({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g., Supplier cost increase, market adjustment, promotional pricing..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               rows={3}
             />
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
             <div className="flex items-start space-x-2">
-              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-yellow-800">
+              <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-yellow-800 dark:text-yellow-200">
                 <p className="font-medium mb-1">Important:</p>
                 <p>This will update the product price for future sales. Previous transactions will retain their original pricing.</p>
               </div>
