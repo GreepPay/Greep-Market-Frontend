@@ -10,7 +10,8 @@ import {
   EyeOff,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useStore } from '../context/StoreContext';
@@ -214,6 +215,7 @@ export const Settings: React.FC = () => {
     const allTabs = [
       { id: 'profile', label: 'My Profile', icon: Users, roles: ['admin', 'owner', 'manager', 'cashier'] },
       { id: 'users', label: 'User Management', icon: Users, roles: ['admin', 'owner', 'manager'] },
+      { id: 'customer-orders', label: 'Customer Orders', icon: ShoppingBag, roles: ['admin', 'owner', 'manager'] },
       { id: 'store', label: 'Store Settings', icon: Database, roles: ['admin', 'owner'] },
       { id: 'theme', label: 'Theme & Appearance', icon: Sun, roles: ['admin', 'owner', 'manager', 'cashier'] },
       { id: 'audit', label: 'Audit Logs', icon: Shield, roles: ['admin', 'owner', 'manager'] }
@@ -439,6 +441,33 @@ export const Settings: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCustomerOrders = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Customer Orders</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Manage customer orders from the public catalog
+        </p>
+      </div>
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-blue-900 dark:text-blue-100">Customer Order Management</h3>
+            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+              Access the full customer order management interface
+            </p>
+          </div>
+          <button
+            onClick={() => window.open('/admin/customer-orders', '_blank')}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Open Customer Orders
+          </button>
         </div>
       </div>
     </div>
@@ -684,6 +713,8 @@ export const Settings: React.FC = () => {
         return renderMyProfile();
       case 'users':
         return renderUserManagement();
+      case 'customer-orders':
+        return renderCustomerOrders();
       case 'store':
         return renderStoreSettings();
       case 'theme':

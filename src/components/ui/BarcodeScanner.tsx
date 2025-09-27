@@ -295,6 +295,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                         value={selectedCamera}
                         onChange={(e) => setSelectedCamera(e.target.value)}
                         className="w-full text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        aria-label="Select camera for barcode scanning"
                       >
                         {availableCameras.map((camera) => (
                           <option key={camera.deviceId} value={camera.deviceId}>
