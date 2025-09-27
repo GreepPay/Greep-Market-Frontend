@@ -463,13 +463,13 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, user, loadGoals]);
 
-  // Update progress every 10 minutes (further reduced frequency since Dashboard now updates goals)
+  // Update progress every 30 minutes (significantly reduced frequency to prevent API spam)
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
     const interval = setInterval(() => {
       updateGoalProgress(); // This will make API calls as fallback
-    }, 600000); // 10 minutes - Dashboard should handle most updates
+    }, 1800000); // 30 minutes - Dashboard handles most updates
 
     return () => clearInterval(interval);
   }, [isAuthenticated, user, updateGoalProgress]);

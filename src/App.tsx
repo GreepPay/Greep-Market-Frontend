@@ -26,6 +26,9 @@ import { Audit } from './pages/Audit';
 import { RiderManagementPage } from './pages/RiderManagement';
 import { CashTrackingPage } from './pages/CashTracking';
 import { SalesHistory } from './pages/SalesHistory';
+import { CustomerCatalog } from './pages/CustomerCatalog';
+import { OrderTracking } from './pages/OrderTracking';
+import { AdminCustomerOrders } from './pages/AdminCustomerOrders';
 import { ScrollToTopWrapper } from './components/ScrollToTopWrapper';
 import { GoalCelebrationManager } from './components/ui/GoalCelebrationManager';
 
@@ -155,6 +158,18 @@ function App() {
                   <MobileNavigation />
                 </ProtectedRoute>
               } />
+              <Route path="/admin/customer-orders" element={
+                <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
+                  <Header />
+                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                    <AdminCustomerOrders />
+                  </main>
+                  <MobileNavigation />
+                </ProtectedRoute>
+              } />
+              {/* Public routes - no authentication required */}
+              <Route path="/catalog" element={<CustomerCatalog />} />
+              <Route path="/track-order" element={<OrderTracking />} />
             </Routes>
             <Toaster
               position="top-right"

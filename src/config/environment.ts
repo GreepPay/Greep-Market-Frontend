@@ -8,8 +8,8 @@
 export const config = {
   // API Configuration
   api: {
-    baseUrl: process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1',
-    socketUrl: process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000',
+    baseUrl: process.env.REACT_APP_API_URL || 'http://localhost:3001/api/v1',
+    socketUrl: process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001',
   },
   
   // Cloudinary Configuration
