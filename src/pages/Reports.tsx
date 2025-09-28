@@ -11,7 +11,9 @@ import {
   History
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { Card } from '../components/ui/Card';
+import { formatStockQuantity } from '../utils/formatUtils';
 import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PerformanceDashboard } from '../components/ui/PerformanceDashboard';
@@ -39,12 +41,13 @@ export const Reports: React.FC = () => {
   const { products, dashboardMetrics, sales, loading } = useApp();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('30d');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('this_month');
   const [periodStartDate, setPeriodStartDate] = useState<Date | undefined>();
   const [periodEndDate, setPeriodEndDate] = useState<Date | undefined>();
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedReport, setSelectedReport] = useState<'sales' | 'inventory' | 'products' | 'performance'>('performance');
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const loadAnalytics = async () => {
@@ -133,6 +136,194 @@ export const Reports: React.FC = () => {
     }).format(price);
   };
 
+  const handleExportReport = async () => {
+    if (!analyticsData) {
+      toast.error('No data available to export');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const dashboardData = analyticsData?.dashboardAnalytics;
+      const productData = analyticsData?.productPerformance;
+      const inventoryData = analyticsData?.inventoryAnalytics;
+      
+      // Debug: Log the actual data structure
+      console.log('🔍 Export Debug - Analytics Data:', {
+        dashboardData: dashboardData,
+        todaySales: dashboardData?.todaySales,
+        monthlySales: dashboardData?.monthlySales,
+        selectedPeriod: selectedPeriod,
+        periodStartDate: periodStartDate,
+        periodEndDate: periodEndDate,
+        topProducts: dashboardData?.topProducts,
+        recentTransactions: dashboardData?.recentTransactions,
+        productData: productData,
+        inventoryData: inventoryData
+      });
+      
+      // Generate comprehensive report data
+      const reportData = [];
+      
+      // Add report metadata
+      const reportDate = new Date().toLocaleDateString('tr-TR');
+      const periodText = selectedPeriod === 'custom' 
+        ? `${periodStartDate?.toLocaleDateString('tr-TR')} - ${periodEndDate?.toLocaleDateString('tr-TR')}`
+        : selectedPeriod;
+      
+      reportData.push(['Greep Market - Business Report']);
+      reportData.push(['Generated on:', reportDate]);
+      reportData.push(['Report Period:', periodText]);
+      reportData.push(['Report Type:', selectedReport]);
+      reportData.push(['Note:', `Today's sales and monthly sales may appear similar if using same date range filter`]);
+      reportData.push(['']); // Empty row
+      
+      // Add dashboard metrics
+      if (dashboardData) {
+        reportData.push(['DASHBOARD METRICS']);
+        reportData.push(['Metric', 'Value']);
+        reportData.push(['Total Sales', `₺${dashboardData.totalSales?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Total Transactions', dashboardData.totalTransactions?.toString() || '0']);
+        reportData.push(['Total Products', dashboardData.totalProducts?.toString() || '0']);
+        reportData.push(['Low Stock Items', dashboardData.lowStockItems?.toString() || '0']);
+        reportData.push(['Today Sales', `₺${dashboardData.todaySales?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Monthly Sales', `₺${dashboardData.monthlySales?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Average Transaction Value', `₺${dashboardData.averageTransactionValue?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Growth Rate', `${dashboardData.growthRate?.toFixed(2) || '0.00'}%`]);
+        reportData.push(['Sales vs Yesterday', `${dashboardData.salesVsYesterday > 0 ? '+' : ''}${dashboardData.salesVsYesterday?.toFixed(2) || '0.00'}%`]);
+        reportData.push(['Expenses vs Yesterday', `${dashboardData.expensesVsYesterday > 0 ? '+' : ''}${dashboardData.expensesVsYesterday?.toFixed(2) || '0.00'}%`]);
+        reportData.push(['Profit vs Yesterday', `${dashboardData.profitVsYesterday > 0 ? '+' : ''}${dashboardData.profitVsYesterday?.toFixed(2) || '0.00'}%`]);
+        reportData.push(['Transactions vs Yesterday', `${dashboardData.transactionsVsYesterday > 0 ? '+' : ''}${dashboardData.transactionsVsYesterday?.toFixed(2) || '0.00'}%`]);
+        reportData.push(['Total Expenses', `₺${dashboardData.totalExpenses?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Monthly Expenses', `₺${dashboardData.monthlyExpenses?.toFixed(2) || '0.00'}`]);
+        reportData.push(['Net Profit', `₺${dashboardData.netProfit?.toFixed(2) || '0.00'}`]);
+        reportData.push(['']); // Empty row
+      }
+      
+      // Add sales data by month
+      if (dashboardData?.salesByMonth && dashboardData.salesByMonth.length > 0) {
+        reportData.push(['SALES BY MONTH']);
+        reportData.push(['Month', 'Sales (₺)', 'Transactions']);
+        dashboardData.salesByMonth.forEach((item: any) => {
+          reportData.push([
+            item.month || item.date || 'N/A',
+            item.sales?.toFixed(2) || '0.00',
+            item.transactions?.toString() || '0'
+          ]);
+        });
+        reportData.push(['']); // Empty row
+      }
+      
+      // Add top products
+      if (dashboardData?.topProducts && dashboardData.topProducts.length > 0) {
+        reportData.push(['TOP PRODUCTS']);
+        reportData.push(['Product Name', 'Quantity Sold', 'Revenue (₺)']);
+        dashboardData.topProducts.forEach((product: any) => {
+          reportData.push([
+            product.productName || 'Unknown Product',
+            product.quantitySold?.toString() || '0',
+            product.revenue?.toFixed(2) || '0.00'
+          ]);
+        });
+        reportData.push(['']); // Empty row
+      }
+      
+      // Add recent transactions
+      if (dashboardData?.recentTransactions && dashboardData.recentTransactions.length > 0) {
+        reportData.push(['RECENT TRANSACTIONS']);
+        reportData.push(['Date', 'Amount (₺)', 'Payment Method']);
+        dashboardData.recentTransactions.forEach((transaction: any) => {
+          reportData.push([
+            new Date(transaction.createdAt).toLocaleDateString('tr-TR'),
+            transaction.totalAmount?.toFixed(2) || '0.00',
+            transaction.paymentMethod || 'Cash'
+          ]);
+        });
+        reportData.push(['']); // Empty row
+      }
+      
+      // Add product performance data if available
+      if (productData) {
+        // Handle different possible data structures
+        const products = productData.topSellingProducts || productData.products || productData;
+        
+        if (Array.isArray(products) && products.length > 0) {
+          reportData.push(['PRODUCT PERFORMANCE']);
+          reportData.push(['Product Name', 'Category', 'Stock', 'Sold', 'Revenue (₺)']);
+          products.forEach((product: any) => {
+            // Better category handling with debugging
+            const category = product.category || product.categoryName || 'No Category';
+            console.log('Product category debug:', {
+              productName: product.productName || product.name,
+              category: product.category,
+              categoryName: product.categoryName,
+              finalCategory: category
+            });
+            
+            reportData.push([
+              product.productName || product.name || 'Unknown Product',
+              category,
+              product.stock?.toString() || product.stockQuantity?.toString() || '0',
+              product.quantitySold || product.sold?.toString() || '0',
+              product.revenue?.toFixed(2) || '0.00'
+            ]);
+          });
+          reportData.push(['']); // Empty row
+        }
+      }
+      
+      // Add inventory analytics if available
+      if (inventoryData) {
+        reportData.push(['INVENTORY ANALYTICS']);
+        reportData.push(['Metric', 'Value']);
+        if (inventoryData.lowStockProducts) {
+          reportData.push(['Low Stock Products', inventoryData.lowStockProducts.toString()]);
+        }
+        if (inventoryData.totalInventoryValue) {
+          reportData.push(['Total Inventory Value', `₺${inventoryData.totalInventoryValue.toFixed(2)}`]);
+        }
+        if (inventoryData.fastMovingProducts) {
+          reportData.push(['Fast Moving Products', inventoryData.fastMovingProducts.toString()]);
+        }
+        if (inventoryData.slowMovingProducts) {
+          reportData.push(['Slow Moving Products', inventoryData.slowMovingProducts.toString()]);
+        }
+      }
+      
+      // Convert to CSV
+      const csvContent = reportData.map(row => 
+        row.map(cell => {
+          // Escape quotes and wrap in quotes if contains comma, quote, or newline
+          const cellStr = String(cell || '');
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(',')
+      ).join('\n');
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      
+      const filename = `greep-market-report-${selectedReport}-${periodText.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Report exported successfully');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export report. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Use dashboard analytics data first, then fallback to calculated metrics
   const dashboardData = analyticsData?.dashboardAnalytics;
 
@@ -209,9 +400,10 @@ export const Reports: React.FC = () => {
   const getPaymentMethodColor = (method: string) => {
     const colors: { [key: string]: string } = {
       'cash': '#22c55e',      // Green
-      'card': '#3b82f6',      // Blue  
-      'transfer': '#8b5cf6',  // Purple
-      'pos': '#f59e0b',       // Orange
+      'pos_isbank_transfer': '#3b82f6',      // Blue  
+      'naira_transfer': '#8b5cf6',  // Purple
+      'crypto_payment': '#f59e0b',       // Orange
+      'pos': '#3b82f6',       // Blue (for backward compatibility)
       'unknown': '#6b7280'    // Gray
     };
     return colors[method] || '#6b7280';
@@ -398,9 +590,11 @@ export const Reports: React.FC = () => {
                 <Button 
                   variant="outline"
                   className="w-full sm:w-auto"
+                  onClick={handleExportReport}
+                  disabled={isExporting || !analyticsData}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export Report
+                  {isExporting ? 'Exporting...' : 'Export Report'}
                 </Button>
               </div>
             </div>
@@ -795,7 +989,7 @@ export const Reports: React.FC = () => {
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
                         <p className="text-sm text-red-600 dark:text-red-400">
-                          {product.stock_quantity} remaining (min: {product.min_stock_level})
+                          {formatStockQuantity(product.stock_quantity)} remaining (min: {product.min_stock_level})
                         </p>
                       </div>
                       <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-medium rounded-full">

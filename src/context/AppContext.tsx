@@ -424,10 +424,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('Sending transaction to API:', transactionPayload);
       const newTransaction = await apiService.createTransaction(transactionPayload);
       dispatch({ type: 'ADD_TRANSACTION', payload: newTransaction });
-      toast.success('Transaction completed');
+      // Don't show toast here - let the calling component handle it
     } catch (error) {
       console.error('Failed to create transaction:', error);
-      toast.error('Failed to create transaction');
+      // Don't show toast here - let the calling component handle it
       throw error;
     }
   };
@@ -440,10 +440,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reason: 'Manual adjustment',
       });
       await loadProducts(); // Reload products to get updated quantities
-      toast.success('Inventory updated');
+      // Don't show toast here - let the calling component handle it
     } catch (error) {
       console.error('Failed to update inventory:', error);
-      toast.error('Failed to update inventory');
+      // Don't show toast here - let the calling component handle it
       throw error;
     }
   };

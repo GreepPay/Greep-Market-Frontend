@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { useApp } from '../context/AppContext';
 import { api } from '../config/environment';
 import { toast } from 'react-hot-toast';
+import { formatStockQuantity } from '../utils/formatUtils';
 
 interface Product {
   _id: string;
@@ -418,7 +419,7 @@ export const CustomerCatalog: React.FC = () => {
                       ₺{product.price.toFixed(2)}
                     </span>
                     <span className="text-sm text-gray-500">
-                      Stock: {product.stock_quantity}
+                      Stock: {formatStockQuantity(product.stock_quantity)}
                     </span>
                   </div>
                   

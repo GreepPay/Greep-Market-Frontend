@@ -36,9 +36,9 @@ function App() {
   return (
     <ThemeProvider>
       <SettingsProvider>
-        <NotificationProvider>
-          <RiderProvider>
-            <AuthProvider>
+        <RiderProvider>
+          <AuthProvider>
+            <NotificationProvider>
               <StoreProvider>
                 <AppProvider>
                   <GoalProvider>
@@ -201,9 +201,9 @@ function App() {
                   </GoalProvider>
                   </AppProvider>
                 </StoreProvider>
+              </NotificationProvider>
               </AuthProvider>
             </RiderProvider>
-          </NotificationProvider>
         </SettingsProvider>
       </ThemeProvider>
     );

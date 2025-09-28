@@ -53,9 +53,9 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const paymentTypes = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
-    { id: 'card', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
-    { id: 'transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
-    { id: 'crypto', label: 'Crypto Payment', icon: Coins, color: 'orange' },
+    { id: 'pos_isbank_transfer', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
+    { id: 'naira_transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
+    { id: 'crypto_payment', label: 'Crypto Payment', icon: Coins, color: 'orange' },
   ];
 
   // Calculate remaining amount based on current payments

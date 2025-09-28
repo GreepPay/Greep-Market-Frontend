@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { Notification } from '../components/ui/NotificationDropdown';
+import { apiService } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -8,13 +10,20 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   clearAll: () => void;
   removeNotification: (id: string) => void;
+  toggleExpand: (id: string) => void;
   unreadCount: number;
+  loadNotifications: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { isAuthenticated, user } = useAuth();
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const addNotification = useCallback((notificationData: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const notification: Notification = {
@@ -34,21 +43,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, []);
 
-  const markAsRead = useCallback((id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-  }, []);
-
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-  }, []);
 
   const clearAll = useCallback(() => {
     setNotifications([]);
@@ -57,6 +51,141 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
   }, []);
+
+  const toggleExpand = useCallback((id: string) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, expanded: !notification.expanded }
+          : notification
+      )
+    );
+  }, []);
+
+  // Load notifications from backend
+  const loadNotifications = useCallback(async () => {
+    if (!isAuthenticated || !user) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await apiService.getNotifications({ limit: 50 });
+      const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
+        id: notif._id,
+        type: notif.type,
+        priority: notif.priority,
+        title: notif.title,
+        message: notif.message,
+        timestamp: new Date(notif.created_at),
+        read: notif.read,
+        data: notif.data,
+      }));
+      
+      setNotifications(backendNotifications);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, user]);
+
+  // Refresh notifications (for real-time updates)
+  const refreshNotifications = useCallback(async () => {
+    if (!isAuthenticated || !user) return;
+    
+    try {
+      const response = await apiService.getNotifications({ limit: 50 });
+      const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
+        id: notif._id,
+        type: notif.type,
+        priority: notif.priority,
+        title: notif.title,
+        message: notif.message,
+        timestamp: new Date(notif.created_at),
+        read: notif.read,
+        data: notif.data,
+      }));
+      
+      setNotifications(backendNotifications);
+    } catch (error) {
+      console.error('Failed to refresh notifications:', error);
+    }
+  }, [isAuthenticated, user]);
+
+  // Enhanced mark as read with backend sync
+  const markAsRead = useCallback(async (id: string) => {
+    // Optimistically update UI
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true }
+          : notification
+      )
+    );
+
+    // Sync with backend
+    try {
+      await apiService.markNotificationAsRead(id);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      // Revert optimistic update on error
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id 
+            ? { ...notification, read: false }
+            : notification
+        )
+      );
+    }
+  }, []);
+
+  // Enhanced mark all as read with backend sync
+  const markAllAsRead = useCallback(async () => {
+    // Optimistically update UI
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, read: true }))
+    );
+
+    // Sync with backend
+    try {
+      await apiService.markAllNotificationsAsRead();
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
+  }, []);
+
+  // Start polling for new notifications
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    pollingIntervalRef.current = setInterval(() => {
+      refreshNotifications();
+    }, 30000); // Poll every 30 seconds
+  }, [refreshNotifications]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  // Load notifications on mount and start polling
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadNotifications();
+      startPolling();
+    } else {
+      stopPolling();
+      setNotifications([]);
+    }
+
+    return () => {
+      stopPolling();
+    };
+  }, [isAuthenticated, user, loadNotifications, startPolling, stopPolling]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -67,7 +196,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     markAllAsRead,
     clearAll,
     removeNotification,
+    toggleExpand,
     unreadCount,
+    loadNotifications,
+    refreshNotifications,
+    isLoading,
   };
 
   return (

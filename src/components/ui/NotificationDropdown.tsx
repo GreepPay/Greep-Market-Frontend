@@ -1,14 +1,17 @@
 import React from 'react';
-import { Bell, X, AlertTriangle, Package, ShoppingCart, TrendingUp, CheckCircle } from 'lucide-react';
+import { Bell, X, AlertTriangle, Package, ShoppingCart, TrendingUp, CheckCircle, Trophy, Target, Calendar, Star } from 'lucide-react';
 import { GlassmorphismIcon } from './GlassmorphismIcon';
 
 export interface Notification {
   id: string;
-  type: 'info' | 'warning' | 'success' | 'error';
+  type: 'info' | 'warning' | 'success' | 'error' | 'MILESTONE' | 'DAILY_SUMMARY' | 'ACHIEVEMENT' | 'GOAL_REMINDER';
+  priority?: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
   title: string;
   message: string;
   timestamp: Date;
   read: boolean;
+  data?: any;
+  expanded?: boolean;
   action?: {
     label: string;
     onClick: () => void;
@@ -20,6 +23,7 @@ interface NotificationDropdownProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onClearAll: () => void;
+  onToggleExpand: (id: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -29,6 +33,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   onMarkAsRead,
   onMarkAllAsRead,
   onClearAll,
+  onToggleExpand,
   isOpen,
   onClose,
 }) => {
@@ -42,6 +47,14 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return CheckCircle;
       case 'error':
         return AlertTriangle;
+      case 'MILESTONE':
+        return Trophy;
+      case 'DAILY_SUMMARY':
+        return Calendar;
+      case 'ACHIEVEMENT':
+        return Star;
+      case 'GOAL_REMINDER':
+        return Target;
       default:
         return Bell;
     }
@@ -55,6 +68,14 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return 'green';
       case 'error':
         return 'red';
+      case 'MILESTONE':
+        return 'purple';
+      case 'DAILY_SUMMARY':
+        return 'blue';
+      case 'ACHIEVEMENT':
+        return 'yellow';
+      case 'GOAL_REMINDER':
+        return 'green';
       default:
         return 'blue';
     }
@@ -77,7 +98,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-0 mt-2 w-80 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-xl border border-white/20 dark:border-gray-700/50 z-50 transition-all duration-200">
+    <div className="absolute right-0 mt-2 w-96 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-xl border border-white/20 dark:border-gray-700/50 z-50 transition-all duration-200">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/20 dark:border-gray-700/50">
         <div className="flex items-center space-x-2">
@@ -127,6 +148,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   key={notification.id}
                   className={`p-3 rounded-lg mb-2 transition-all duration-200 cursor-pointer hover:bg-white/20 dark:hover:bg-gray-700/50 ${
                     !notification.read ? 'bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-400' : ''
+                  } ${
+                    notification.priority === 'URGENT' ? 'ring-2 ring-red-400/50 bg-red-50/30 dark:bg-red-900/10' :
+                    notification.priority === 'HIGH' ? 'ring-1 ring-orange-400/50 bg-orange-50/20 dark:bg-orange-900/10' : ''
                   }`}
                   onClick={() => !notification.read && onMarkAsRead(notification.id)}
                 >
@@ -149,9 +173,20 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                           }`}>
                             {notification.title}
                           </p>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                          <p className={`text-xs text-gray-600 dark:text-gray-400 mt-1 ${
+                            notification.expanded ? '' : 'line-clamp-2'
+                          }`}>
                             {notification.message}
                           </p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleExpand(notification.id);
+                            }}
+                            className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 mt-1 font-medium"
+                          >
+                            {notification.expanded ? 'Show less' : 'Show more'}
+                          </button>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                             {formatTimestamp(notification.timestamp)}
                           </p>

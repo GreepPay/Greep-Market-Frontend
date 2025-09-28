@@ -633,10 +633,6 @@ export const AuditLogs: React.FC<AuditLogsProps> = ({ storeId, currentUserRole }
                                 <div>${selectedLog.metadata.additional_info.discount_amount?.toFixed(2) || '0.00'}</div>
                               </div>
                               <div className="bg-white dark:bg-gray-800 p-2 rounded border">
-                                <div className="font-medium">Tax</div>
-                                <div>${selectedLog.metadata.additional_info.tax_amount?.toFixed(2) || '0.00'}</div>
-                              </div>
-                              <div className="bg-white dark:bg-gray-800 p-2 rounded border">
                                 <div className="font-medium">Status</div>
                                 <div className="capitalize">{selectedLog.metadata.additional_info.status || 'N/A'}</div>
                               </div>

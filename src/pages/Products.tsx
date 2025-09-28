@@ -13,6 +13,7 @@ import ExcelImportModal from '../components/ExcelImportModal';
 import { PriceUpdateModal } from '../components/ui/PriceUpdateModal';
 import { PriceHistoryModal } from '../components/ui/PriceHistoryModal';
 import CategorySelect from '../components/ui/CategorySelect';
+import { normalizeCategoryName, getAllAvailableCategories } from '../utils/categoryUtils';
 import { TagsDropdown } from '../components/ui/TagsDropdown';
 import { EnhancedProductForm } from '../components/ui/EnhancedProductForm';
 import { CategoryFilterSidebar } from '../components/ui/CategoryFilterSidebar';
@@ -79,8 +80,8 @@ export const Products: React.FC = () => {
 
   const categories = useMemo(() => {
     if (!Array.isArray(products)) return ['all'];
-    const uniqueCategories = Array.from(new Set(products.map(p => p.category)));
-    return ['all', ...uniqueCategories];
+    const allAvailableCategories = getAllAvailableCategories(products);
+    return ['all', ...allAvailableCategories];
   }, [products]);
 
   const existingTags = useMemo(() => {
@@ -292,7 +293,7 @@ export const Products: React.FC = () => {
         name: formData.name,
         description: formData.description || '',
         price: parseFloat(formData.price),
-        category: formData.category,
+        category: normalizeCategoryName(formData.category),
         sku: sku,
         barcode: formData.barcode || undefined,
         stock_quantity: formData.stock_quantity ? parseInt(formData.stock_quantity) : 0,
@@ -385,7 +386,7 @@ export const Products: React.FC = () => {
         name: newProduct.name,
         description: newProduct.description || '',
         price: parseFloat(newProduct.price),
-        category: newProduct.category,
+        category: normalizeCategoryName(newProduct.category),
         sku: newProduct.sku,
         barcode: newProduct.barcode || undefined,
         stock_quantity: newProduct.stock_quantity ? parseInt(newProduct.stock_quantity) : 0,
@@ -903,6 +904,7 @@ export const Products: React.FC = () => {
                 value={newProduct.category}
                 onChange={(category: string) => setNewProduct({ ...newProduct, category })}
                 existingCategories={categories.filter(cat => cat !== 'all')}
+                products={products}
                 placeholder="Select or add a category"
                 required
               />

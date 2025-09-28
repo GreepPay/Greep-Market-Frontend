@@ -561,7 +561,7 @@ class ApiService {
       discount_amount?: number;
     }>;
     discount_amount?: number;
-    payment_method: 'cash' | 'card' | 'transfer' | 'crypto';
+    payment_method: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
     notes?: string;
     cashier_id: string;
   }): Promise<Transaction> {
@@ -586,14 +586,26 @@ class ApiService {
       unit_price: number;
     }>;
     payment_method?: string;
+    payment_methods?: Array<{
+      type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
+      amount: number;
+    }>;
     customer_id?: string;
     notes?: string;
   }): Promise<Transaction> {
     try {
+      // Convert payment_methods array to single payment_method for backend compatibility
+      const backendUpdates = { ...updates };
+      if (updates.payment_methods && updates.payment_methods.length > 0) {
+        backendUpdates.payment_method = updates.payment_methods[0].type;
+        delete backendUpdates.payment_methods;
+      }
+      
       const response = await this.privateRequest<Transaction>(`/transactions/${transactionId}`, {
         method: 'PUT',
-        body: JSON.stringify(updates),
+        body: JSON.stringify(backendUpdates),
       });
+      
       return response.data;
     } catch (error: any) {
       console.error('Update transaction error:', error);
@@ -1027,6 +1039,81 @@ class ApiService {
       body: JSON.stringify(settings),
     });
     return (response as any).data;
+  }
+
+  // Notification API methods
+  async getNotifications(params?: {
+    limit?: number;
+    offset?: number;
+    priority?: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+    type?: 'MILESTONE' | 'DAILY_SUMMARY' | 'ACHIEVEMENT' | 'GOAL_REMINDER';
+    read?: boolean;
+  }): Promise<{
+    notifications: Array<{
+      _id: string;
+      user_id: string;
+      store_id: string;
+      type: 'MILESTONE' | 'DAILY_SUMMARY' | 'ACHIEVEMENT' | 'GOAL_REMINDER';
+      priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+      title: string;
+      message: string;
+      data?: any;
+      read: boolean;
+      created_at: string;
+      expires_at?: string;
+    }>;
+    total: number;
+    unread_count: number;
+  }> {
+    const queryParams = new URLSearchParams();
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+    if (params?.priority) queryParams.append('priority', params.priority);
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.read !== undefined) queryParams.append('read', params.read.toString());
+
+    const response = await this.privateRequest<{ success: boolean; data: any }>(`/notifications?${queryParams.toString()}`);
+    return (response as any).data;
+  }
+
+  async getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+    const response = await this.privateRequest<{ success: boolean; data: any }>('/notifications/unread-count');
+    return (response as any).data;
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<{ success: boolean }> {
+    const response = await this.privateRequest<{ success: boolean }>(`/notifications/${notificationId}/read`, {
+      method: 'PUT'
+    });
+    return response;
+  }
+
+  async markAllNotificationsAsRead(): Promise<{ success: boolean }> {
+    const response = await this.privateRequest<{ success: boolean }>('/notifications/read-all', {
+      method: 'PUT'
+    });
+    return response;
+  }
+
+  // Test endpoints for development
+  async testMilestoneNotification(): Promise<{ success: boolean; message: string }> {
+    const response = await this.privateRequest<{ success: boolean; message: string }>('/notifications/test-milestone', {
+      method: 'POST'
+    });
+    return {
+      success: response.success || false,
+      message: response.message || 'Test notification sent'
+    };
+  }
+
+  async testDailySummaryNotification(): Promise<{ success: boolean; message: string }> {
+    const response = await this.privateRequest<{ success: boolean; message: string }>('/notifications/test-daily-summary', {
+      method: 'POST'
+    });
+    return {
+      success: response.success || false,
+      message: response.message || 'Test notification sent'
+    };
   }
 
   // Settings API methods
