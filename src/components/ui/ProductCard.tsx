@@ -2,6 +2,7 @@ import React from 'react';
 import { Package, AlertTriangle, CheckSquare, Square, DollarSign, History, Edit3, Trash2, Plus, Tag } from 'lucide-react';
 import { Product } from '../../types';
 import { formatTagsForDisplay } from '../../utils/tagUtils';
+import { formatStockQuantity } from '../../utils/formatUtils';
 
 interface ProductCardProps {
   product: Product;
@@ -43,6 +44,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       currency: 'TRY',
     }).format(price);
   };
+
 
   const highlightSearchTerm = (text: string, term: string) => {
     if (!term || !text) return text;
@@ -159,7 +161,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   ? 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' 
                   : 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
             }`}>
-              {product.stock_quantity}
+              {formatStockQuantity(product.stock_quantity)}
             </span>
           </div>
         </div>

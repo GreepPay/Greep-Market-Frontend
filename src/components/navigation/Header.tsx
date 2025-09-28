@@ -12,7 +12,7 @@ import { NotificationDropdown } from '../ui/NotificationDropdown';
 export const Header: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const { currentStore } = useStore();
-  const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount } = useNotifications();
+  const { notifications, markAsRead, markAllAsRead, clearAll, toggleExpand, unreadCount } = useNotifications();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -63,6 +63,7 @@ export const Header: React.FC = () => {
               onMarkAsRead={markAsRead}
               onMarkAllAsRead={markAllAsRead}
               onClearAll={clearAll}
+              onToggleExpand={toggleExpand}
               isOpen={showNotifications}
               onClose={() => setShowNotifications(false)}
             />

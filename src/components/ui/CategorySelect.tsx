@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Plus, Tag } from 'lucide-react';
+import { normalizeCategoryName, addSavedCategory, getAllAvailableCategories } from '../../utils/categoryUtils';
 
 interface CategorySelectProps {
   value: string;
   onChange: (category: string) => void;
   existingCategories: string[];
+  products?: any[]; // Add products prop for category normalization
   placeholder?: string;
   label?: string;
   required?: boolean;
@@ -35,6 +37,7 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
   value,
   onChange,
   existingCategories,
+  products = [],
   placeholder = "Select or add a category",
   label = "Category",
   required = false,
@@ -45,13 +48,16 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Get all available categories (saved + normalized from products)
+  const allAvailableCategories = getAllAvailableCategories(products);
+  
   // Filter categories based on search term
-  const filteredCategories = existingCategories.filter(category =>
+  const filteredCategories = allAvailableCategories.filter(category =>
     category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Check if search term matches a new category
-  const isNewCategory = searchTerm && !existingCategories.includes(searchTerm);
+  const isNewCategory = searchTerm && !allAvailableCategories.includes(normalizeCategoryName(searchTerm));
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -74,14 +80,17 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
   }, [isOpen]);
 
   const handleSelectCategory = (category: string) => {
-    onChange(category);
+    const normalizedCategory = normalizeCategoryName(category);
+    onChange(normalizedCategory);
     setIsOpen(false);
     setSearchTerm('');
   };
 
   const handleAddNewCategory = () => {
     if (searchTerm.trim()) {
-      handleSelectCategory(searchTerm.trim());
+      const normalizedCategory = normalizeCategoryName(searchTerm.trim());
+      addSavedCategory(normalizedCategory);
+      handleSelectCategory(normalizedCategory);
     }
   };
 
@@ -99,7 +108,7 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
     }
   };
 
-  const selectedCategoryIndex = existingCategories.indexOf(value);
+  const selectedCategoryIndex = allAvailableCategories.indexOf(value);
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -200,7 +209,7 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
               <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quick add popular categories:</div>
               <div className="flex flex-wrap gap-1">
                 {['Food & Beverages', 'Electronics', 'Clothing', 'Home & Garden', 'Health & Beauty', 'Sports & Outdoors'].map((quickCategory) => {
-                  if (existingCategories.includes(quickCategory)) return null;
+                  if (allAvailableCategories.includes(quickCategory)) return null;
                   return (
                     <button
                       key={quickCategory}

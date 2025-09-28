@@ -45,9 +45,9 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
   const paymentTypes = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'green' },
-    { id: 'card', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
-    { id: 'transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
-    { id: 'crypto', label: 'Crypto Payment', icon: Coins, color: 'orange' },
+    { id: 'pos_isbank_transfer', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
+    { id: 'naira_transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
+    { id: 'crypto_payment', label: 'Crypto Payment', icon: Coins, color: 'orange' },
   ];
 
   // Initialize form data when transaction changes
@@ -61,7 +61,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       } else if (transaction.payment_method) {
         // Convert legacy single payment method to array format
         setPaymentMethods([{
-          type: transaction.payment_method as 'cash' | 'card' | 'transfer' | 'crypto',
+          type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment',
           amount: transaction.total_amount
         }]);
       } else {
@@ -186,7 +186,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       };
 
       await onSave(transaction._id, updates);
-      toast.success('Transaction updated successfully');
+      // Don't show toast here - let the parent component handle it
       onClose();
     } catch (error) {
       console.error('Failed to update transaction:', error);

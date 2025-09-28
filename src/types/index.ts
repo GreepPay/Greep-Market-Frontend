@@ -43,7 +43,7 @@ export interface Product {
 }
 
 export interface PaymentMethod {
-  type: 'cash' | 'card' | 'transfer' | 'crypto';
+  type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
   amount: number;
 }
 
@@ -83,10 +83,9 @@ export interface Transaction {
   items: TransactionItem[];
   subtotal: number;
   discount_amount: number;
-  tax_amount: number;
   total_amount: number;
   payment_methods: PaymentMethod[]; // Multiple payment methods
-  payment_method?: 'cash' | 'card' | 'transfer' | 'crypto'; // Legacy single payment method (for backward compatibility)
+  payment_method?: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment'; // Legacy single payment method (for backward compatibility)
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   status: 'pending' | 'completed' | 'cancelled' | 'voided';
   order_source: 'in_store' | 'online' ;
@@ -167,6 +166,11 @@ export interface DashboardMetrics {
   totalExpenses: number;
   monthlyExpenses: number;
   netProfit: number;
+  // New individual vs yesterday metrics
+  salesVsYesterday?: number;
+  expensesVsYesterday?: number;
+  profitVsYesterday?: number;
+  transactionsVsYesterday?: number;
   topProducts: Array<{
     productId: string;
     productName: string;

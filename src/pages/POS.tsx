@@ -8,10 +8,12 @@ import { ShoppingCartComponent } from '../components/ui/ShoppingCart';
 import { BarcodeScanner } from '../components/ui/BarcodeScanner';
 import { EnhancedPaymentModal, PaymentData } from '../components/ui/EnhancedPaymentModal';
 import { SmartNavButton } from '../components/ui/SmartNavButton';
+import { CheckoutLoader } from '../components/ui/CheckoutLoader';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useRiders } from '../context/RiderContext';
 import { useGoals } from '../context/GoalContext';
+import { useNotifications } from '../context/NotificationContext';
 import { TransactionItem } from '../types';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 
@@ -20,6 +22,7 @@ export const POS: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { riders, loadRiders } = useRiders();
   const { updateGoalProgress } = useGoals();
+  const { refreshNotifications } = useNotifications();
   
   
   // Enable automatic refresh for POS (conservative settings)
@@ -42,6 +45,7 @@ export const POS: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState<TransactionItem[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [discount, setDiscount] = useState('');
 
@@ -176,7 +180,7 @@ export const POS: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to update inventory:', error);
-      toast.error('Failed to update inventory');
+      // Don't show toast here - the main error will be handled by processPayment
     }
   };
 
@@ -200,6 +204,9 @@ export const POS: React.FC = () => {
       return;
     }
     
+    // Show loading state
+    setIsProcessingPayment(true);
+    
     // Use default store if user doesn't have a store_id assigned
     const storeId = user?.store_id || 'default-store';
 
@@ -210,15 +217,15 @@ export const POS: React.FC = () => {
         (current.amount > prev.amount) ? current : prev
       );
 
-    const transaction = {
+      const transaction = {
         store_id: storeId,
         cashier_id: user.id,
-      items: cartItems.map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-      })),
-      discount_amount: parseFloat(discount) || 0,
+        items: cartItems.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
+        discount_amount: parseFloat(discount) || 0,
         payment_method: primaryPaymentMethod.type,
         order_source: paymentData.order_source,
         rider_id: paymentData.rider_id,
@@ -228,34 +235,45 @@ export const POS: React.FC = () => {
       };
 
       console.log('Creating enhanced transaction:', transaction);
-      await addTransaction(transaction);
-
-      // Update goal progress after successful transaction
-      await updateGoalProgress();
-
-      // Update inventory - reduce stock for sold items
-      if (products && Array.isArray(products)) {
-        for (const item of cartItems) {
-      const product = products.find(p => p._id === item.product_id);
-      if (product) {
-            await updateInventoryForSale(item.product_id, item.quantity);
+      
+      // Process transaction and inventory updates
+      await Promise.all([
+        addTransaction(transaction),
+        updateGoalProgress(),
+        // Update inventory for all sold items
+        ...cartItems.map(async (item) => {
+          if (products && Array.isArray(products)) {
+            const product = products.find(p => p._id === item.product_id);
+            if (product) {
+              await updateInventoryForSale(item.product_id, item.quantity);
+            }
           }
-        }
-      }
+        })
+      ]);
 
-    // Clear cart and close modal
-    clearCart();
-    setIsPaymentModalOpen(false);
-    setDiscount('');
+      // Trigger notification refresh to get new milestone notifications
+      setTimeout(() => {
+        refreshNotifications();
+      }, 2000); // Wait 2 seconds for backend to process
+
+      // Clear cart and close modal
+      clearCart();
+      setIsPaymentModalOpen(false);
+      setDiscount('');
 
       const paymentMethodsText = paymentData.payment_methods.map(pm => 
         `${pm.type.charAt(0).toUpperCase() + pm.type.slice(1)}: ₺${pm.amount.toFixed(2)}`
       ).join(', ');
 
+      // Single success toast with all information
       toast.success(`Sale completed! Total: ₺${finalTotal.toFixed(2)} (${paymentMethodsText})`);
+      
     } catch (error) {
       console.error('Payment processing failed:', error);
       toast.error('Failed to process payment. Please try again.');
+    } finally {
+      // Hide loading state
+      setIsProcessingPayment(false);
     }
   };
 
@@ -476,6 +494,13 @@ export const POS: React.FC = () => {
         onClose={() => setIsScannerOpen(false)}
         onScan={handleBarcodeScan}
         onError={(error) => toast.error(`Scanner error: ${error}`)}
+      />
+      
+      <CheckoutLoader 
+        isVisible={isProcessingPayment}
+        message="Processing your order..."
+        onCancel={() => setIsProcessingPayment(false)}
+        canCancel={true}
       />
     </div>
   );

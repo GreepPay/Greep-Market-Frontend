@@ -90,6 +90,7 @@ export const SalesHistory: React.FC = () => {
       }
       
       const response = await apiService.getTransactions({
+        store_id: user?.store_id,
         page: currentPage,
         limit: 20,
         start_date: startDate,
@@ -97,6 +98,7 @@ export const SalesHistory: React.FC = () => {
         // Note: API doesn't support category/tags filtering for transactions yet
         // This would need to be implemented on the backend
       });
+      
       
       setSales(response.transactions);
       setTotalPages(response.total || 1);
@@ -107,7 +109,7 @@ export const SalesHistory: React.FC = () => {
     } finally {
       setIsLoadingSales(false);
     }
-  }, [currentPage, selectedMonth, selectedYear]);
+  }, [currentPage, selectedMonth, selectedYear, user?.store_id]);
 
   // Load sales when filters change
   useEffect(() => {
@@ -205,6 +207,24 @@ export const SalesHistory: React.FC = () => {
               }
             }
             
+            // Handle both new (payment_methods array) and legacy (single payment_method) formats
+            let paymentMethods: PaymentMethod[] = [];
+            let paymentMethod: string = 'cash';
+            
+            if (transaction.payment_methods && transaction.payment_methods.length > 0) {
+              // New format: payment_methods array
+              paymentMethods = transaction.payment_methods;
+              paymentMethod = transaction.payment_methods[0].type;
+            } else if (transaction.payment_method) {
+              // Legacy format: single payment_method field
+              paymentMethod = transaction.payment_method;
+              paymentMethods = [{
+                type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment',
+                amount: transaction.total_amount
+              }];
+            }
+            
+            
             soldItems.push({
               productId: product._id,
               productName: product.name,
@@ -215,8 +235,8 @@ export const SalesHistory: React.FC = () => {
               totalRevenue: item.quantity * item.unit_price,
               saleDate: new Date(transaction.created_at),
               transactionId: transaction._id,
-              paymentMethods: transaction.payment_methods || (transaction.payment_method ? [{ type: transaction.payment_method as 'cash' | 'card' | 'transfer' | 'crypto', amount: transaction.total_amount }] : []),
-              paymentMethod: transaction.payment_method || (transaction.payment_methods && transaction.payment_methods.length > 0 ? transaction.payment_methods[0].type : 'cash'),
+              paymentMethods: paymentMethods,
+              paymentMethod: paymentMethod,
               customerId: transaction.customer_id
             });
           }
@@ -330,13 +350,13 @@ export const SalesHistory: React.FC = () => {
       // Handle multiple payment methods
       if (item.paymentMethods && item.paymentMethods.length > 0) {
         item.paymentMethods.forEach(method => {
-          const methodKey = method.type === 'card' ? 'pos' : method.type;
+          const methodKey = method.type === 'pos_isbank_transfer' ? 'pos' : method.type;
           acc[methodKey] = (acc[methodKey] || 0) + method.amount;
         });
       } else {
         // Fallback to legacy single payment method
         const method = item.paymentMethod?.toLowerCase() || 'unknown';
-        const methodKey = method === 'card' ? 'pos' : method;
+        const methodKey = method === 'pos_isbank_transfer' ? 'pos' : method;
         acc[methodKey] = (acc[methodKey] || 0) + item.totalRevenue;
       }
       return acc;

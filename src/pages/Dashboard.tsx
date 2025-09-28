@@ -504,8 +504,12 @@ export const Dashboard: React.FC = () => {
   const totalTransactions = currentDashboardMetrics?.totalTransactions ?? 0;
   const averageTransactionValue = currentDashboardMetrics?.averageTransactionValue ?? 0;
   const growthRate = currentDashboardMetrics?.growthRate ?? 0;
-  const transactionGrowthRate = 0; // Simplified for now
-  const avgTransactionGrowthRate = 0; // Simplified for now
+  
+  // New individual vs yesterday metrics
+  const salesVsYesterday = currentDashboardMetrics?.salesVsYesterday ?? 0;
+  const expensesVsYesterday = currentDashboardMetrics?.expensesVsYesterday ?? 0;
+  const profitVsYesterday = currentDashboardMetrics?.profitVsYesterday ?? 0;
+  const transactionsVsYesterday = currentDashboardMetrics?.transactionsVsYesterday ?? 0;
   // Get comparison label and period label based on current filter
   let comparisonLabel = 'vs last month';
   let periodLabel = 'This Month';
@@ -556,7 +560,7 @@ export const Dashboard: React.FC = () => {
         netProfit: netProfitFromMetrics
       }
     });
-  }, [dashboardMetrics, totalSales, totalTransactions, averageTransactionValue, growthRate, transactionGrowthRate, avgTransactionGrowthRate, netProfit, totalExpensesFromMetrics, monthlyExpensesFromMetrics, netProfitFromMetrics, comparisonLabel, periodLabel, dateRange, customStartDate, customEndDate, currentDashboardMetrics]);
+  }, [dashboardMetrics, totalSales, totalTransactions, averageTransactionValue, growthRate, salesVsYesterday, expensesVsYesterday, profitVsYesterday, transactionsVsYesterday, netProfit, totalExpensesFromMetrics, monthlyExpensesFromMetrics, netProfitFromMetrics, comparisonLabel, periodLabel, dateRange, customStartDate, customEndDate, currentDashboardMetrics]);
 
   const metricCards = [
     {
@@ -566,8 +570,8 @@ export const Dashboard: React.FC = () => {
       gradient: 'from-emerald-500 to-teal-600',
       iconBg: 'bg-gradient-to-br from-emerald-100 to-teal-100',
       iconColor: 'text-emerald-600',
-      change: `${growthRate > 0 ? '+' : ''}${growthRate.toFixed(1)}% ${comparisonLabel}`,
-      changeColor: growthRate >= 0 ? 'text-emerald-600' : 'text-red-600',
+      change: `${salesVsYesterday > 0 ? '+' : ''}${salesVsYesterday.toFixed(1)}% ${comparisonLabel}`,
+      changeColor: salesVsYesterday >= 0 ? 'text-emerald-600' : 'text-red-600',
     },
     {
       title: 'Total Expenses',
@@ -576,8 +580,8 @@ export const Dashboard: React.FC = () => {
       gradient: 'from-red-500 to-pink-600',
       iconBg: 'bg-gradient-to-br from-red-100 to-pink-100',
       iconColor: 'text-red-600',
-      change: `+8.2% ${comparisonLabel}`, // TODO: Calculate expense growth rate
-      changeColor: 'text-red-600',
+      change: `${expensesVsYesterday > 0 ? '+' : ''}${expensesVsYesterday.toFixed(1)}% ${comparisonLabel}`,
+      changeColor: expensesVsYesterday <= 0 ? 'text-emerald-600' : 'text-red-600', // Lower expenses = good (green)
     },
     {
       title: 'Net Profit',
@@ -586,8 +590,8 @@ export const Dashboard: React.FC = () => {
       gradient: netProfit >= 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-rose-600',
       iconBg: netProfit >= 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-red-100 to-rose-100',
       iconColor: netProfit >= 0 ? 'text-green-600' : 'text-red-600',
-      change: `${growthRate > 0 ? '+' : ''}${growthRate.toFixed(1)}% ${comparisonLabel}`, // TODO: Calculate net profit growth rate
-      changeColor: netProfit >= 0 ? 'text-green-600' : 'text-red-600',
+      change: `${profitVsYesterday > 0 ? '+' : ''}${profitVsYesterday.toFixed(1)}% ${comparisonLabel}`,
+      changeColor: profitVsYesterday >= 0 ? 'text-green-600' : 'text-red-600',
     },
     {
       title: 'Transactions',
@@ -596,8 +600,8 @@ export const Dashboard: React.FC = () => {
       gradient: 'from-green-500 to-green-700',
       iconBg: 'bg-gradient-to-br from-green-100 to-green-200',
       iconColor: 'text-green-600',
-      change: `${transactionGrowthRate > 0 ? '+' : ''}${transactionGrowthRate.toFixed(1)}% ${comparisonLabel}`,
-      changeColor: transactionGrowthRate >= 0 ? 'text-blue-600' : 'text-red-600',
+      change: `${transactionsVsYesterday > 0 ? '+' : ''}${transactionsVsYesterday.toFixed(1)}% ${comparisonLabel}`,
+      changeColor: transactionsVsYesterday >= 0 ? 'text-green-600' : 'text-red-600',
     },
   ];
 
