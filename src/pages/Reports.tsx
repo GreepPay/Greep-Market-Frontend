@@ -20,6 +20,7 @@ import { PerformanceDashboard } from '../components/ui/PerformanceDashboard';
 import { ReportPeriodFilter } from '../components/ui/ReportPeriodFilter';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { apiService } from '../services/api';
 import { 
   LineChart, 
@@ -40,6 +41,33 @@ import {
 export const Reports: React.FC = () => {
   const { products, dashboardMetrics, sales, loading } = useApp();
   const { user } = useAuth();
+  const { isDark } = useTheme();
+  
+  // Tooltip styles based on theme
+  const getTooltipStyles = () => ({
+    contentStyle: {
+      backgroundColor: isDark ? '#1F2937' : '#ffffff',
+      border: isDark ? '1px solid #4B5563' : '1px solid #e5e7eb',
+      borderRadius: '8px',
+      color: isDark ? '#F9FAFB' : '#374151',
+      fontSize: '14px',
+      fontWeight: '500',
+      padding: '8px 12px',
+      boxShadow: isDark 
+        ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
+        : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+    },
+    labelStyle: {
+      color: isDark ? '#F9FAFB' : '#374151',
+      fontSize: '14px',
+      fontWeight: '600',
+      marginBottom: '4px'
+    },
+    itemStyle: {
+      color: isDark ? '#F9FAFB' : '#374151'
+    }
+  });
+
   const navigate = useNavigate();
   const [selectedPeriod, setSelectedPeriod] = useState<string>('this_month');
   const [periodStartDate, setPeriodStartDate] = useState<Date | undefined>();
@@ -371,28 +399,71 @@ export const Reports: React.FC = () => {
 
   const salesData = generateSalesData();
 
-  // Generate payment method data from actual transactions
+  // Generate payment method data from actual transactions (using AMOUNTS, not counts)
   const generatePaymentMethodData = () => {
     if (!sales || sales.length === 0) {
       // Generate sample payment method data
       return [
         { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
-        { name: 'Card', value: 35, percentage: '35.0', color: '#3b82f6' },
-        { name: 'Transfer', value: 20, percentage: '20.0', color: '#8b5cf6' }
+        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
+        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
+        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
       ];
     }
     
     const paymentMethods: { [key: string]: number } = {};
+    let totalAmount = 0;
+    
     sales.forEach(sale => {
-      // Use the correct field name: payment_method (singular) instead of payment_methods (plural)
-      const method = sale.payment_method || 'unknown';
-      paymentMethods[method] = (paymentMethods[method] || 0) + 1;
+      // Handle both new (payment_methods array) and legacy (single payment_method) formats
+      if (sale.payment_methods && sale.payment_methods.length > 0) {
+        // New format: payment_methods array
+        sale.payment_methods.forEach(method => {
+          let methodKey: string;
+          switch (method.type) {
+            case 'pos_isbank_transfer':
+            case 'card': // Legacy support for card payments
+              methodKey = 'pos';
+              break;
+            case 'naira_transfer':
+              methodKey = 'transfer';
+              break;
+            case 'crypto_payment':
+              methodKey = 'crypto';
+              break;
+            default:
+              methodKey = method.type;
+          }
+          paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
+          totalAmount += method.amount;
+        });
+      } else if (sale.payment_method) {
+        // Legacy format: single payment_method field
+        const method = sale.payment_method.toLowerCase();
+        let methodKey: string;
+        switch (method) {
+          case 'pos_isbank_transfer':
+          case 'card': // Legacy support for card payments
+            methodKey = 'pos';
+            break;
+          case 'naira_transfer':
+            methodKey = 'transfer';
+            break;
+          case 'crypto_payment':
+            methodKey = 'crypto';
+            break;
+          default:
+            methodKey = method;
+        }
+        paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + sale.total_amount;
+        totalAmount += sale.total_amount;
+      }
     });
     
-    return Object.entries(paymentMethods).map(([method, count]) => ({
+    return Object.entries(paymentMethods).map(([method, amount]) => ({
       name: method.charAt(0).toUpperCase() + method.slice(1),
-      value: count,
-      percentage: ((count / sales.length) * 100).toFixed(1),
+      value: amount,
+      percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
       color: getPaymentMethodColor(method)
     }));
   };
@@ -400,10 +471,14 @@ export const Reports: React.FC = () => {
   const getPaymentMethodColor = (method: string) => {
     const colors: { [key: string]: string } = {
       'cash': '#22c55e',      // Green
+      'pos': '#3b82f6',       // Blue (for pos_isbank_transfer and card)
+      'transfer': '#8b5cf6',  // Purple (for naira_transfer)
+      'crypto': '#f59e0b',    // Orange (for crypto_payment)
+      // Legacy support
       'pos_isbank_transfer': '#3b82f6',      // Blue  
       'naira_transfer': '#8b5cf6',  // Purple
       'crypto_payment': '#f59e0b',       // Orange
-      'pos': '#3b82f6',       // Blue (for backward compatibility)
+      'card': '#3b82f6',      // Blue (legacy)
       'unknown': '#6b7280'    // Gray
     };
     return colors[method] || '#6b7280';
@@ -695,23 +770,7 @@ export const Reports: React.FC = () => {
                       <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                       <Tooltip 
                         formatter={(value: number) => [formatPrice(value), 'Sales']}
-                        contentStyle={{ 
-                          backgroundColor: '#1F2937', 
-                          border: '1px solid #4B5563', 
-                          borderRadius: '8px',
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          padding: '8px 12px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                        }}
-                        labelStyle={{ 
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          marginBottom: '4px'
-                        }}
-                        itemStyle={{ color: '#FFFFFF' }}
+                        {...getTooltipStyles()}
                       />
                       <Line 
                         type="monotone" 
@@ -755,23 +814,7 @@ export const Reports: React.FC = () => {
                           const paymentMethod = props.payload?.name || 'Unknown';
                           return [`${percentage}%`, paymentMethod];
                         }}
-                        contentStyle={{ 
-                          backgroundColor: '#1F2937', 
-                          border: '1px solid #4B5563', 
-                          borderRadius: '8px',
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          padding: '8px 12px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                        }}
-                        labelStyle={{ 
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          marginBottom: '4px'
-                        }}
-                        itemStyle={{ color: '#FFFFFF' }}
+                        {...getTooltipStyles()}
                       />
                       <Legend />
                     </PieChart>
@@ -814,23 +857,7 @@ export const Reports: React.FC = () => {
                           const status = props.payload?.name || 'Unknown';
                           return [`${value} products`, status];
                         }}
-                        contentStyle={{ 
-                          backgroundColor: '#1F2937', 
-                          border: '1px solid #4B5563', 
-                          borderRadius: '8px',
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          padding: '8px 12px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                        }}
-                        labelStyle={{ 
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          marginBottom: '4px'
-                        }}
-                        itemStyle={{ color: '#FFFFFF' }}
+                        {...getTooltipStyles()}
                       />
                       <Legend />
                     </PieChart>
@@ -910,23 +937,7 @@ export const Reports: React.FC = () => {
                       <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                       <Tooltip 
                         formatter={(value: number) => [formatPrice(value), 'Revenue']}
-                        contentStyle={{ 
-                          backgroundColor: '#1F2937', 
-                          border: '1px solid #4B5563', 
-                          borderRadius: '8px',
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '500',
-                          padding: '8px 12px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                        }}
-                        labelStyle={{ 
-                          color: '#FFFFFF',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          marginBottom: '4px'
-                        }}
-                        itemStyle={{ color: '#FFFFFF' }}
+                        {...getTooltipStyles()}
                       />
                       <Bar dataKey="revenue" fill="#8b5cf6" />
                     </BarChart>

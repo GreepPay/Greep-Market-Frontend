@@ -52,6 +52,15 @@ class ApiService {
     }
   }
 
+  // Clear all tokens without triggering the callback (to prevent infinite loops)
+  public clearTokensSilently(): void {
+    this.accessToken = null;
+    this.refreshToken = null;
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    // Note: We don't call the callback here to prevent infinite loops
+  }
+
   // Check if tokens are valid
   private isTokenValid(token: string | null): boolean {
     if (!token) return false;
@@ -63,13 +72,14 @@ class ApiService {
       
       if (!isValid) {
         console.log('Token is expired, clearing tokens');
-        this.clearTokens();
+        this.clearTokensSilently();
       }
       
       return isValid;
     } catch (error) {
       console.log('Token validation failed:', error);
-      this.clearTokens();
+      // Clear tokens if they're malformed or invalid
+      this.clearTokensSilently();
       return false;
     }
   }
@@ -116,7 +126,7 @@ class ApiService {
     // Validate access token before making request
     if (this.accessToken && !this.isTokenValid(this.accessToken)) {
       console.log('Access token is invalid, clearing tokens');
-      this.clearTokens();
+      this.clearTokensSilently();
       throw new Error('Authentication token is invalid or expired');
     }
     
@@ -210,6 +220,10 @@ class ApiService {
           console.error('Token validation failed before request');
           // Token expiration callback will be triggered by clearTokens()
           throw error;
+        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          console.error('Unauthorized access - clearing tokens and redirecting');
+          this.clearTokensSilently();
+          throw new Error('Authentication failed. Please sign in again.');
         }
       }
       
@@ -297,11 +311,15 @@ class ApiService {
     store_id?: string;
     search?: string;
     category?: string;
+    stock_level?: 'low_stock' | 'out_of_stock' | 'normal' | 'all';
+    tags?: string[];
   }): Promise<{ products: Product[]; total: number }> {
     const queryParams = new URLSearchParams();
     if (params?.store_id) queryParams.append('store_id', params.store_id);
     if (params?.search) queryParams.append('search', params.search);
     if (params?.category) queryParams.append('category', params.category);
+    if (params?.stock_level && params.stock_level !== 'all') queryParams.append('stock_level', params.stock_level);
+    if (params?.tags && params.tags.length > 0) queryParams.append('tags', params.tags.join(','));
 
     const response = await this.privateRequest<{ success: boolean; data: { products: Product[]; total: number } }>(`/products?${queryParams}`) as any;
     
@@ -569,6 +587,9 @@ class ApiService {
     status?: string;
     page?: number;
     limit?: number;
+    category?: string;
+    tags?: string[];
+    search?: string;
   }): Promise<{ transactions: Transaction[]; total: number; page: number; limit: number }> {
     const queryParams = new URLSearchParams();
     if (params?.store_id) queryParams.append('store_id', params.store_id);
@@ -577,6 +598,9 @@ class ApiService {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.tags && params.tags.length > 0) queryParams.append('tags', params.tags.join(','));
+    if (params?.search) queryParams.append('search', params.search);
     
     // Add cache-busting parameter to ensure fresh data when filters change
     queryParams.append('_t', Date.now().toString());
@@ -600,7 +624,7 @@ class ApiService {
       discount_amount?: number;
     }>;
     discount_amount?: number;
-    payment_method: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
+    payment_method: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card';
     notes?: string;
     cashier_id: string;
   }): Promise<Transaction> {
@@ -626,7 +650,7 @@ class ApiService {
     }>;
     payment_method?: string;
     payment_methods?: Array<{
-      type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
+      type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card';
       amount: number;
     }>;
     customer_id?: string;
@@ -691,7 +715,22 @@ class ApiService {
     // Add cache-busting parameter to ensure fresh data when filters change
     queryParams.append('_t', Date.now().toString());
     
-    const response = await this.privateRequest<{ success: boolean; data: DashboardMetrics }>(`/analytics/dashboard?${queryParams}`);
+    const url = `/analytics/dashboard?${queryParams}`;
+    console.log('🔍 API getDashboardAnalytics call:', {
+      params,
+      queryParams: queryParams.toString(),
+      url
+    });
+    
+    const response = await this.privateRequest<{ success: boolean; data: DashboardMetrics }>(url);
+    
+    console.log('🔍 API getDashboardAnalytics response:', {
+      success: response.success,
+      dataKeys: (response as any).data ? Object.keys((response as any).data) : 'No data',
+      totalExpenses: (response as any).data?.totalExpenses,
+      monthlyExpenses: (response as any).data?.monthlyExpenses
+    });
+    
     return (response as any).data;
   }
 

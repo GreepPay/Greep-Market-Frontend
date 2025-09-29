@@ -61,7 +61,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       } else if (transaction.payment_method) {
         // Convert legacy single payment method to array format
         setPaymentMethods([{
-          type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment',
+          type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card',
           amount: transaction.total_amount
         }]);
       } else {

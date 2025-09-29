@@ -31,29 +31,32 @@ import { OrderTracking } from './pages/OrderTracking';
 import { AdminCustomerOrders } from './pages/AdminCustomerOrders';
 import { ScrollToTopWrapper } from './components/ScrollToTopWrapper';
 import { GoalCelebrationManager } from './components/ui/GoalCelebrationManager';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   return (
-    <ThemeProvider>
-      <SettingsProvider>
-        <RiderProvider>
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <AuthProvider>
-              <NotificationProvider>
-                <StoreProvider>
-                  <AppProvider>
-                    <GoalProvider>
-                      <RefreshProvider>
-                        <NavigationProvider>
-              <ScrollToTopWrapper>
-              <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-            <GoalCelebrationManager />
-            <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <SettingsProvider>
+          <RiderProvider>
+            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <ErrorBoundary>
+                <AuthProvider>
+                  <NotificationProvider>
+                    <StoreProvider>
+                      <AppProvider>
+                        <GoalProvider>
+                          <RefreshProvider>
+                            <NavigationProvider>
+                  <ScrollToTopWrapper>
+                  <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+                <GoalCelebrationManager />
+                <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <POS />
                   </main>
                   <MobileNavigation />
@@ -62,7 +65,7 @@ function App() {
               <Route path="/pos" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <POS />
                   </main>
                   <MobileNavigation />
@@ -71,7 +74,7 @@ function App() {
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Header />
-                  <main className="pt-0 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Dashboard />
                   </main>
                   <MobileNavigation />
@@ -80,7 +83,7 @@ function App() {
               <Route path="/products" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Products />
                   </main>
                   <MobileNavigation />
@@ -89,7 +92,7 @@ function App() {
               <Route path="/inventory" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Inventory />
                   </main>
                   <MobileNavigation />
@@ -98,7 +101,7 @@ function App() {
               <Route path="/sales-history" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <SalesHistory />
                   </main>
                   <MobileNavigation />
@@ -107,7 +110,7 @@ function App() {
               <Route path="/reports" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Reports />
                   </main>
                   <MobileNavigation />
@@ -116,7 +119,7 @@ function App() {
               <Route path="/settings" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Settings />
                   </main>
                   <MobileNavigation />
@@ -125,7 +128,7 @@ function App() {
               <Route path="/expenses" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager', 'cashier']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Expenses />
                   </main>
                   <MobileNavigation />
@@ -134,7 +137,7 @@ function App() {
               <Route path="/audit" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <Audit />
                   </main>
                   <MobileNavigation />
@@ -143,7 +146,7 @@ function App() {
               <Route path="/riders" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <RiderManagementPage />
                   </main>
                   <MobileNavigation />
@@ -152,7 +155,7 @@ function App() {
               <Route path="/cash-tracking" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <CashTrackingPage />
                   </main>
                   <MobileNavigation />
@@ -161,7 +164,7 @@ function App() {
               <Route path="/admin/customer-orders" element={
                 <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
                   <Header />
-                  <main className="pt-0 pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <AdminCustomerOrders />
                   </main>
                   <MobileNavigation />
@@ -193,19 +196,21 @@ function App() {
                 },
               }}
             />
-              </div>
-              </ScrollToTopWrapper>
-                        </NavigationProvider>
-                      </RefreshProvider>
-                    </GoalProvider>
-                  </AppProvider>
-                </StoreProvider>
-              </NotificationProvider>
-            </AuthProvider>
-          </Router>
-        </RiderProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+                  </div>
+                  </ScrollToTopWrapper>
+                            </NavigationProvider>
+                          </RefreshProvider>
+                        </GoalProvider>
+                      </AppProvider>
+                    </StoreProvider>
+                  </NotificationProvider>
+                </AuthProvider>
+              </ErrorBoundary>
+            </Router>
+          </RiderProvider>
+        </SettingsProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

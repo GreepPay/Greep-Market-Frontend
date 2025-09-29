@@ -11,6 +11,7 @@ import {
 import { Card } from './Card';
 import { Button } from './Button';
 import { apiService } from '../../services/api';
+import { useTheme } from '../../context/ThemeContext';
 import { 
   BarChart, 
   Bar, 
@@ -44,6 +45,24 @@ interface AuditStats {
 }
 
 export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
+  const { isDark } = useTheme();
+  
+  // Tooltip styles based on theme
+  const getTooltipStyles = () => ({
+    contentStyle: {
+      backgroundColor: isDark ? '#1F2937' : '#ffffff',
+      border: isDark ? '1px solid #374151' : '1px solid #e5e7eb',
+      borderRadius: '8px',
+      color: isDark ? '#F9FAFB' : '#374151',
+      fontSize: '14px',
+      fontWeight: '500',
+      padding: '8px 12px',
+      boxShadow: isDark 
+        ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
+        : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+    }
+  });
+
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +187,14 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
     count: user.count
   }));
 
+  // Debug logging for user data
+  console.log('🔍 Most Active Users Debug:', {
+    mostActiveUsers: stats.most_active_users,
+    userData: userData,
+    hasData: userData.length > 0,
+    totalCount: userData.reduce((sum, user) => sum + user.count, 0)
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -277,7 +304,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
                 ))}
               </Pie>
               <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                {...getTooltipStyles()}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -292,7 +319,7 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
               <XAxis dataKey="resource" stroke="#9CA3AF" />
               <YAxis stroke="#9CA3AF" />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                {...getTooltipStyles()}
               />
               <Bar dataKey="count" fill="#3B82F6" />
             </BarChart>
@@ -303,17 +330,40 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
       {/* Most Active Users */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Active Users</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={userData} layout="horizontal">
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis type="number" stroke="#9CA3AF" />
-            <YAxis dataKey="user" type="category" width={80} stroke="#9CA3AF" />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-            />
-            <Bar dataKey="count" fill="#10B981" />
-          </BarChart>
-        </ResponsiveContainer>
+        {userData.length === 0 || userData.every(user => user.count === 0) ? (
+          <div className="flex flex-col items-center justify-center h-[300px] text-gray-500 dark:text-gray-400">
+            <Users className="h-16 w-16 mb-4 opacity-50" />
+            <h4 className="text-lg font-medium mb-2">No User Activity Data</h4>
+            <p className="text-sm text-center max-w-sm">
+              No user activity has been recorded for the selected time period. 
+              User activity will appear here once users start performing actions in the system.
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={userData} layout="horizontal">
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis 
+                type="number" 
+                stroke="#9CA3AF" 
+                domain={[0, 'dataMax']}
+                tickFormatter={(value) => value.toString()}
+              />
+              <YAxis dataKey="user" type="category" width={80} stroke="#9CA3AF" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#ffffff', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '8px',
+                  color: '#1f2937'
+                }}
+                formatter={(value: any, name: string) => [value, 'Actions']}
+                labelFormatter={(label) => `User: ${label}`}
+              />
+              <Bar dataKey="count" fill="#10B981" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Card>
 
       {/* Recent Activity */}

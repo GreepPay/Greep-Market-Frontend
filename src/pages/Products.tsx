@@ -91,36 +91,24 @@ export const Products: React.FC = () => {
     return Array.from(new Set(allTags));
   }, [products]);
 
-  // Load products on initial mount
-  useEffect(() => {
-    const categoryParam = selectedCategories.includes('all') ? 'all' : selectedCategories.join(',');
-    loadProducts(searchQuery, categoryParam);
-  }, [loadProducts, searchQuery, selectedCategories]); // Load initial page on mount
-
   // Load products when search query or category changes
   useEffect(() => {
     const categoryParam = selectedCategories.includes('all') ? 'all' : selectedCategories.join(',');
     loadProducts(searchQuery, categoryParam);
   }, [searchQuery, selectedCategories, loadProducts]);
 
-  // Use intelligent search for client-side filtering
+  // No need for client-side filtering since we're using API filtering
+  // Only use intelligent search if there's a search query and no server-side search
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     
-    let filtered = products;
-    
-    // Filter by categories
-    if (!selectedCategories.includes('all')) {
-      filtered = filtered.filter(product => selectedCategories.includes(product.category));
-    }
-    
-    // If there's a search query, use intelligent search on filtered results
+    // If there's a search query, use intelligent search as backup
     if (searchQuery.trim()) {
-      return searchProducts(searchQuery, filtered);
+      return searchProducts(searchQuery, products);
     }
     
-    return filtered;
-  }, [products, searchQuery, selectedCategories, searchProducts]);
+    return products;
+  }, [products, searchQuery, searchProducts]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);

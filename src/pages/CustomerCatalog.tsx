@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, ShoppingCart, Phone, MapPin, Clock, CheckCircle, X } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { ProductCard } from '../components/ui/ProductCard';
 import { CategoryFilterSidebar } from '../components/ui/CategoryFilterSidebar';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { useApp } from '../context/AppContext';
@@ -326,7 +325,7 @@ export const CustomerCatalog: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -595,6 +594,7 @@ export const CustomerCatalog: React.FC = () => {
                       value={order.paymentMethod}
                       onChange={(e) => setOrder(prev => ({ ...prev, paymentMethod: e.target.value as any }))}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      aria-label="Payment Method"
                     >
                       <option value="cash">Cash on Delivery</option>
                       <option value="isbank">Isbank Transfer</option>
@@ -603,14 +603,16 @@ export const CustomerCatalog: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="delivery-method" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Delivery Method
                     </label>
-                    <select
-                      value={order.deliveryMethod}
-                      onChange={(e) => setOrder(prev => ({ ...prev, deliveryMethod: e.target.value as any }))}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
+                      <select
+                        id="delivery-method"
+                        value={order.deliveryMethod}
+                        onChange={(e) => setOrder(prev => ({ ...prev, deliveryMethod: e.target.value as any }))}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        aria-label="Delivery Method"
+                      >
                       <option value="pickup">Self Pickup</option>
                       <option value="delivery">Delivery (+₺25)</option>
                     </select>
@@ -665,6 +667,8 @@ export const CustomerCatalog: React.FC = () => {
                     <button
                       onClick={() => setOrderError(null)}
                       className="ml-3 flex-shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                      title="Close error message"
+                      aria-label="Close error message"
                     >
                       <X className="h-4 w-4" />
                     </button>

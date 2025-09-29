@@ -12,6 +12,7 @@ import { Button } from './Button';
 import { GoalSettingModal } from './GoalSettingModal';
 import { apiService } from '../../services/api';
 import { useGoals } from '../../context/GoalContext';
+import { useTheme } from '../../context/ThemeContext';
 import {
   LineChart,
   Line,
@@ -65,6 +66,27 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   analyticsData: providedAnalyticsData,
   isLoading: parentIsLoading = false
 }) => {
+  const { isDark } = useTheme();
+  
+  // Tooltip styles based on theme
+  const getTooltipStyles = () => ({
+    contentStyle: {
+      backgroundColor: isDark ? '#1F2937' : '#ffffff',
+      border: isDark ? '1px solid #374151' : '1px solid #e5e7eb',
+      borderRadius: '8px',
+      color: isDark ? '#F9FAFB' : '#374151',
+      fontSize: '14px',
+      fontWeight: '500',
+      padding: '8px 12px',
+      boxShadow: isDark 
+        ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
+        : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+    },
+    labelStyle: {
+      color: isDark ? '#F9FAFB' : '#374151'
+    }
+  });
+
   const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -488,13 +510,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                 <YAxis stroke="#9CA3AF" />
                 <Tooltip
                   formatter={(value: number) => [`₺${value.toLocaleString()}`, 'Sales']}
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#F9FAFB'
-                  }}
-                  labelStyle={{ color: '#F9FAFB' }}
+                  {...getTooltipStyles()}
                 />
                 <Line
                   type="monotone"

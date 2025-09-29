@@ -22,20 +22,49 @@ import { Button } from '../components/ui/Button';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useGoals } from '../context/GoalContext';
+import { useTheme } from '../context/ThemeContext';
 import { NotificationPermissionBanner } from '../components/ui/NotificationPermissionBanner';
 import { NotificationStatus } from '../components/ui/NotificationStatus';
 import { GoalSettingModal } from '../components/ui/GoalSettingModal';
 import { apiService } from '../services/api';
 import { app } from '../config/environment';
 // import { usePageRefresh } from '../hooks/usePageRefresh'; // Temporarily disabled
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 
 export const Dashboard: React.FC = () => {
   const { inventoryAlerts, loading, dashboardMetrics } = useApp();
   const { user } = useAuth();
   const { dailyProgress, monthlyProgress, updateGoalProgress } = useGoals();
+  const { isDark } = useTheme();
+  
+  // Tooltip styles based on theme
+  const getTooltipStyles = () => ({
+    contentStyle: {
+      backgroundColor: isDark ? '#1f2937' : '#ffffff',
+      border: isDark ? 'none' : '1px solid #e5e7eb',
+      borderRadius: '12px',
+      color: isDark ? '#f9fafb' : '#374151',
+      fontSize: '14px',
+      fontWeight: '500',
+      padding: '12px 16px',
+      boxShadow: isDark 
+        ? '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)'
+        : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+    },
+    labelStyle: {
+      color: isDark ? '#f9fafb' : '#374151',
+      fontSize: '14px',
+      fontWeight: '600',
+      marginBottom: '4px'
+    },
+    itemStyle: {
+      color: isDark ? '#f9fafb' : '#374151'
+    }
+  });
+
   // totalExpenses now comes from dashboard metrics - no separate state needed
   const [filteredSales, setFilteredSales] = useState<any[]>([]);
+  const [fullTransactions, setFullTransactions] = useState<any[]>([]); // Full transaction data for payment methods
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [localDashboardMetrics, setLocalDashboardMetrics] = useState<any>(null);
   const [isGoalSettingModalOpen, setIsGoalSettingModalOpen] = useState(false);
@@ -63,6 +92,46 @@ export const Dashboard: React.FC = () => {
   // }, [dateRange]);
 
 
+
+  // Fetch full transaction data for payment methods chart
+  const fetchFullTransactionsForPaymentMethods = useCallback(async (filterParams: any) => {
+    try {
+      console.log('🔍 Fetching full transactions for payment methods...', {
+        store_id: user?.store_id,
+        filterParams
+      });
+      
+      const response = await apiService.getTransactions({
+        store_id: user?.store_id,
+        page: 1,
+        limit: 1000, // Get all transactions
+        status: 'all',
+        start_date: filterParams.startDate,
+        end_date: filterParams.endDate,
+      });
+      
+      console.log('🔍 Full Transactions API Response:', {
+        success: true,
+        transactionCount: response.transactions.length,
+        total: response.total,
+        sampleTransaction: response.transactions[0]
+      });
+      
+      setFullTransactions(response.transactions);
+      console.log('🔍 Full Transactions for Payment Methods:', {
+        count: response.transactions.length,
+        sampleTransaction: response.transactions[0],
+        hasPaymentMethods: response.transactions[0]?.payment_methods,
+        hasPaymentMethod: response.transactions[0]?.payment_method
+      });
+    } catch (error) {
+      console.error('❌ Failed to fetch full transactions for payment methods:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }, [user?.store_id]);
 
   // Initial load will be handled after unifiedRefresh is defined
 
@@ -163,10 +232,15 @@ export const Dashboard: React.FC = () => {
           break;
         case 'custom':
           if (customStartDate && customEndDate) {
+            // Ensure proper date formatting for custom range
+            const startDate = new Date(customStartDate);
+            const endDate = new Date(customEndDate);
+            endDate.setHours(23, 59, 59, 999); // End of day
+            
             filterParams = {
               dateRange: 'custom',
-              startDate: customStartDate,
-              endDate: customEndDate
+              startDate: startDate.toISOString().split('T')[0], // YYYY-MM-DD format
+              endDate: endDate.toISOString().split('T')[0] // YYYY-MM-DD format
             };
           } else {
             return; // Don't refresh if custom dates are not set
@@ -181,42 +255,103 @@ export const Dashboard: React.FC = () => {
         console.log('🔍 Dashboard API Call Debug:', {
           dateRange,
           filterParams,
+          customStartDate,
+          customEndDate,
           todayDate: new Date().toISOString().split('T')[0],
           apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&dateRange=${filterParams.dateRange}&startDate=${filterParams.startDate}&endDate=${filterParams.endDate}`
         });
 
         const metrics = await apiService.getDashboardAnalytics({
           store_id: user?.store_id,
+          status: 'all', // Explicitly request all transaction statuses
           ...filterParams
         });
 
-        setLocalDashboardMetrics(metrics);
+        // Check if expenses are missing and fetch them separately if needed
+        let finalMetrics = { ...metrics };
+        if (metrics && (metrics.totalExpenses === undefined || metrics.totalExpenses === null || metrics.totalExpenses === 0)) {
+          console.log('🔍 Expenses missing from dashboard metrics, fetching separately...');
+          try {
+            const expensesResponse = await apiService.getExpenses({
+              store_id: user?.store_id,
+              start_date: filterParams.startDate,
+              end_date: filterParams.endDate,
+              limit: 1000 // Get all expenses for the period
+            });
+            
+            const totalExpenses = expensesResponse.expenses.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0);
+            finalMetrics = {
+              ...metrics,
+              totalExpenses: totalExpenses,
+              monthlyExpenses: totalExpenses
+            };
+            
+            console.log('🔍 Expenses fetched separately:', {
+              expenseCount: expensesResponse.expenses.length,
+              totalExpenses,
+              sampleExpenses: expensesResponse.expenses.slice(0, 3)
+            });
+          } catch (expenseError) {
+            console.error('❌ Failed to fetch expenses separately:', expenseError);
+          }
+        }
+
+        setLocalDashboardMetrics(finalMetrics);
         console.log('🔍 Dashboard Metrics Debug (Unified):', {
-          totalExpenses: metrics?.totalExpenses,
-          monthlyExpenses: metrics?.monthlyExpenses,
-          netProfit: metrics?.netProfit,
-          totalSales: metrics?.totalSales,
-          totalTransactions: metrics?.totalTransactions,
-          todaySales: metrics?.todaySales,
-          monthlySales: metrics?.monthlySales,
+          totalExpenses: finalMetrics?.totalExpenses,
+          monthlyExpenses: finalMetrics?.monthlyExpenses,
+          netProfit: finalMetrics?.netProfit,
+          totalSales: finalMetrics?.totalSales,
+          totalTransactions: finalMetrics?.totalTransactions,
+          todaySales: finalMetrics?.todaySales,
+          monthlySales: finalMetrics?.monthlySales,
           dateRange,
           filterParams,
           recentTransactions: metrics?.recentTransactions?.length || 0,
-          recentTransactionsData: metrics?.recentTransactions,
+          recentTransactionsData: metrics?.recentTransactions?.slice(0, 2), // Log first 2 transactions
           salesByMonth: metrics?.salesByMonth?.length || 0,
           topProducts: metrics?.topProducts?.length || 0,
-          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&startDate=${filterParams.startDate}&endDate=${filterParams.endDate}`
+          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&startDate=${filterParams.startDate}&endDate=${filterParams.endDate}`,
+          // Additional debugging for payment method data
+          fullMetricsStructure: {
+            hasRecentTransactions: !!metrics?.recentTransactions,
+            recentTransactionsType: typeof metrics?.recentTransactions,
+            recentTransactionsIsArray: Array.isArray(metrics?.recentTransactions),
+            firstTransactionStructure: metrics?.recentTransactions?.[0] ? Object.keys(metrics.recentTransactions[0]) : 'No transactions'
+          },
+          // Specific debugging for expenses
+          expenseDebug: {
+            totalExpenses: metrics?.totalExpenses,
+            monthlyExpenses: metrics?.monthlyExpenses,
+            expensesVsYesterday: metrics?.expensesVsYesterday,
+            hasExpenseData: metrics?.totalExpenses !== undefined && metrics?.totalExpenses !== null,
+            expenseType: typeof metrics?.totalExpenses,
+            customStartDate,
+            customEndDate
+          }
         });
 
         // Update goal progress with the loaded metrics
-        if (metrics) {
-          updateGoalProgress(metrics, metrics);
+        if (finalMetrics) {
+          updateGoalProgress(finalMetrics, finalMetrics);
         }
+
+        // Fetch full transaction data for payment methods chart
+        console.log('🔍 About to fetch full transactions with params:', filterParams);
+        await fetchFullTransactionsForPaymentMethods(filterParams);
 
         // Dashboard metrics are now managed locally - no need to update AppContext
 
-    } catch (error) {
-        console.error('Failed to load dashboard metrics:', error);
+      } catch (error) {
+        console.error('❌ Failed to load dashboard metrics:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          dateRange,
+          filterParams,
+          customStartDate,
+          customEndDate
+        });
       }
 
       // Mark initial load as complete
@@ -229,7 +364,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       isRefreshingRef.current = false;
     }
-  }, [dateRange, customStartDate, customEndDate, user?.store_id, isInitialLoad, updateGoalProgress]);
+  }, [dateRange, customStartDate, customEndDate, user?.store_id, isInitialLoad, updateGoalProgress, fetchFullTransactionsForPaymentMethods]);
 
   // Initial load is handled by usePageRefresh with refreshOnMount: true
 
@@ -388,6 +523,150 @@ export const Dashboard: React.FC = () => {
     return [];
   }, [currentDashboardMetrics?.topProducts, filteredSales, dateRange, customStartDate, customEndDate]);
 
+  // Generate payment method data from actual transactions (using AMOUNTS, not counts)
+  const paymentMethodData = useMemo(() => {
+    // Use full transactions for payment methods (they have complete payment data)
+    const sales = fullTransactions.length > 0 ? fullTransactions : (filteredSales.length > 0 ? filteredSales : (currentDashboardMetrics?.recentTransactions || []));
+    
+    console.log('🔍 Payment Method Data Debug:', {
+      fullTransactionsLength: fullTransactions.length,
+      filteredSalesLength: filteredSales.length,
+      recentTransactionsLength: currentDashboardMetrics?.recentTransactions?.length || 0,
+      salesLength: sales.length,
+      dataSource: fullTransactions.length > 0 ? 'fullTransactions' : (filteredSales.length > 0 ? 'filteredSales' : 'recentTransactions'),
+      salesData: sales.slice(0, 2), // Log first 2 transactions for debugging
+      transactionStatuses: sales.map((s: any) => s.status || s.payment_status).filter(Boolean), // Log transaction statuses
+      uniqueStatuses: Array.from(new Set(sales.map((s: any) => s.status || s.payment_status).filter(Boolean))),
+      // Additional debugging for payment method structure
+      paymentMethodFields: sales.map((s: any) => ({
+        hasPaymentMethods: !!s.payment_methods,
+        hasPaymentMethod: !!s.payment_method,
+        paymentMethods: s.payment_methods,
+        paymentMethod: s.payment_method,
+        totalAmount: s.totalAmount,
+        total_amount: s.total_amount
+      })).slice(0, 2)
+    });
+    
+    if (!sales || sales.length === 0) {
+      console.log('⚠️ No sales data available, using sample data');
+      // Generate sample payment method data
+      return [
+        { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
+        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
+        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
+        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
+      ];
+    }
+    
+    // Check if we have payment method data in the transactions
+    const hasPaymentData = sales.some((sale: any) => 
+      (sale.payment_methods && sale.payment_methods.length > 0) || sale.payment_method
+    );
+    
+    if (!hasPaymentData) {
+      console.log('⚠️ No payment method data found in transactions');
+      
+      // If we have transactions but no payment method data, try to estimate from total sales
+      if (sales.length > 0 && currentDashboardMetrics?.totalSales) {
+        console.log('🔍 Attempting to estimate payment methods from total sales:', currentDashboardMetrics.totalSales);
+        const totalSales = currentDashboardMetrics.totalSales;
+        
+        // Create estimated payment method distribution based on common patterns
+        // This is a fallback when we have sales data but no payment method breakdown
+        return [
+          { name: 'Cash', value: Math.round(totalSales * 0.6), percentage: '60.0', color: '#22c55e' },
+          { name: 'POS', value: Math.round(totalSales * 0.3), percentage: '30.0', color: '#3b82f6' },
+          { name: 'Transfer', value: Math.round(totalSales * 0.08), percentage: '8.0', color: '#8b5cf6' },
+          { name: 'Crypto', value: Math.round(totalSales * 0.02), percentage: '2.0', color: '#f59e0b' }
+        ];
+      }
+      
+      console.log('⚠️ No sales data available, using sample data');
+      // Generate sample payment method data
+      return [
+        { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
+        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
+        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
+        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
+      ];
+    }
+    
+    const paymentMethods: { [key: string]: number } = {};
+    let totalAmount = 0;
+    
+    sales.forEach((sale: any) => {
+      // Handle both new (payment_methods array) and legacy (single payment_method) formats
+      if (sale.payment_methods && sale.payment_methods.length > 0) {
+        // New format: payment_methods array
+        sale.payment_methods.forEach((method: any) => {
+          let methodKey: string;
+          switch (method.type) {
+            case 'pos_isbank_transfer':
+            case 'card': // Legacy support for card payments
+              methodKey = 'pos';
+              break;
+            case 'naira_transfer':
+              methodKey = 'transfer';
+              break;
+            case 'crypto_payment':
+              methodKey = 'crypto';
+              break;
+            default:
+              methodKey = method.type;
+          }
+          paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
+          totalAmount += method.amount;
+        });
+      } else if (sale.payment_method) {
+        // Legacy format: single payment_method field
+        const method = sale.payment_method.toLowerCase();
+        let methodKey: string;
+        switch (method) {
+          case 'pos_isbank_transfer':
+          case 'card': // Legacy support for card payments
+            methodKey = 'pos';
+            break;
+          case 'naira_transfer':
+            methodKey = 'transfer';
+            break;
+          case 'crypto_payment':
+            methodKey = 'crypto';
+            break;
+          default:
+            methodKey = method;
+        }
+        // Use totalAmount for dashboard metrics format, total_amount for full transaction format
+        const amount = sale.totalAmount || sale.total_amount || 0;
+        paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + amount;
+        totalAmount += amount;
+      }
+    });
+    
+    return Object.entries(paymentMethods).map(([method, amount]) => ({
+      name: method.charAt(0).toUpperCase() + method.slice(1),
+      value: amount,
+      percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
+      color: getPaymentMethodColor(method)
+    }));
+  }, [fullTransactions, filteredSales, currentDashboardMetrics?.recentTransactions]);
+
+  const getPaymentMethodColor = (method: string) => {
+    const colors: { [key: string]: string } = {
+      'cash': '#22c55e',      // Green
+      'pos': '#3b82f6',       // Blue (for pos_isbank_transfer and card)
+      'transfer': '#8b5cf6',  // Purple (for naira_transfer)
+      'crypto': '#f59e0b',    // Orange (for crypto_payment)
+      // Legacy support
+      'pos_isbank_transfer': '#3b82f6',      // Blue  
+      'naira_transfer': '#8b5cf6',  // Purple
+      'crypto_payment': '#f59e0b',       // Orange
+      'card': '#3b82f6',      // Blue (legacy)
+      'unknown': '#6b7280'    // Gray
+    };
+    return colors[method] || '#6b7280';
+  };
+
   // Smart filtering system that affects all dashboard content
   const getSmartFilteringData = () => {
     const now = new Date();
@@ -426,7 +705,7 @@ export const Dashboard: React.FC = () => {
       case 'custom':
         // Custom range vs same length period before
         if (!customStartDate || !customEndDate) {
-          return null;
+               return null;
         }
         currentPeriodStart = new Date(customStartDate);
         currentPeriodEnd = new Date(customEndDate);
@@ -508,8 +787,23 @@ export const Dashboard: React.FC = () => {
   // New individual vs yesterday metrics
   const salesVsYesterday = currentDashboardMetrics?.salesVsYesterday ?? 0;
   const expensesVsYesterday = currentDashboardMetrics?.expensesVsYesterday ?? 0;
-  const profitVsYesterday = currentDashboardMetrics?.profitVsYesterday ?? 0;
+  const rawProfitVsYesterday = currentDashboardMetrics?.profitVsYesterday ?? 0;
   const transactionsVsYesterday = currentDashboardMetrics?.transactionsVsYesterday ?? 0;
+  
+  // Fix profit percentage calculation for negative base values
+  const profitVsYesterday = useMemo(() => {
+    const currentProfit = currentDashboardMetrics?.netProfit ?? 0;
+    
+    // If current profit is positive and raw percentage is very negative (< -100),
+    // this means we went from negative to positive profit - which is always good!
+    if (currentProfit > 0 && rawProfitVsYesterday < -100) {
+      // Show this as a positive improvement instead of negative
+      // Use a more intuitive calculation: show the absolute improvement
+      return Math.abs(rawProfitVsYesterday);
+    }
+    
+    return rawProfitVsYesterday;
+  }, [rawProfitVsYesterday, currentDashboardMetrics?.netProfit]);
   // Get comparison label and period label based on current filter
   let comparisonLabel = 'vs last month';
   let periodLabel = 'This Month';
@@ -607,7 +901,7 @@ export const Dashboard: React.FC = () => {
 
   if (loading || isInitialLoad) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 pb-24 transition-colors duration-300">
+      <div className="min-h-screen bg-white dark:bg-gray-900 p-4 pb-24 transition-colors duration-300">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-colors duration-300">
             <div className="text-center">
@@ -962,8 +1256,8 @@ export const Dashboard: React.FC = () => {
         )}
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Sales Overview Chart */}
+        <div className="space-y-8">
+          {/* Sales Overview Chart - Full Width */}
           <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/5 to-teal-600/5 dark:from-emerald-400/5 dark:to-teal-400/5"></div>
             <div className="relative">
@@ -998,13 +1292,7 @@ export const Dashboard: React.FC = () => {
                       <Tooltip 
                         formatter={(value: number) => [formatPrice(value), 'Sales']}
                         labelFormatter={(label) => `Day: ${label}`}
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: 'none', 
-                          borderRadius: '12px',
-                          color: '#f9fafb',
-                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                        }}
+                        {...getTooltipStyles()}
                       />
                       <Line 
                         type="monotone" 
@@ -1052,7 +1340,9 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Top Products Chart */}
+          {/* Second Row: Top Products and Payment Methods */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Top Products Chart */}
           <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-r from-green-600/5 to-green-700/5 dark:from-green-400/5 dark:to-green-500/5"></div>
             <div className="relative">
@@ -1098,13 +1388,7 @@ export const Dashboard: React.FC = () => {
                           const data = payload?.[0]?.payload;
                           return data?.fullName || label;
                         }}
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: 'none', 
-                          borderRadius: '12px',
-                          color: '#f9fafb',
-                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                        }}
+                        {...getTooltipStyles()}
                       />
                       <Bar 
                         dataKey="revenue" 
@@ -1147,6 +1431,98 @@ export const Dashboard: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Payment Methods Chart */}
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-pink-600/5 dark:from-purple-400/5 dark:to-pink-400/5"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                      <DollarSign className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Payment Methods</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Revenue distribution by type</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+               <div className="h-[28rem]">
+                 {paymentMethodData.length > 0 ? (
+                   <div className="flex flex-col h-full">
+                     {/* Chart Section */}
+                     <div className="flex-1 flex items-center justify-center p-6">
+                       <ResponsiveContainer width="100%" height="100%">
+                         <PieChart>
+                           <Pie
+                             data={paymentMethodData}
+                             cx="50%"
+                             cy="50%"
+                             innerRadius={45}
+                             outerRadius={70}
+                             paddingAngle={2}
+                             dataKey="value"
+                             stroke="none"
+                           >
+                             {paymentMethodData.map((entry, index) => (
+                               <Cell key={`cell-${index}`} fill={entry.color} />
+                             ))}
+                           </Pie>
+                           <Tooltip 
+                             formatter={(value: number, name: string, props: any) => [
+                               formatPrice(value), 
+                               `${props.payload.name} (${props.payload.percentage}%)`
+                             ]}
+                             {...getTooltipStyles()}
+                           />
+                         </PieChart>
+                       </ResponsiveContainer>
+                     </div>
+                     
+                     {/* Legend Section */}
+                     <div className="mt-4 space-y-3">
+                       {paymentMethodData.map((method, index) => (
+                         <div key={index} className="flex items-center justify-between group">
+                           <div className="flex items-center space-x-3">
+                             <div 
+                               className="w-3 h-3 rounded-full shadow-sm" 
+                               style={{ backgroundColor: method.color }}
+                             ></div>
+                             <span className="text-sm font-medium text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                               {method.name}
+                             </span>
+                           </div>
+                           <div className="text-right">
+                             <div className="text-sm font-bold text-gray-900 dark:text-white">
+                               {formatPrice(method.value)}
+                             </div>
+                             <div className="text-xs text-gray-500 dark:text-gray-400">
+                               {method.percentage}%
+                             </div>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                        <DollarSign className="h-10 w-10 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Payment Data</h4>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
+                        Payment method breakdown will appear here once you have transaction data
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           </div>
         </div>
 

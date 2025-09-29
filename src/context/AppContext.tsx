@@ -24,7 +24,7 @@ interface AppContextType extends AppState {
     startDate?: string;
     endDate?: string;
   }) => Promise<void>;
-  loadProducts: (search?: string, category?: string) => Promise<void>;
+  loadProducts: (search?: string, category?: string, stockLevel?: 'low_stock' | 'out_of_stock' | 'normal' | 'all', tags?: string[]) => Promise<void>;
   loadAllProducts: () => Promise<void>;
   loadTransactions: () => Promise<void>;
   loadInventoryAlerts: () => Promise<void>;
@@ -159,7 +159,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
-  const loadProducts = useCallback(async (search?: string, category?: string) => {
+  const loadProducts = useCallback(async (search?: string, category?: string, stockLevel?: 'low_stock' | 'out_of_stock' | 'normal' | 'all', tags?: string[]) => {
     if (!isAuthenticated || !user) {
       console.log('User not authenticated, skipping products load');
       return;
@@ -177,6 +177,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Add category parameter if provided and not 'all'
       if (category && category !== 'all') {
         params.category = category;
+      }
+      
+      // Add stock level parameter if provided and not 'all'
+      if (stockLevel && stockLevel !== 'all') {
+        params.stock_level = stockLevel;
+      }
+      
+      // Add tags parameter if provided
+      if (tags && tags.length > 0) {
+        params.tags = tags;
       }
       
       const response = await apiService.getProducts(params);
