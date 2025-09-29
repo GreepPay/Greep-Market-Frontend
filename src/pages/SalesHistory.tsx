@@ -17,7 +17,8 @@ import {
   ArrowUp,
   ArrowDown,
   Edit,
-  Trash2
+  Trash2,
+  Coins
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
@@ -52,7 +53,8 @@ interface SoldProduct {
 export const SalesHistory: React.FC = () => {
   const { products, loading } = useApp();
   const { user } = useAuth();
-  const [sales, setSales] = useState<Transaction[]>([]);
+  const [allSales, setAllSales] = useState<Transaction[]>([]); // All transactions for calculations
+  const [sales, setSales] = useState<Transaction[]>([]); // Paginated transactions for display
   const [isLoadingSales, setIsLoadingSales] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -64,6 +66,7 @@ export const SalesHistory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalSales, setTotalSales] = useState(0);
+  const [itemsPerPage] = useState(20); // Display pagination
   const [exportLoading, setExportLoading] = useState(false);
   const [showTransactionIds, setShowTransactionIds] = useState(false);
   const [sortField, setSortField] = useState<keyof SoldProduct>('saleDate');
@@ -74,47 +77,67 @@ export const SalesHistory: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
 
-  // Load sales data from server with filtering
-  const loadSales = useCallback(async () => {
+  // Update paginated sales for display
+  const updatePaginatedSales = useCallback((transactions: Transaction[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedTransactions = transactions.slice(startIndex, endIndex);
+    setSales(paginatedTransactions);
+  }, [currentPage, itemsPerPage]);
+
+  // Load all sales data from server (without filters)
+  const loadAllSales = useCallback(async () => {
+    console.log('🚀 Loading sales data...', { 
+      store_id: user?.store_id, 
+      user_id: user?.id,
+      isAuthenticated: !!user 
+    });
+    
+    if (!user?.store_id) {
+      console.warn('⚠️ No store_id found for user:', user);
+      toast.error('Store ID not found. Please contact support.');
+      return;
+    }
+    
     setIsLoadingSales(true);
     try {
-      // Calculate date range based on month/year selection
-      let startDate: string | undefined;
-      let endDate: string | undefined;
-      
-      if (selectedMonth !== 'all' && selectedYear !== 'all') {
-        const month = parseInt(selectedMonth);
-        const year = parseInt(selectedYear);
-        startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-        endDate = new Date(year, month, 0).toISOString().split('T')[0];
-      }
-      
+      // Load ALL transactions without any filters
       const response = await apiService.getTransactions({
-        store_id: user?.store_id,
-        page: currentPage,
-        limit: 20,
-        start_date: startDate,
-        end_date: endDate,
-        // Note: API doesn't support category/tags filtering for transactions yet
-        // This would need to be implemented on the backend
+        store_id: user.store_id,
+        page: 1,
+        limit: 1000, // Large limit to get all transactions
       });
       
+      console.log('📊 API Response:', {
+        totalTransactions: response.transactions?.length || 0,
+        total: response.total,
+        transactions: response.transactions?.slice(0, 3) // First 3 transactions for debugging
+      });
       
-      setSales(response.transactions);
+      // Store all transactions for calculations
+      setAllSales(response.transactions || []);
       setTotalPages(response.total || 1);
       setTotalSales(response.total || 0);
+      
     } catch (error) {
-      console.error('Failed to load sales:', error);
+      console.error('❌ Failed to load sales:', error);
       toast.error('Failed to load sales data');
     } finally {
       setIsLoadingSales(false);
     }
-  }, [currentPage, selectedMonth, selectedYear, user?.store_id]);
+  }, [user?.store_id]);
 
-  // Load sales when filters change
+  // Apply client-side filtering to the loaded data
+  const loadSales = useCallback(async () => {
+    // Just trigger a re-render to apply client-side filters
+    // The actual filtering is done in the filteredProducts useMemo
+  }, []);
+
+  // Load all sales data on initial mount
   useEffect(() => {
-    loadSales();
-  }, [loadSales]);
+    loadAllSales();
+  }, [loadAllSales]);
+
 
   // Check if user is admin
   const isAdmin = user?.role === 'admin';
@@ -172,15 +195,23 @@ export const SalesHistory: React.FC = () => {
     }
   };
 
-  // Process sales data to extract sold products
+  // Process sales data to extract sold products (use allSales for calculations)
   const soldProducts = useMemo(() => {
-    if (!sales || !products || !Array.isArray(sales) || !Array.isArray(products)) {
+    console.log('🔄 Processing sold products...', {
+      allSalesLength: allSales?.length || 0,
+      productsLength: products?.length || 0,
+      allSalesIsArray: Array.isArray(allSales),
+      productsIsArray: Array.isArray(products)
+    });
+    
+    if (!allSales || !products || !Array.isArray(allSales) || !Array.isArray(products)) {
+      console.log('⚠️ Missing data for sold products calculation');
       return [];
     }
 
     const soldItems: SoldProduct[] = [];
     
-    sales.forEach((transaction: Transaction) => {
+    allSales.forEach((transaction: Transaction) => {
       if (transaction.items && Array.isArray(transaction.items)) {
         transaction.items.forEach((item: any) => {
           // Try different possible field names for product ID
@@ -211,6 +242,7 @@ export const SalesHistory: React.FC = () => {
             let paymentMethods: PaymentMethod[] = [];
             let paymentMethod: string = 'cash';
             
+            
             if (transaction.payment_methods && transaction.payment_methods.length > 0) {
               // New format: payment_methods array
               paymentMethods = transaction.payment_methods;
@@ -219,7 +251,7 @@ export const SalesHistory: React.FC = () => {
               // Legacy format: single payment_method field
               paymentMethod = transaction.payment_method;
               paymentMethods = [{
-                type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment',
+                type: transaction.payment_method as 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card',
                 amount: transaction.total_amount
               }];
             }
@@ -246,8 +278,14 @@ export const SalesHistory: React.FC = () => {
 
     // Sort by most recent sales first
     const sortedItems = soldItems.sort((a, b) => b.saleDate.getTime() - a.saleDate.getTime());
+    
+    console.log('✅ Sold products processed:', {
+      totalSoldItems: sortedItems.length,
+      sampleItems: sortedItems.slice(0, 2)
+    });
+    
     return sortedItems;
-  }, [sales, products]);
+  }, [allSales, products]);
 
   // Get unique categories from sold products
   const categories = useMemo(() => {
@@ -261,57 +299,70 @@ export const SalesHistory: React.FC = () => {
     return Array.from(new Set(allTags)).sort();
   }, [soldProducts]);
 
-  // Get available years from sales data
+  // Get available years - use a range of years since we're using API filtering
   const availableYears = useMemo(() => {
-    const years = Array.from(new Set(
-      soldProducts.map(item => item.saleDate.getFullYear())
-    ));
-    return years.sort((a, b) => b - a); // Most recent first
-  }, [soldProducts]);
-
-  // Get months for selected year
-  const availableMonths = useMemo(() => {
-    const months = Array.from(new Set(
-      soldProducts
-        .filter(item => item.saleDate.getFullYear().toString() === selectedYear)
-        .map(item => item.saleDate.getMonth())
-    ));
+    const currentYear = new Date().getFullYear();
+    const years = [];
     
+    // Generate years from 2020 to current year + 1
+    for (let year = 2020; year <= currentYear + 1; year++) {
+      years.push(year);
+    }
+    
+    return years.sort((a, b) => b - a); // Most recent first
+  }, []);
+
+  // Get months for selected year - use all months since we're using API filtering
+  const availableMonths = useMemo(() => {
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     
-    return months
-      .sort((a, b) => a - b)
-      .map(month => ({ value: month.toString(), label: monthNames[month] }));
-  }, [soldProducts, selectedYear]);
+    // Return all months since API filtering handles the actual filtering
+    return monthNames.map((name, index) => ({ 
+      value: index.toString(), 
+      label: name 
+    }));
+  }, []);
 
-  // Filter and sort sold products based on search and filters
+  // Apply client-side filtering to sold products
   const filteredProducts = useMemo(() => {
-    const filtered = soldProducts.filter(item => {
-      // Search filter
-      const matchesSearch = !searchQuery || 
-        item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    let filtered = soldProducts;
 
-      // Category filter
-      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.productName.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query) ||
+        item.tags.some(tag => tag.toLowerCase().includes(query))
+      );
+    }
 
-      // Tags filter
-      const matchesTags = selectedTags.length === 0 || 
-        selectedTags.some(tag => item.tags.includes(tag));
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(item => item.category === selectedCategory);
+    }
 
-      // Month filter
-      const matchesMonth = selectedMonth === 'all' || 
-        item.saleDate.getMonth().toString() === selectedMonth;
+    // Apply tags filter
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(item => 
+        selectedTags.some(tag => item.tags.includes(tag))
+      );
+    }
 
-      // Year filter
-      const matchesYear = item.saleDate.getFullYear().toString() === selectedYear;
+    // Apply month filter
+    if (selectedMonth !== 'all') {
+      const month = parseInt(selectedMonth);
+      filtered = filtered.filter(item => item.saleDate.getMonth() === month);
+    }
 
-      return matchesSearch && matchesCategory && matchesTags && matchesMonth && matchesYear;
-    });
+    // Apply year filter
+    if (selectedYear !== 'all') {
+      const year = parseInt(selectedYear);
+      filtered = filtered.filter(item => item.saleDate.getFullYear() === year);
+    }
 
     // Sort the filtered results
     return filtered.sort((a, b) => {
@@ -338,51 +389,151 @@ export const SalesHistory: React.FC = () => {
     });
   }, [soldProducts, searchQuery, selectedCategory, selectedTags, selectedMonth, selectedYear, sortField, sortDirection]);
 
-  // Calculate summary statistics
+  // Update paginated sales when page changes or filtered products change
+  useEffect(() => {
+    if (filteredProducts.length > 0) {
+      // Convert filtered products back to transactions for pagination
+      const filteredTransactions = allSales.filter(transaction => 
+        filteredProducts.some(product => product.transactionId === transaction._id)
+      );
+      updatePaginatedSales(filteredTransactions);
+      
+      // Update totals based on filtered results
+      setTotalSales(filteredProducts.length);
+      setTotalPages(Math.ceil(filteredProducts.length / itemsPerPage));
+    } else {
+      setSales([]);
+      setTotalSales(0);
+      setTotalPages(1);
+    }
+  }, [filteredProducts, allSales, updatePaginatedSales, itemsPerPage]);
+
+  // Calculate summary statistics using transaction-level data (same as Dashboard)
   const summaryStats = useMemo(() => {
-    const totalRevenue = filteredProducts.reduce((sum, item) => sum + item.totalRevenue, 0);
+    // Get unique transactions from filtered products
+    const uniqueTransactionIds = new Set(filteredProducts.map(item => item.transactionId));
+    const filteredTransactions = allSales.filter(transaction => uniqueTransactionIds.has(transaction._id));
+    
+    // Calculate totals from transaction data (not individual products)
+    const totalRevenue = filteredTransactions.reduce((sum, transaction) => sum + transaction.total_amount, 0);
     const totalQuantity = filteredProducts.reduce((sum, item) => sum + item.quantitySold, 0);
     const uniqueProducts = new Set(filteredProducts.map(item => item.productId)).size;
-    const totalTransactions = new Set(filteredProducts.map(item => item.transactionId)).size;
+    const totalTransactions = filteredTransactions.length;
 
-    // Calculate payment method amounts
-    const paymentMethodAmounts = filteredProducts.reduce((acc, item) => {
-      // Handle multiple payment methods
-      if (item.paymentMethods && item.paymentMethods.length > 0) {
-        item.paymentMethods.forEach(method => {
-          const methodKey = method.type === 'pos_isbank_transfer' ? 'pos' : method.type;
-          acc[methodKey] = (acc[methodKey] || 0) + method.amount;
-        });
-      } else {
-        // Fallback to legacy single payment method
-        const method = item.paymentMethod?.toLowerCase() || 'unknown';
-        const methodKey = method === 'pos_isbank_transfer' ? 'pos' : method;
-        acc[methodKey] = (acc[methodKey] || 0) + item.totalRevenue;
-      }
-      return acc;
-    }, {} as Record<string, number>);
+    // Debug logging to verify calculations
+    console.log('SalesHistory Revenue Calculation Debug:', {
+      filteredProductsCount: filteredProducts.length,
+      filteredTransactionsCount: filteredTransactions.length,
+      totalRevenueFromTransactions: totalRevenue,
+      totalRevenueFromProducts: filteredProducts.reduce((sum, item) => sum + item.totalRevenue, 0),
+      totalQuantity,
+      uniqueProducts,
+      totalTransactions
+    });
 
     return {
       totalRevenue,
       totalQuantity,
       uniqueProducts,
-      totalTransactions,
-      paymentMethodAmounts
+      totalTransactions
     };
-  }, [filteredProducts]);
+  }, [filteredProducts, allSales]);
+
+  // Calculate payment method amounts directly from transactions (not from individual products)
+  const paymentMethodAmounts = useMemo(() => {
+    const result = allSales.reduce((acc, transaction) => {
+      
+      // Handle multiple payment methods
+      if (transaction.payment_methods && transaction.payment_methods.length > 0) {
+        transaction.payment_methods.forEach(method => {
+          // Map payment method types to display keys
+          let methodKey: string;
+          switch (method.type) {
+            case 'pos_isbank_transfer':
+            case 'card': // Legacy support for card payments
+              methodKey = 'pos';
+              break;
+            case 'naira_transfer':
+              methodKey = 'transfer';
+              break;
+            case 'crypto_payment':
+              methodKey = 'crypto';
+              break;
+            default:
+              methodKey = method.type;
+          }
+          acc[methodKey] = (acc[methodKey] || 0) + method.amount;
+        });
+      } else if (transaction.payment_method) {
+        // Fallback to legacy single payment method
+        const method = transaction.payment_method.toLowerCase();
+        let methodKey: string;
+        switch (method) {
+          case 'pos_isbank_transfer':
+          case 'card': // Legacy support for card payments
+            methodKey = 'pos';
+            break;
+          case 'naira_transfer':
+            methodKey = 'transfer';
+            break;
+          case 'crypto_payment':
+            methodKey = 'crypto';
+            break;
+          default:
+            methodKey = method;
+        }
+        acc[methodKey] = (acc[methodKey] || 0) + transaction.total_amount;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+    
+    console.log('Payment Method Amounts Debug:', {
+      totalTransactions: sales.length,
+      paymentMethodAmounts: result,
+      sampleTransactions: sales.slice(0, 3).map(t => ({
+        id: t._id,
+        total_amount: t.total_amount,
+        payment_methods: t.payment_methods,
+        payment_method: t.payment_method
+      }))
+    });
+    
+    return result;
+  }, [allSales]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setCurrentPage(1); // Reset to first page when searching
   };
 
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handleTagsChange = (tags: string[]) => {
+    setSelectedTags(tags);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handleYearChange = (year: string) => {
+    setSelectedYear(year);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   const handleRefresh = () => {
     loadSales();
   };
 
-  const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category);
-  };
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags(prev => 
@@ -466,7 +617,7 @@ export const SalesHistory: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
+    <div className="min-h-screen bg-white dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Back Navigation */}
         <div className="flex items-center justify-between mb-6">
@@ -599,14 +750,14 @@ export const SalesHistory: React.FC = () => {
             <DollarSign className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
             Payment Methods
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Cash Payments */}
             <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Cash</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(summaryStats.paymentMethodAmounts.cash || 0).toLocaleString()}
+                    ₺{(paymentMethodAmounts.cash || 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
@@ -621,7 +772,7 @@ export const SalesHistory: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">POS</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(summaryStats.paymentMethodAmounts.pos || 0).toLocaleString()}
+                    ₺{(paymentMethodAmounts.pos || 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
@@ -636,11 +787,26 @@ export const SalesHistory: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transfer</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(summaryStats.paymentMethodAmounts.transfer || 0).toLocaleString()}
+                    ₺{(paymentMethodAmounts.transfer || 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
                   <TrendingUp className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Crypto Payments */}
+            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Crypto</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    ₺{(paymentMethodAmounts.crypto || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
+                  <Coins className="h-5 w-5 text-white" />
                 </div>
               </div>
             </Card>
@@ -691,10 +857,7 @@ export const SalesHistory: React.FC = () => {
                   </label>
                   <select
                     value={selectedYear}
-                    onChange={(e) => {
-                      setSelectedYear(e.target.value);
-                      setSelectedMonth('all');
-                    }}
+                    onChange={(e) => handleYearChange(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     aria-label="Select year"
                   >
@@ -712,7 +875,7 @@ export const SalesHistory: React.FC = () => {
                   </label>
                   <select
                     value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    onChange={(e) => handleMonthChange(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     aria-label="Select month"
                   >
@@ -763,7 +926,7 @@ export const SalesHistory: React.FC = () => {
                     )}
                     {selectedMonth !== 'all' && (
                       <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-sm rounded-full">
-                        Month: {availableMonths.find(m => m.value === selectedMonth)?.label}
+                        Month: {availableMonths.find(m => m.value === selectedMonth)?.label || selectedMonth}
                       </span>
                     )}
                     {selectedTags.map(tag => (
@@ -821,7 +984,7 @@ export const SalesHistory: React.FC = () => {
                 {soldProducts.length !== filteredProducts.length && (
                   <div className="text-right">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
-                    <p className="text-lg font-bold text-gray-600 dark:text-gray-400">₺{soldProducts.reduce((sum, item) => sum + item.totalRevenue, 0).toLocaleString()}</p>
+                    <p className="text-lg font-bold text-gray-600 dark:text-gray-400">₺{sales.reduce((sum, transaction) => sum + transaction.total_amount, 0).toLocaleString()}</p>
                   </div>
                 )}
               </div>

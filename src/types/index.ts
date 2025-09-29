@@ -43,7 +43,7 @@ export interface Product {
 }
 
 export interface PaymentMethod {
-  type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment';
+  type: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card';
   amount: number;
 }
 
@@ -85,7 +85,7 @@ export interface Transaction {
   discount_amount: number;
   total_amount: number;
   payment_methods: PaymentMethod[]; // Multiple payment methods
-  payment_method?: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment'; // Legacy single payment method (for backward compatibility)
+  payment_method?: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card'; // Legacy single payment method (for backward compatibility)
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   status: 'pending' | 'completed' | 'cancelled' | 'voided';
   order_source: 'in_store' | 'online' ;

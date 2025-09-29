@@ -35,8 +35,7 @@ export const Inventory: React.FC = () => {
       const response = await apiService.getProducts({
         store_id: user.store_id,
         search: searchQuery,
-        // Note: API doesn't support stock level filtering yet
-        // This would need to be implemented on the backend
+        stock_level: selectedFilter, // Now using API filtering for stock levels
       });
       
       setProducts(response.products);
@@ -47,32 +46,15 @@ export const Inventory: React.FC = () => {
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [user?.store_id, currentPage, searchQuery]);
+  }, [user?.store_id, currentPage, searchQuery, selectedFilter]);
 
   // Load products when filters change
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
-  const filteredProducts = useMemo(() => {
-    if (!products || !Array.isArray(products)) return [];
-    return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           product.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           product.sku.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      let matchesFilter = true;
-      if (selectedFilter === 'low_stock') {
-        matchesFilter = product.stock_quantity <= product.min_stock_level && product.stock_quantity > 0;
-      } else if (selectedFilter === 'out_of_stock') {
-        matchesFilter = product.stock_quantity === 0;
-      } else if (selectedFilter === 'normal') {
-        matchesFilter = product.stock_quantity > product.min_stock_level;
-      }
-      
-      return matchesSearch && matchesFilter;
-    });
-  }, [products, searchQuery, selectedFilter]);
+  // No need for client-side filtering since we're using API filtering
+  const filteredProducts = products || [];
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
