@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Filter, Grid, List, Package, Upload, Trash2, CheckSquare, Square, Download, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, Filter, Grid, List, Package, Upload, Trash2, CheckSquare, Square, Download, FileText, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -8,6 +8,7 @@ import { useIntelligentSearch } from '../hooks/useIntelligentSearch';
 import { ProductCard } from '../components/ui/ProductCard';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
+import { NumberInput } from '../components/ui/NumberInput';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import ExcelImportModal from '../components/ExcelImportModal';
 import { PriceUpdateModal } from '../components/ui/PriceUpdateModal';
@@ -838,7 +839,10 @@ export const Products: React.FC = () => {
           resetForm();
         }}
         title="Add New Product"
-        size="xl"
+        size="2xl"
+        headerIcon={<ShoppingCart className="h-6 w-6 text-white" />}
+        headerColor="primary"
+        closeOnOverlayClick={true}
       >
         <EnhancedProductForm
           onSubmit={handleAddProduct}
@@ -915,7 +919,7 @@ export const Products: React.FC = () => {
                 <select
                   value={newProduct.unit}
                   onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   required
                   aria-label="Select unit"
                 >
@@ -933,7 +937,7 @@ export const Products: React.FC = () => {
                 onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
                 placeholder="Enter product description"
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
               />
             </div>
           </div>
@@ -944,28 +948,28 @@ export const Products: React.FC = () => {
               Pricing & Inventory
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
+              <NumberInput
                 label="Price (₺) *"
-                type="number"
-                step="0.01"
                 value={newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                onChange={(value) => setNewProduct({ ...newProduct, price: String(value) })}
                 placeholder="0.00"
                 required
+                precision={2}
+                step={0.01}
               />
-              <Input
+              <NumberInput
                 label="Stock Quantity"
-                type="number"
                 value={newProduct.stock_quantity}
-                onChange={(e) => setNewProduct({ ...newProduct, stock_quantity: e.target.value })}
+                onChange={(value) => setNewProduct({ ...newProduct, stock_quantity: String(value) })}
                 placeholder="0"
+                min={0}
               />
-              <Input
+              <NumberInput
                 label="Minimum Stock Level"
-                type="number"
                 value={newProduct.min_stock_level}
-                onChange={(e) => setNewProduct({ ...newProduct, min_stock_level: e.target.value })}
+                onChange={(value) => setNewProduct({ ...newProduct, min_stock_level: String(value) })}
                 placeholder="5"
+                min={0}
               />
             </div>
           </div>

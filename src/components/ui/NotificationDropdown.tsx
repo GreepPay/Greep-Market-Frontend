@@ -112,7 +112,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         <div className="flex items-center space-x-1">
           {unreadCount > 0 && (
             <button
-              onClick={onMarkAllAsRead}
+              onClick={() => {
+                console.log('Marking all notifications as read');
+                onMarkAllAsRead();
+              }}
               className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 px-2 py-1 rounded hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors duration-200"
             >
               Mark all read
@@ -152,7 +155,12 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                     notification.priority === 'URGENT' ? 'ring-2 ring-red-400/50 bg-red-50/30 dark:bg-red-900/10' :
                     notification.priority === 'HIGH' ? 'ring-1 ring-orange-400/50 bg-orange-50/20 dark:bg-orange-900/10' : ''
                   }`}
-                  onClick={() => !notification.read && onMarkAsRead(notification.id)}
+                  onClick={() => {
+                    if (!notification.read) {
+                      console.log('Marking notification as read:', notification.id);
+                      onMarkAsRead(notification.id);
+                    }
+                  }}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">

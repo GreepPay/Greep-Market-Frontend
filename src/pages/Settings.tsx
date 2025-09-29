@@ -602,7 +602,7 @@ export const Settings: React.FC = () => {
                 type="text"
                 value={storeSettings?.name || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, name: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Enter your store name"
                 placeholder="Enter store name"
               />
@@ -613,7 +613,7 @@ export const Settings: React.FC = () => {
                 type="tel"
                 value={storeSettings?.phone || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, phone: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Enter your store phone number"
                 placeholder="Enter phone number"
               />
@@ -626,7 +626,7 @@ export const Settings: React.FC = () => {
               value={storeSettings?.address || ''}
               onChange={(e) => setStoreSettings(prev => prev ? {...prev, address: e.target.value} : null)}
               rows={3}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
               title="Enter your store address"
               placeholder="Enter store address"
             />
@@ -639,7 +639,7 @@ export const Settings: React.FC = () => {
                 type="email"
                 value={storeSettings?.email || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, email: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Enter your store email address"
                 placeholder="Enter email address"
               />
@@ -649,7 +649,7 @@ export const Settings: React.FC = () => {
               <select
                 value={storeSettings?.currency || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, currency: e.target.value} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Select your store currency"
               >
                 <option value="">Select Currency</option>
@@ -667,7 +667,7 @@ export const Settings: React.FC = () => {
                 type="number"
                 value={storeSettings?.tax_rate || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, tax_rate: Number(e.target.value)} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Enter tax rate percentage"
                 placeholder=""
               />
@@ -678,7 +678,7 @@ export const Settings: React.FC = () => {
                 type="number"
                 value={storeSettings?.low_stock_threshold || ''}
                 onChange={(e) => setStoreSettings(prev => prev ? {...prev, low_stock_threshold: Number(e.target.value)} : null)}
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                 title="Enter low stock threshold number"
                 placeholder=""
               />
@@ -785,7 +785,7 @@ export const Settings: React.FC = () => {
                   value={newUser.email}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                   required
-                  className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                   title="Enter user email address"
                   placeholder="Enter email address"
                 />
@@ -798,7 +798,7 @@ export const Settings: React.FC = () => {
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 pr-10"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 pr-10"
                     title="Enter user password"
                     placeholder="Enter password"
                   />
@@ -819,7 +819,7 @@ export const Settings: React.FC = () => {
                     value={newUser.first_name}
                     onChange={(e) => setNewUser({...newUser, first_name: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                     title="Enter user first name"
                     placeholder="Enter first name"
                   />
@@ -831,7 +831,7 @@ export const Settings: React.FC = () => {
                     value={newUser.last_name}
                     onChange={(e) => setNewUser({...newUser, last_name: e.target.value})}
                     required
-                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                     title="Enter user last name"
                     placeholder="Enter last name"
                   />
@@ -842,7 +842,7 @@ export const Settings: React.FC = () => {
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({...newUser, role: e.target.value as any})}
-                  className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200"
                   title="Select user role"
                 >
                   {currentUser?.role === 'manager' ? (

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, forwardRef } from 'react';
 import { Search, Camera, X, Loader2 } from 'lucide-react';
 import { Button } from './Button';
 
@@ -13,7 +13,7 @@ interface SearchBarProps {
   showLoading?: boolean;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({
+export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(({
   placeholder = 'Search products...',
   onSearch,
   onBarcodeScan,
@@ -22,7 +22,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   enableRealTime = true,
   debounceMs = 300,
   showLoading = false,
-}) => {
+}, ref) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -72,6 +72,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setIsLoading(false);
   };
 
+  const handleInputClick = () => {
+    // Select all text when the input is clicked
+    if (ref && typeof ref === 'object' && ref.current) {
+      ref.current.select();
+    }
+  };
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -88,11 +95,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
         </div>
         <input
+          ref={ref}
           type="text"
           value={query}
           onChange={handleInputChange}
+          onClick={handleInputClick}
           placeholder={placeholder}
-          className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
+          className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200"
         />
         <div className="absolute inset-y-0 right-0 flex items-center pr-2 space-x-1">
           {/* Loading indicator */}
@@ -142,4 +151,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       )}
     </form>
   );
-};
+});
+
+SearchBar.displayName = 'SearchBar';

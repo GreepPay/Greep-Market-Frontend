@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Loader2, Scan, Package, DollarSign, Tag, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Input } from './Input';
+import { NumberInput } from './NumberInput';
 import { Button } from './Button';
 import CategorySelect from './CategorySelect';
 import { TagsDropdown } from './TagsDropdown';
@@ -487,7 +488,7 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
             <select
               value={formData.unit}
               onChange={(e) => handleInputChange('unit', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-200"
               required
               aria-label="Select unit"
             >
@@ -507,7 +508,7 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
             onChange={(e) => handleInputChange('description', e.target.value)}
             placeholder="Enter product description"
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none transition-colors duration-200"
           />
         </div>
       </div>
@@ -522,14 +523,14 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Price */}
           <div className="relative">
-            <Input
+            <NumberInput
               label="Price (₺) *"
-              type="number"
-              step="0.01"
               value={formData.price}
-              onChange={(e) => handleInputChange('price', e.target.value)}
+              onChange={(value) => handleInputChange('price', String(value))}
               placeholder="0.00"
               required
+              precision={2}
+              step={0.01}
               className={!validation.price.isValid ? 'border-red-500 focus:ring-red-500' : ''}
             />
             <div className="absolute right-3 top-8">
@@ -545,12 +546,12 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
 
           {/* Stock Quantity */}
           <div className="relative">
-            <Input
+            <NumberInput
               label="Stock Quantity"
-              type="number"
               value={formData.stock_quantity}
-              onChange={(e) => handleInputChange('stock_quantity', e.target.value)}
+              onChange={(value) => handleInputChange('stock_quantity', String(value))}
               placeholder="0"
+              min={0}
               className={!validation.stock_quantity.isValid ? 'border-red-500 focus:ring-red-500' : ''}
             />
             <div className="absolute right-3 top-8">
@@ -566,12 +567,12 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
 
           {/* Minimum Stock Level */}
           <div className="relative">
-            <Input
+            <NumberInput
               label="Minimum Stock Level"
-              type="number"
               value={formData.min_stock_level}
-              onChange={(e) => handleInputChange('min_stock_level', e.target.value)}
+              onChange={(value) => handleInputChange('min_stock_level', String(value))}
               placeholder="5"
+              min={0}
               className={!validation.min_stock_level.isValid ? 'border-red-500 focus:ring-red-500' : ''}
             />
             <div className="absolute right-3 top-8">

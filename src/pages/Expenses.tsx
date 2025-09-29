@@ -2,21 +2,19 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Search,
-  Filter,
-  Download,
   Edit,
   Trash2,
-  Eye,
-  Calendar,
   DollarSign,
   Package,
   CreditCard,
   TrendingUp,
   AlertCircle,
-  X
+  Receipt
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
+import { NumberInput } from '../components/ui/NumberInput';
+import { Modal } from '../components/ui/Modal';
 import toast from 'react-hot-toast';
 
 interface Expense {
@@ -418,14 +416,14 @@ export const Expenses: React.FC = () => {
                 placeholder="Search expenses by product name or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 bg-white dark:bg-gray-700"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 bg-white dark:bg-gray-700"
               />
             </div>
             <div className="flex flex-wrap gap-3">
               <select
                 value={filterDateRange}
                 onChange={(e) => setFilterDateRange(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 aria-label="Filter by date range"
               >
                 {dateRangeOptions.map(option => (
@@ -437,7 +435,7 @@ export const Expenses: React.FC = () => {
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 aria-label="Filter by category"
               >
                 <option value="">All Categories</option>
@@ -450,7 +448,7 @@ export const Expenses: React.FC = () => {
               <select
                 value={filterPaymentMethod}
                 onChange={(e) => setFilterPaymentMethod(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 aria-label="Filter by payment method"
               >
                 <option value="">All Payment Methods</option>
@@ -601,23 +599,15 @@ export const Expenses: React.FC = () => {
         )}
 
         {/* Add Expense Modal */}
-        {showAddExpense && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add New Expense</h2>
-                  <button
-                    onClick={() => setShowAddExpense(false)}
-                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
-                    title="Close modal"
-                    aria-label="Close modal"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+        <Modal
+          isOpen={showAddExpense}
+          onClose={() => setShowAddExpense(false)}
+          title="Add New Expense"
+          size="lg"
+          headerIcon={<Receipt className="h-6 w-6 text-white" />}
+          headerColor="success"
+          closeOnOverlayClick={true}
+        >
                 
                 <form onSubmit={handleAddExpense} className="space-y-6">
                   <div className="grid grid-cols-1 gap-4">
@@ -627,7 +617,7 @@ export const Expenses: React.FC = () => {
                         type="date"
                         value={newExpense.date}
                         onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         required
                         aria-label="Select date"
                       />
@@ -640,24 +630,22 @@ export const Expenses: React.FC = () => {
                         value={newExpense.product_name}
                         onChange={(e) => setNewExpense({ ...newExpense, product_name: e.target.value })}
                         placeholder="Enter product or service name"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         required
                       />
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quantity *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <NumberInput
+                          label="Quantity *"
                           value={newExpense.quantity}
-                          onChange={(e) => setNewExpense({ ...newExpense, quantity: parseFloat(e.target.value) })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          onChange={(value) => setNewExpense({ ...newExpense, quantity: typeof value === 'number' ? value : parseFloat(value) || 0 })}
                           placeholder="Enter quantity"
+                          min={0}
+                          step={0.01}
+                          precision={2}
                           required
-                          aria-label="Enter quantity"
                         />
                       </div>
                       <div>
@@ -665,7 +653,7 @@ export const Expenses: React.FC = () => {
                         <select
                           value={newExpense.unit}
                           onChange={(e) => setNewExpense({ ...newExpense, unit: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select unit"
                         >
                           {units.map(unit => (
@@ -677,15 +665,14 @@ export const Expenses: React.FC = () => {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <NumberInput
+                          label="Amount *"
                           value={newExpense.amount}
-                          onChange={(e) => setNewExpense({ ...newExpense, amount: parseFloat(e.target.value) })}
+                          onChange={(value) => setNewExpense({ ...newExpense, amount: typeof value === 'number' ? value : parseFloat(value) || 0 })}
                           placeholder="0.00"
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          min={0}
+                          step={0.01}
+                          precision={2}
                           required
                         />
                       </div>
@@ -694,7 +681,7 @@ export const Expenses: React.FC = () => {
                         <select
                           value={newExpense.currency}
                           onChange={(e) => setNewExpense({ ...newExpense, currency: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select currency"
                         >
                           {currencies.map(currency => (
@@ -710,7 +697,7 @@ export const Expenses: React.FC = () => {
                         <select
                           value={newExpense.payment_method}
                           onChange={(e) => setNewExpense({ ...newExpense, payment_method: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select payment method"
                         >
                           {paymentMethods.map(method => (
@@ -723,7 +710,7 @@ export const Expenses: React.FC = () => {
                         <select
                           value={newExpense.category}
                           onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select category"
                         >
                           {categories.map(category => (
@@ -740,7 +727,7 @@ export const Expenses: React.FC = () => {
                         onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
                         rows={3}
                         placeholder="Optional description or notes"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                       />
                     </div>
                   </div>
@@ -761,42 +748,33 @@ export const Expenses: React.FC = () => {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
 
         {/* Edit Expense Modal */}
-        {showEditExpense && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Expense</h2>
-                  <button
-                    onClick={() => setShowEditExpense(null)}
-                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
-                    title="Close modal"
-                    aria-label="Close modal"
-                  >
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+        <Modal
+          isOpen={!!showEditExpense}
+          onClose={() => setShowEditExpense(null)}
+          title="Edit Expense"
+          size="lg"
+          headerIcon={<Edit className="h-6 w-6 text-white" />}
+          headerColor="info"
+          closeOnOverlayClick={true}
+        >
                 
                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  handleEditExpense(showEditExpense);
+                  if (showEditExpense) {
+                    handleEditExpense(showEditExpense);
+                  }
                 }} className="space-y-6">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date *</label>
                       <input
                         type="date"
-                        value={showEditExpense.date}
-                        onChange={(e) => setShowEditExpense({ ...showEditExpense, date: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        value={showEditExpense?.date || ''}
+                        onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, date: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         required
                         aria-label="Select date"
                       />
@@ -806,35 +784,33 @@ export const Expenses: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
                       <input
                         type="text"
-                        value={showEditExpense.product_name}
-                        onChange={(e) => setShowEditExpense({ ...showEditExpense, product_name: e.target.value })}
+                        value={showEditExpense?.product_name || ''}
+                        onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, product_name: e.target.value })}
                         placeholder="Enter product or service name"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         required
                       />
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quantity *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={showEditExpense.quantity}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, quantity: parseFloat(e.target.value) })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        <NumberInput
+                          label="Quantity *"
+                          value={showEditExpense?.quantity || 0}
+                          onChange={(value) => showEditExpense && setShowEditExpense({ ...showEditExpense, quantity: typeof value === 'number' ? value : parseFloat(String(value)) || 0 })}
                           placeholder="Enter quantity"
+                          min={0}
+                          step={0.01}
+                          precision={2}
                           required
-                          aria-label="Enter quantity"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Unit *</label>
                         <select
-                          value={showEditExpense.unit}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, unit: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={showEditExpense?.unit || ''}
+                          onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, unit: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select unit"
                         >
                           {units.map(unit => (
@@ -846,25 +822,23 @@ export const Expenses: React.FC = () => {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={showEditExpense.amount}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, amount: parseFloat(e.target.value) })}
+                        <NumberInput
+                          label="Amount *"
+                          value={showEditExpense?.amount || 0}
+                          onChange={(value) => showEditExpense && setShowEditExpense({ ...showEditExpense, amount: typeof value === 'number' ? value : parseFloat(String(value)) || 0 })}
                           placeholder="0.00"
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          min={0}
+                          step={0.01}
+                          precision={2}
                           required
-                          aria-label="Enter amount"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency *</label>
                         <select
-                          value={showEditExpense.currency}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, currency: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={showEditExpense?.currency || ''}
+                          onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, currency: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select currency"
                         >
                           {currencies.map(currency => (
@@ -878,9 +852,9 @@ export const Expenses: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Payment Method *</label>
                         <select
-                          value={showEditExpense.payment_method}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, payment_method: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={showEditExpense?.payment_method || ''}
+                          onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, payment_method: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select payment method"
                         >
                           {paymentMethods.map(method => (
@@ -891,9 +865,9 @@ export const Expenses: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Category *</label>
                         <select
-                          value={showEditExpense.category}
-                          onChange={(e) => setShowEditExpense({ ...showEditExpense, category: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          value={showEditExpense?.category || ''}
+                          onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, category: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           aria-label="Select category"
                         >
                           {categories.map(category => (
@@ -906,11 +880,11 @@ export const Expenses: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</label>
                       <textarea
-                        value={showEditExpense.description || ''}
-                        onChange={(e) => setShowEditExpense({ ...showEditExpense, description: e.target.value })}
+                        value={showEditExpense?.description || ''}
+                        onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, description: e.target.value })}
                         rows={3}
                         placeholder="Optional description or notes"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       />
                     </div>
                   </div>
@@ -931,446 +905,26 @@ export const Expenses: React.FC = () => {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
 
         {/* Delete Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-xl flex items-center justify-center mr-4">
-                  <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Expense</h3>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-                Are you sure you want to delete this expense? This action cannot be undone and will permanently remove the expense from your records.
-              </p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(null)}
-                  className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteExpense(showDeleteConfirm)}
-                  className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
-                >
-                  Delete Expense
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        </div>
-      </div>
-
-      {/* Add Expense Modal */}
-      {showAddExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add New Expense</h2>
-                <button
-                  onClick={() => setShowAddExpense(false)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
-                  title="Close modal"
-                  aria-label="Close modal"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              
-              <form onSubmit={handleAddExpense} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      id="expense-date"
-                      name="expense-date"
-                      value={newExpense.date}
-                      onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-                      required
-                      aria-label="Expense date"
-                      title="Expense date"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                     
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Product Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={newExpense.product_name}
-                      onChange={(e) => setNewExpense({ ...newExpense, product_name: e.target.value })}
-                      required
-                      placeholder="Enter product or service name"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Quantity <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={newExpense.quantity}
-                      onChange={(e) => setNewExpense({ ...newExpense, quantity: parseInt(e.target.value) || 1 })}
-                      required
-                      min="1"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Enter quantity"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Unit <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={newExpense.unit}
-                      onChange={(e) => setNewExpense({ ...newExpense, unit: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select unit"
-                    >
-                      <option value="Pieces">Pieces</option>
-                      <option value="Kg">Kg</option>
-                      <option value="Liters">Liters</option>
-                      <option value="Hours">Hours</option>
-                      <option value="Days">Days</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Amount <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={newExpense.amount}
-                      onChange={(e) => setNewExpense({ ...newExpense, amount: parseFloat(e.target.value) || 0 })}
-                      required
-                      min="0"
-                      step="0.01"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Enter amount"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Currency <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={newExpense.currency}
-                      onChange={(e) => setNewExpense({ ...newExpense, currency: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select currency"
-                    >
-                      <option value="TRY">₺ (Turkish Lira)</option>
-                      <option value="USD">$ (US Dollar)</option>
-                      <option value="EUR">€ (Euro)</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={newExpense.payment_method}
-                      onChange={(e) => setNewExpense({ ...newExpense, payment_method: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select payment method"
-                    >
-                      {paymentMethods.map((method) => (
-                        <option key={method.value} value={method.value}>
-                          {method.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={newExpense.category}
-                    onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    aria-label="Select category"
-                  >
-                    {categories.map((category) => (
-                      <option key={category.value} value={category.value}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={newExpense.description}
-                    onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
-                    rows={3}
-                    placeholder="Optional description or notes"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                </div>
-                
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddExpense(false)}
-                    className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
-                  >
-                    Add Expense
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Expense Modal */}
-      {showEditExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Edit Expense</h2>
-                <button
-                  onClick={() => setShowEditExpense(null)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
-                  title="Close modal"
-                  aria-label="Close modal"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              
-              <form onSubmit={handleEditExpenseSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={showEditExpense.date}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, date: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select date"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Product Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={showEditExpense.product_name}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, product_name: e.target.value })}
-                      required
-                      placeholder="Enter product or service name"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Quantity <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={showEditExpense.quantity}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, quantity: parseInt(e.target.value) || 1 })}
-                      required
-                      min="1"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Enter quantity"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Unit <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={showEditExpense.unit}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, unit: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select unit"
-                    >
-                      <option value="Pieces">Pieces</option>
-                      <option value="Kg">Kg</option>
-                      <option value="Liters">Liters</option>
-                      <option value="Hours">Hours</option>
-                      <option value="Days">Days</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Amount <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={showEditExpense.amount}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, amount: parseFloat(e.target.value) || 0 })}
-                      required
-                      min="0"
-                      step="0.01"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Enter amount"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Currency <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={showEditExpense.currency}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, currency: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select currency"
-                    >
-                      <option value="TRY">₺ (Turkish Lira)</option>
-                      <option value="USD">$ (US Dollar)</option>
-                      <option value="EUR">€ (Euro)</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={showEditExpense.payment_method}
-                      onChange={(e) => setShowEditExpense({ ...showEditExpense, payment_method: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      aria-label="Select payment method"
-                    >
-                      {paymentMethods.map((method) => (
-                        <option key={method.value} value={method.value}>
-                          {method.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={showEditExpense.category}
-                    onChange={(e) => setShowEditExpense({ ...showEditExpense, category: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    aria-label="Select category"
-                  >
-                    {categories.map((category) => (
-                      <option key={category.value} value={category.value}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={showEditExpense.description}
-                    onChange={(e) => setShowEditExpense({ ...showEditExpense, description: e.target.value })}
-                    rows={3}
-                    placeholder="Optional description or notes"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                </div>
-                
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditExpense(null)}
-                    className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
-                  >
-                    Update Expense
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <div className="flex items-center mb-4">
-              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-xl flex items-center justify-center mr-4">
-                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Expense</h3>
+        <Modal
+          isOpen={!!showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(null)}
+          title="Delete Expense"
+          size="md"
+          headerIcon={<AlertCircle className="h-6 w-6 text-white" />}
+          headerColor="error"
+          closeOnOverlayClick={true}
+        >
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
             </div>
             <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
               Are you sure you want to delete this expense? This action cannot be undone and will permanently remove the expense from your records.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-center space-x-3">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
                 className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 font-medium"
@@ -1378,15 +932,16 @@ export const Expenses: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteExpense(showDeleteConfirm)}
+                onClick={() => showDeleteConfirm && handleDeleteExpense(showDeleteConfirm)}
                 className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
               >
                 Delete Expense
               </button>
             </div>
           </div>
+        </Modal>
         </div>
-      )}
+      </div>
     </>
   );
 };
