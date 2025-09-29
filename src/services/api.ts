@@ -15,11 +15,28 @@ const API_BASE_URL = api.baseUrl;
 class ApiService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private onTokenExpired: (() => void) | null = null;
 
   constructor() {
     // Load tokens from localStorage on initialization
     this.accessToken = localStorage.getItem('access_token');
     this.refreshToken = localStorage.getItem('refresh_token');
+  }
+
+  // Set callback for token expiration
+  setTokenExpiredCallback(callback: () => void) {
+    this.onTokenExpired = callback;
+  }
+
+  // Clear token expiration callback
+  clearTokenExpiredCallback() {
+    this.onTokenExpired = null;
+  }
+
+  // Development utility: Force token expiration for testing
+  forceTokenExpiration() {
+    console.log('Forcing token expiration for testing...');
+    this.clearTokens();
   }
 
   // Clear all tokens
@@ -28,6 +45,11 @@ class ApiService {
     this.refreshToken = null;
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    
+    // Trigger token expiration callback if set
+    if (this.onTokenExpired) {
+      this.onTokenExpired();
+    }
   }
 
   // Check if tokens are valid
@@ -37,8 +59,17 @@ class ApiService {
       // Basic JWT validation - check if it's not expired
       const payload = JSON.parse(atob(token.split('.')[1]));
       const now = Math.floor(Date.now() / 1000);
-      return payload.exp > now;
-    } catch {
+      const isValid = payload.exp > now;
+      
+      if (!isValid) {
+        console.log('Token is expired, clearing tokens');
+        this.clearTokens();
+      }
+      
+      return isValid;
+    } catch (error) {
+      console.log('Token validation failed:', error);
+      this.clearTokens();
       return false;
     }
   }
@@ -83,11 +114,11 @@ class ApiService {
     console.log(`Making API request to: ${url}`);
     
     // Validate access token before making request
-    // Temporarily disabled for debugging
-    // if (this.accessToken && !this.isTokenValid(this.accessToken)) {
-    //   console.log('Access token is invalid, clearing tokens');
-    //   this.clearTokens();
-    // }
+    if (this.accessToken && !this.isTokenValid(this.accessToken)) {
+      console.log('Access token is invalid, clearing tokens');
+      this.clearTokens();
+      throw new Error('Authentication token is invalid or expired');
+    }
     
     const config: RequestInit = {
       headers: {
@@ -140,10 +171,13 @@ class ApiService {
 
       if (!response.ok) {
         if (response.status === 401) {
+          console.log('Received 401 Unauthorized - handling token expiration');
           if (this.refreshToken && this.isTokenValid(this.refreshToken)) {
             // Try to refresh token
+            console.log('Attempting to refresh token...');
             const refreshed = await this.refreshAccessToken();
             if (refreshed) {
+              console.log('Token refreshed successfully, retrying request');
               // Retry the original request
               config.headers = {
                 ...config.headers,
@@ -153,7 +187,8 @@ class ApiService {
               return await retryResponse.json();
             }
           }
-          // If refresh fails or no refresh token, clear all tokens
+          // If refresh fails or no refresh token, clear all tokens and trigger logout
+          console.log('Token refresh failed or no refresh token - clearing tokens and redirecting to login');
           this.clearTokens();
         }
         throw new Error(data.error?.message || 'Request failed');
@@ -171,6 +206,10 @@ class ApiService {
         } else if (error.message.includes('Failed to fetch')) {
           console.error('Network error - server might be down');
           throw new Error('Unable to connect to server. Please check if the backend is running.');
+        } else if (error.message.includes('Authentication token is invalid or expired')) {
+          console.error('Token validation failed before request');
+          // Token expiration callback will be triggered by clearTokens()
+          throw error;
         }
       }
       
@@ -1082,16 +1121,20 @@ class ApiService {
   }
 
   async markNotificationAsRead(notificationId: string): Promise<{ success: boolean }> {
+    console.log('Marking notification as read:', notificationId);
     const response = await this.privateRequest<{ success: boolean }>(`/notifications/${notificationId}/read`, {
       method: 'PUT'
     });
+    console.log('Mark as read API response:', response);
     return response;
   }
 
   async markAllNotificationsAsRead(): Promise<{ success: boolean }> {
+    console.log('Marking all notifications as read');
     const response = await this.privateRequest<{ success: boolean }>('/notifications/read-all', {
       method: 'PUT'
     });
+    console.log('Mark all as read API response:', response);
     return response;
   }
 

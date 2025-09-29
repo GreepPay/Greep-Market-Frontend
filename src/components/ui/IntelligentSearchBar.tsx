@@ -309,7 +309,7 @@ export const IntelligentSearchBar: React.FC<IntelligentSearchBarProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => setShowSuggestions(true)}
             placeholder={placeholder}
-            className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
+            className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200"
             autoComplete="off"
           />
           <div className="absolute inset-y-0 right-0 flex items-center pr-2 space-x-1">

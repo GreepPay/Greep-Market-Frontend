@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CreditCard, X, Users, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
@@ -41,6 +41,17 @@ export const POS: React.FC = () => {
       loadRiders();
     }
   }, [isAuthenticated, user, loadAllProducts, loadRiders]);
+
+  // Auto-focus search field when POS component mounts
+  useEffect(() => {
+    if (isAuthenticated && user && searchInputRef.current) {
+      // Small delay to ensure the component is fully rendered
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, user]);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState<TransactionItem[]>([]);
@@ -48,6 +59,7 @@ export const POS: React.FC = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [discount, setDiscount] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredProducts = useMemo(() => {
     if (!products || !Array.isArray(products)) {
@@ -63,11 +75,7 @@ export const POS: React.FC = () => {
     const searchLower = searchQuery.toLowerCase();
     const filtered = products.filter(product => 
       product.name.toLowerCase().includes(searchLower) ||
-      product.barcode?.toLowerCase().includes(searchLower) ||
-      product.sku.toLowerCase().includes(searchLower) ||
-      product.category.toLowerCase().includes(searchLower) ||
-      product.description?.toLowerCase().includes(searchLower) ||
-      product.tags?.some(tag => tag.toLowerCase().includes(searchLower))
+      product.barcode?.toLowerCase().includes(searchLower)
     );
     console.log('POS - Filtered products:', filtered.length);
     return filtered;
@@ -408,9 +416,10 @@ export const POS: React.FC = () => {
               placeholder="Search products or scan barcode..."
               onSearch={handleSearch}
               onBarcodeScan={() => setIsScannerOpen(true)}
-                  enableRealTime={true}
-                  debounceMs={200}
-                  showBarcodeButton={true}
+              enableRealTime={true}
+              debounceMs={200}
+              showBarcodeButton={true}
+              ref={searchInputRef}
             />
               </div>
             </div>

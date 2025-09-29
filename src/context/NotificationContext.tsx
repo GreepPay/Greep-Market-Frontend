@@ -76,7 +76,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         title: notif.title,
         message: notif.message,
         timestamp: new Date(notif.created_at),
-        read: notif.read,
+        read: notif.read || notif.is_read || false, // Handle both 'read' and 'is_read' fields
         data: notif.data,
       }));
       
@@ -93,7 +93,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (!isAuthenticated || !user) return;
     
     try {
+      console.log('Refreshing notifications...');
       const response = await apiService.getNotifications({ limit: 50 });
+      console.log('Notifications refresh response:', response);
+      
       const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
         id: notif._id,
         type: notif.type,
@@ -101,10 +104,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         title: notif.title,
         message: notif.message,
         timestamp: new Date(notif.created_at),
-        read: notif.read,
+        read: notif.read || notif.is_read || false, // Handle both 'read' and 'is_read' fields
         data: notif.data,
       }));
       
+      console.log('Processed notifications:', backendNotifications);
       setNotifications(backendNotifications);
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
@@ -124,7 +128,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     // Sync with backend
     try {
-      await apiService.markNotificationAsRead(id);
+      const response = await apiService.markNotificationAsRead(id);
+      console.log('Mark as read response:', response);
+      
+      // Refresh notifications to ensure UI is in sync with backend
+      await refreshNotifications();
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
       // Revert optimistic update on error
@@ -136,7 +144,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         )
       );
     }
-  }, []);
+  }, [refreshNotifications]);
 
   // Enhanced mark all as read with backend sync
   const markAllAsRead = useCallback(async () => {
@@ -147,11 +155,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     // Sync with backend
     try {
-      await apiService.markAllNotificationsAsRead();
+      const response = await apiService.markAllNotificationsAsRead();
+      console.log('Mark all as read response:', response);
+      
+      // Refresh notifications to ensure UI is in sync with backend
+      await refreshNotifications();
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
+      // Revert optimistic update on error
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: false }))
+      );
     }
-  }, []);
+  }, [refreshNotifications]);
 
   // Start polling for new notifications
   const startPolling = useCallback(() => {

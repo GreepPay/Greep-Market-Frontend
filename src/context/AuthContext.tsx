@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { User } from '../types';
 import { toast } from 'react-hot-toast';
@@ -78,6 +79,28 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const navigate = useNavigate();
+
+  // Handle token expiration - redirect to login
+  const handleTokenExpiration = () => {
+    console.log('Token expired - redirecting to login');
+    dispatch({ type: 'AUTH_LOGOUT' });
+    toast.error('Your session has expired. Please sign in again.', {
+      duration: 4000,
+      position: 'top-center',
+    });
+    navigate('/login', { replace: true });
+  };
+
+  // Set up token expiration callback
+  useEffect(() => {
+    apiService.setTokenExpiredCallback(handleTokenExpiration);
+    
+    // Cleanup callback on unmount
+    return () => {
+      apiService.clearTokenExpiredCallback();
+    };
+  }, [navigate]);
 
   // Check for existing authentication on app load
   useEffect(() => {
@@ -153,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiService.logout();
     dispatch({ type: 'AUTH_LOGOUT' });
     toast.success('Logged out');
+    navigate('/login', { replace: true });
   };
 
   const clearError = () => {

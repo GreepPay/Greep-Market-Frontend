@@ -37,14 +37,14 @@ function App() {
     <ThemeProvider>
       <SettingsProvider>
         <RiderProvider>
-          <AuthProvider>
-            <NotificationProvider>
-              <StoreProvider>
-                <AppProvider>
-                  <GoalProvider>
-                    <RefreshProvider>
-            <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <NavigationProvider>
+          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <AuthProvider>
+              <NotificationProvider>
+                <StoreProvider>
+                  <AppProvider>
+                    <GoalProvider>
+                      <RefreshProvider>
+                        <NavigationProvider>
               <ScrollToTopWrapper>
               <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
             <GoalCelebrationManager />
@@ -195,18 +195,18 @@ function App() {
             />
               </div>
               </ScrollToTopWrapper>
-              </NavigationProvider>
-            </Router>
-                    </RefreshProvider>
-                  </GoalProvider>
+                        </NavigationProvider>
+                      </RefreshProvider>
+                    </GoalProvider>
                   </AppProvider>
                 </StoreProvider>
               </NotificationProvider>
-              </AuthProvider>
-            </RiderProvider>
-        </SettingsProvider>
-      </ThemeProvider>
-    );
-  }
+            </AuthProvider>
+          </Router>
+        </RiderProvider>
+      </SettingsProvider>
+    </ThemeProvider>
+  );
+}
 
 export default App;
