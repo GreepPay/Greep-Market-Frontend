@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, X, Filter, Tag } from 'lucide-react';
 
 interface CategoryFilterSidebarProps {
@@ -17,9 +17,47 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
   className = '',
 }) => {
   const hasSelections = selectedCategories.length > 0;
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    // Check if dark mode is enabled
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    
+    checkDarkMode();
+    
+    // Watch for theme changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className={`bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-900 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm ${className}`}>
+    <>
+      <style>
+        {`
+          .category-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          .category-scrollbar::-webkit-scrollbar-track {
+            background: ${isDarkMode ? '#1f2937' : '#f3f4f6'};
+            border-radius: 3px;
+          }
+          .category-scrollbar::-webkit-scrollbar-thumb {
+            background: ${isDarkMode ? '#4b5563' : '#d1d5db'};
+            border-radius: 3px;
+          }
+          .category-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: ${isDarkMode ? '#6b7280' : '#9ca3af'};
+          }
+        `}
+      </style>
+      <div className={`bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-900 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm h-full flex flex-col ${className}`}>
       {/* Header with Icon */}
       <div className="relative p-5 pb-4">
         <div className="flex items-center justify-between">
@@ -48,8 +86,14 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
         </div>
       </div>
 
-      {/* Category List */}
-      <div className="px-5 pb-4">
+      {/* Category List - Flexible and Scrollable */}
+      <div 
+        className="px-5 pb-4 flex-1 overflow-y-auto category-scrollbar"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: isDarkMode ? '#4b5563 #1f2937' : '#d1d5db #f3f4f6'
+        }}
+      >
         <div className="space-y-1.5">
           {categories.map((category, index) => {
             const isSelected = selectedCategories.includes(category);
@@ -135,9 +179,9 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
         </div>
       </div>
 
-      {/* Selection Summary with Animation */}
+      {/* Selection Summary with Animation - Fixed at bottom */}
       {hasSelections && (
-        <div className="px-5 pb-5">
+        <div className="px-5 pb-5 flex-shrink-0">
           <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 border border-primary-200/50 dark:border-primary-700/50">
             <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-blue-500/5 animate-pulse"></div>
             <div className="relative p-3">
@@ -155,5 +199,6 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
         </div>
       )}
     </div>
+    </>
   );
 };

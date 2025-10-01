@@ -77,74 +77,129 @@ export const Reports: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<'sales' | 'inventory' | 'products' | 'performance'>('performance');
   const [isExporting, setIsExporting] = useState(false);
 
+  // Standardized date range calculation
+  const getDateRange = (period: string, startDate?: Date, endDate?: Date) => {
+    const now = new Date();
+    let calculatedStartDate: Date;
+    let calculatedEndDate: Date;
+
+    if (startDate && endDate) {
+      // Custom date range
+      calculatedStartDate = new Date(startDate);
+      calculatedEndDate = new Date(endDate);
+      calculatedEndDate.setHours(23, 59, 59, 999);
+    } else {
+      // Calculate based on period
+      switch (period) {
+        case '7d':
+          calculatedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case '30d':
+          calculatedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case '90d':
+          calculatedStartDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case '1y':
+          calculatedStartDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case 'this_month':
+          calculatedStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          break;
+        default:
+          // Handle month/year periods (YYYY-MM or year-YYYY format)
+          if (/^\d{4}-\d{2}$/.test(period)) {
+            const [year, month] = period.split('-');
+            calculatedStartDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+            calculatedEndDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+          } else if (/^year-\d{4}$/.test(period)) {
+            const year = parseInt(period.split('-')[1]);
+            calculatedStartDate = new Date(year, 0, 1);
+            calculatedEndDate = new Date(year, 11, 31, 23, 59, 59, 999);
+          } else {
+            // Default to 30 days
+            calculatedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          }
+      }
+    }
+
+    return {
+      startDate: calculatedStartDate.toISOString(),
+      endDate: calculatedEndDate.toISOString(),
+      startDateObj: calculatedStartDate,
+      endDateObj: calculatedEndDate
+    };
+  };
+
   useEffect(() => {
     const loadAnalytics = async () => {
-      if (user?.store_id) {
-        setIsLoading(true);
-        try {
-          // Use explicit date ranges to avoid timezone confusion (same as Dashboard)
-          const analyticsParams: any = { store_id: user.store_id };
-          
-          if (periodStartDate && periodEndDate) {
-            // Custom date range - use explicit UTC dates
-            const startDate = new Date(periodStartDate);
-            const endDate = new Date(periodEndDate);
-            endDate.setHours(23, 59, 59, 999); // End of day
-            
-            analyticsParams.startDate = startDate.toISOString();
-            analyticsParams.endDate = endDate.toISOString();
-          } else {
-            // Calculate explicit date ranges based on period selection
-            const now = new Date();
-            let startDate: Date;
-            let endDate: Date;
-            
-            switch (selectedPeriod) {
-              case '7d':
-                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                break;
-              case '30d':
-                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                break;
-              case '90d':
-                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                break;
-              case '1y':
-                startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-                break;
-              default:
-                // Default to 30 days
-                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-            }
-            
-            analyticsParams.startDate = startDate.toISOString();
-            analyticsParams.endDate = endDate.toISOString();
-          }
+      if (!user?.store_id) return;
+      
+      setIsLoading(true);
+      try {
+        // Get standardized date range
+        const dateRange = getDateRange(selectedPeriod, periodStartDate, periodEndDate);
+        
+        // Create standardized payload
+        const analyticsParams = {
+          store_id: user.store_id,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+          period: selectedPeriod
+        };
 
-          // Load dashboard analytics data with explicit date ranges
-          const dashboardAnalytics = await apiService.getDashboardAnalytics(analyticsParams);
-          
-          // Load additional analytics for reports
-          const [productPerformance, inventoryAnalytics] = await Promise.all([
-            apiService.getProductPerformance(user.store_id, selectedPeriod, periodStartDate, periodEndDate),
-            apiService.getInventoryAnalytics(user.store_id)
-          ]);
-          
-          setAnalyticsData({ 
-            dashboardAnalytics, 
-            productPerformance, 
-            inventoryAnalytics 
-          });
-        } catch (error) {
-          console.error('Failed to load analytics:', error);
-        } finally {
-          setIsLoading(false);
-        }
+        // Log the payload for debugging
+        console.log('🔍 Reports Filtering Debug:', {
+          selectedPeriod,
+          periodStartDate,
+          periodEndDate,
+          calculatedDateRange: dateRange,
+          analyticsParams,
+          timestamp: new Date().toISOString()
+        });
+
+        // Load all analytics data with standardized parameters
+        const [dashboardAnalytics, productPerformance, inventoryAnalytics] = await Promise.all([
+          apiService.getDashboardAnalytics(analyticsParams),
+          apiService.getProductPerformance(user.store_id, selectedPeriod, dateRange.startDateObj, dateRange.endDateObj),
+          apiService.getInventoryAnalytics(user.store_id)
+        ]);
+
+        // Log the response for debugging
+        console.log('🔍 Reports API Response Debug:', {
+          dashboardAnalytics: {
+            hasData: !!dashboardAnalytics,
+            keys: dashboardAnalytics ? Object.keys(dashboardAnalytics) : [],
+            totalSales: dashboardAnalytics?.totalSales,
+            totalExpenses: dashboardAnalytics?.totalExpenses,
+            totalTransactions: dashboardAnalytics?.totalTransactions
+          },
+          productPerformance: {
+            hasData: !!productPerformance,
+            keys: productPerformance ? Object.keys(productPerformance) : []
+          },
+          inventoryAnalytics: {
+            hasData: !!inventoryAnalytics,
+            keys: inventoryAnalytics ? Object.keys(inventoryAnalytics) : []
+          }
+        });
+        
+        setAnalyticsData({ 
+          dashboardAnalytics, 
+          productPerformance, 
+          inventoryAnalytics 
+        });
+      } catch (error) {
+        console.error('❌ Failed to load analytics:', error);
+        toast.error('Failed to load report data. Please try again.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -152,9 +207,29 @@ export const Reports: React.FC = () => {
   }, [user?.store_id, selectedPeriod, periodStartDate, periodEndDate]);
 
   const handlePeriodChange = (period: string, startDate?: Date, endDate?: Date) => {
+    console.log('🔍 Period Change Debug:', {
+      period,
+      startDate,
+      endDate,
+      timestamp: new Date().toISOString()
+    });
+    
     setSelectedPeriod(period);
     setPeriodStartDate(startDate);
     setPeriodEndDate(endDate);
+  };
+
+  // Test function to debug filtering
+  const testFiltering = () => {
+    const dateRange = getDateRange(selectedPeriod, periodStartDate, periodEndDate);
+    console.log('🧪 Filtering Test:', {
+      selectedPeriod,
+      periodStartDate,
+      periodEndDate,
+      calculatedDateRange: dateRange,
+      analyticsData: analyticsData ? 'Data loaded' : 'No data',
+      timestamp: new Date().toISOString()
+    });
   };
 
   const formatPrice = (price: number) => {
@@ -397,7 +472,7 @@ export const Reports: React.FC = () => {
     return data;
   };
 
-  const salesData = generateSalesData();
+  const salesData = generateSalesData() || [];
 
   // Generate payment method data from actual transactions (using AMOUNTS, not counts)
   const generatePaymentMethodData = () => {
@@ -484,20 +559,20 @@ export const Reports: React.FC = () => {
     return colors[method] || '#6b7280';
   };
 
-  const paymentMethodData = generatePaymentMethodData();
+  const paymentMethodData = generatePaymentMethodData() || [];
 
-  const topProductsData = analyticsData?.productPerformance?.topSellingProducts?.map((product: any) => ({
-    name: product.productName.length > 15 
-      ? product.productName.substring(0, 15) + '...' 
-      : product.productName,
-    revenue: product.revenue,
-    quantity: product.quantitySold,
-  })) || [];
+  const topProductsData = (analyticsData?.productPerformance?.topSellingProducts || []).map((product: any) => ({
+    name: (product.productName || '').length > 15 
+      ? (product.productName || '').substring(0, 15) + '...' 
+      : (product.productName || ''),
+    revenue: product.revenue || 0,
+    quantity: product.quantitySold || 0,
+  }));
 
   const inventoryStatusData = [
-    { name: 'In Stock', value: (products || []).filter(p => p.stock_quantity > p.min_stock_level).length, color: '#22c55e' },
-    { name: 'Low Stock', value: (products || []).filter(p => p.stock_quantity <= p.min_stock_level && p.stock_quantity > 0).length, color: '#f59e0b' },
-    { name: 'Out of Stock', value: (products || []).filter(p => p.stock_quantity === 0).length, color: '#ef4444' },
+    { name: 'In Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) > (p?.min_stock_level || 0)).length, color: '#22c55e' },
+    { name: 'Low Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) <= (p?.min_stock_level || 0) && (p?.stock_quantity || 0) > 0).length, color: '#f59e0b' },
+    { name: 'Out of Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) === 0).length, color: '#ef4444' },
   ];
 
   // Calculate metrics from real data with fallback to sales data
@@ -709,6 +784,7 @@ export const Reports: React.FC = () => {
           selectedPeriod={selectedPeriod}
           onPeriodChange={handlePeriodChange}
         />
+
 
       {/* Performance Dashboard */}
       {selectedReport === 'performance' && (
@@ -995,16 +1071,16 @@ export const Reports: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Low Stock Products</h3>
                 <div className="space-y-3">
-                  {(products || []).filter(p => p.stock_quantity <= p.min_stock_level).slice(0, 5).map(product => (
+                  {(products || []).filter(p => (p?.stock_quantity || 0) <= (p?.min_stock_level || 0)).slice(0, 5).map(product => (
                     <div key={product._id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{product?.name || 'Unknown Product'}</p>
                         <p className="text-sm text-red-600 dark:text-red-400">
-                          {formatStockQuantity(product.stock_quantity)} remaining (min: {product.min_stock_level})
+                          {formatStockQuantity(product?.stock_quantity || 0)} remaining (min: {product?.min_stock_level || 0})
                         </p>
                       </div>
                       <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-medium rounded-full">
-                        {product.stock_quantity === 0 ? 'Out of Stock' : 'Low Stock'}
+                        {(product?.stock_quantity || 0) === 0 ? 'Out of Stock' : 'Low Stock'}
                       </span>
                     </div>
                   ))}
@@ -1013,6 +1089,34 @@ export const Reports: React.FC = () => {
             </div>
           </>
         )}
+
+        {/* Debug Section - Remove in production */}
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Debug Panel</h3>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">Test filtering and check console logs</p>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                onClick={testFiltering}
+                variant="outline"
+                size="sm"
+                className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+              >
+                Test Filtering
+              </Button>
+              <Button
+                onClick={() => console.log('Current Analytics Data:', analyticsData)}
+                variant="outline"
+                size="sm"
+                className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+              >
+                Log Data
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
