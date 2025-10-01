@@ -50,7 +50,6 @@ export const Products: React.FC = () => {
     sku: '',
     tags: [] as string[],
   });
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [editingImages, setEditingImages] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
@@ -76,7 +75,6 @@ export const Products: React.FC = () => {
       sku: '',
       tags: [],
     });
-    setSelectedImages([]);
   };
 
   const categories = useMemo(() => {
@@ -125,9 +123,7 @@ export const Products: React.FC = () => {
   };
 
   const handlePageChange = (newPage: number) => {
-    // Pagination removed - this function is no longer needed
-    // All products are loaded at once
-    console.log('Pagination removed - all products loaded at once');
+    // Function kept for compatibility but pagination is disabled
   };
 
   const handleCategoryToggle = (category: string) => {
@@ -261,8 +257,7 @@ export const Products: React.FC = () => {
     }
 
     try {
-      const result = await importProducts(file);
-      console.log('Import completed:', result);
+      await importProducts(file);
     } catch (error) {
       console.error('Import products error:', error);
       // Error message is already shown by the importProducts function
@@ -433,17 +428,7 @@ export const Products: React.FC = () => {
     setDeletingProduct(null);
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const fileArray = Array.from(files);
-      setSelectedImages(prev => [...prev, ...fileArray].slice(0, 5)); // Max 5 images
-    }
-  };
 
-  const removeImage = (index: number) => {
-    setSelectedImages(prev => prev.filter((_, i) => i !== index));
-  };
 
   const handleEditImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -610,7 +595,7 @@ export const Products: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Category Filter Sidebar - Fixed */}
           <div className="lg:w-64 flex-shrink-0">
-            <div className="lg:sticky lg:top-6">
+            <div className="lg:sticky" style={{ top: '5.5rem', bottom: '20px', height: 'calc(100vh - 5.5rem - 20px)' }}>
               <CategoryFilterSidebar
                 categories={categories}
                 selectedCategories={selectedCategories}

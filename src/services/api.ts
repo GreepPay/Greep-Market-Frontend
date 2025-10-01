@@ -702,6 +702,7 @@ class ApiService {
     status?: string;
     startDate?: string;
     endDate?: string;
+    period?: string;
   }): Promise<DashboardMetrics> {
     const queryParams = new URLSearchParams();
     if (params?.store_id) queryParams.append('store_id', params.store_id);
@@ -711,6 +712,7 @@ class ApiService {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.period) queryParams.append('period', params.period);
 
     // Add cache-busting parameter to ensure fresh data when filters change
     queryParams.append('_t', Date.now().toString());
@@ -719,7 +721,8 @@ class ApiService {
     console.log('🔍 API getDashboardAnalytics call:', {
       params,
       queryParams: queryParams.toString(),
-      url
+      url,
+      timestamp: new Date().toISOString()
     });
     
     const response = await this.privateRequest<{ success: boolean; data: DashboardMetrics }>(url);
@@ -728,7 +731,10 @@ class ApiService {
       success: response.success,
       dataKeys: (response as any).data ? Object.keys((response as any).data) : 'No data',
       totalExpenses: (response as any).data?.totalExpenses,
-      monthlyExpenses: (response as any).data?.monthlyExpenses
+      monthlyExpenses: (response as any).data?.monthlyExpenses,
+      totalSales: (response as any).data?.totalSales,
+      totalTransactions: (response as any).data?.totalTransactions,
+      timestamp: new Date().toISOString()
     });
     
     return (response as any).data;
@@ -755,7 +761,25 @@ class ApiService {
     if (startDate) queryParams.append('start_date', startDate.toISOString().split('T')[0]);
     if (endDate) queryParams.append('end_date', endDate.toISOString().split('T')[0]);
 
-    const response = await this.privateRequest(`/analytics/products?${queryParams}`);
+    const url = `/analytics/products?${queryParams}`;
+    console.log('🔍 API getProductPerformance call:', {
+      store_id,
+      period,
+      startDate: startDate?.toISOString(),
+      endDate: endDate?.toISOString(),
+      queryParams: queryParams.toString(),
+      url,
+      timestamp: new Date().toISOString()
+    });
+
+    const response = await this.privateRequest(url);
+    
+    console.log('🔍 API getProductPerformance response:', {
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+      timestamp: new Date().toISOString()
+    });
+    
     return response.data;
   }
 

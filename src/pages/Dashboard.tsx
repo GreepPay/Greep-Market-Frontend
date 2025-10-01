@@ -211,11 +211,11 @@ export const Dashboard: React.FC = () => {
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-          // Send date strings in YYYY-MM-DD format to avoid timezone issues
+          // Send explicit ISO timestamps to avoid timezone confusion
           filterParams = {
             dateRange: 'today',
-            startDate: today.toISOString().split('T')[0], // YYYY-MM-DD format
-            endDate: todayEnd.toISOString().split('T')[0] // YYYY-MM-DD format (same day, but backend should handle end of day)
+            startDate: today.toISOString(), // Full ISO timestamp for start of day
+            endDate: todayEnd.toISOString() // Full ISO timestamp for end of day
           };
           break;
         case 'this_month':
@@ -223,11 +223,11 @@ export const Dashboard: React.FC = () => {
           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
           const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-          // Send date strings in YYYY-MM-DD format to avoid timezone issues
+          // Send explicit ISO timestamps to avoid timezone confusion
           filterParams = {
             dateRange: 'this_month',
-            startDate: monthStart.toISOString().split('T')[0], // YYYY-MM-DD format
-            endDate: monthEnd.toISOString().split('T')[0] // YYYY-MM-DD format
+            startDate: monthStart.toISOString(), // Full ISO timestamp for start of month
+            endDate: monthEnd.toISOString() // Full ISO timestamp for end of month
           };
           break;
         case 'custom':
@@ -239,8 +239,8 @@ export const Dashboard: React.FC = () => {
             
             filterParams = {
               dateRange: 'custom',
-              startDate: startDate.toISOString().split('T')[0], // YYYY-MM-DD format
-              endDate: endDate.toISOString().split('T')[0] // YYYY-MM-DD format
+              startDate: startDate.toISOString(), // Full ISO timestamp for start of custom range
+              endDate: endDate.toISOString() // Full ISO timestamp for end of custom range
             };
           } else {
             return; // Don't refresh if custom dates are not set
