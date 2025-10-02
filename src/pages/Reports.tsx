@@ -146,11 +146,11 @@ export const Reports: React.FC = () => {
         // Get standardized date range
         const dateRange = getDateRange(selectedPeriod, periodStartDate, periodEndDate);
         
-        // Create standardized payload
+        // Create standardized payload with proper date format
         const analyticsParams = {
           store_id: user.store_id,
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
+          startDate: dateRange.startDate.split('T')[0], // Convert ISO to date string
+          endDate: dateRange.endDate.split('T')[0], // Convert ISO to date string
           period: selectedPeriod
         };
 
