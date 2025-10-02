@@ -220,7 +220,7 @@ export const POS: React.FC = () => {
 
     try {
       // Create enhanced transaction record with all required fields
-      // Extract primary payment method (the one with the highest amount)
+      // Extract primary payment method (the one with the highest amount) for backward compatibility
       const primaryPaymentMethod = paymentData.payment_methods.reduce((prev, current) => 
         (current.amount > prev.amount) ? current : prev
       );
@@ -234,7 +234,8 @@ export const POS: React.FC = () => {
           unit_price: item.unit_price,
         })),
         discount_amount: parseFloat(discount) || 0,
-        payment_method: primaryPaymentMethod.type,
+        payment_method: primaryPaymentMethod.type, // Keep for backward compatibility
+        payment_methods: paymentData.payment_methods, // Save ALL payment methods
         order_source: paymentData.order_source,
         rider_id: paymentData.rider_id,
         delivery_fee: paymentData.delivery_fee,
@@ -242,7 +243,12 @@ export const POS: React.FC = () => {
         notes: paymentData.notes,
       };
 
-      console.log('Creating enhanced transaction:', transaction);
+      console.log('🔍 Creating enhanced transaction with payment methods:', {
+        transaction,
+        paymentMethods: paymentData.payment_methods,
+        totalPaymentMethods: paymentData.payment_methods.length,
+        primaryPaymentMethod: primaryPaymentMethod
+      });
       
       // Process transaction and inventory updates
       await Promise.all([
