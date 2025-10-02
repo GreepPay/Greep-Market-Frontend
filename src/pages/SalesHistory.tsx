@@ -63,6 +63,19 @@ export const SalesHistory: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Auto-show filters if any filters are active
+  useEffect(() => {
+    const hasActiveFilters = selectedCategory !== 'all' || 
+                           selectedTags.length > 0 || 
+                           selectedMonth !== 'all' || 
+                           selectedYear !== new Date().getFullYear().toString() ||
+                           searchQuery.trim() !== '';
+    
+    if (hasActiveFilters && !showFilters) {
+      setShowFilters(true);
+    }
+  }, [selectedCategory, selectedTags, selectedMonth, selectedYear, searchQuery, showFilters]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalSales, setTotalSales] = useState(0);
@@ -102,11 +115,19 @@ export const SalesHistory: React.FC = () => {
     setIsLoadingSales(true);
     try {
       // Load ALL transactions without any filters
+      console.log('🔍 Sales History - Making API call with params:', {
+        store_id: user.store_id,
+        page: 1,
+        limit: 1000
+      });
+      
       const response = await apiService.getTransactions({
         store_id: user.store_id,
         page: 1,
         limit: 1000, // Large limit to get all transactions
       });
+      
+      console.log('🔍 Sales History - Raw API Response:', response);
       
       console.log('📊 API Response:', {
         totalTransactions: response.transactions?.length || 0,
@@ -118,6 +139,18 @@ export const SalesHistory: React.FC = () => {
       setAllSales(response.transactions || []);
       setTotalPages(response.total || 1);
       setTotalSales(response.total || 0);
+      
+      // Debug: Log all loaded transactions with payment method data
+      console.log('🔍 Sales History - Loaded Transactions:', {
+        totalTransactions: response.transactions?.length || 0,
+        transactions: response.transactions?.map(t => ({
+          id: t._id,
+          total_amount: t.total_amount,
+          payment_methods: t.payment_methods,
+          payment_method: t.payment_method,
+          created_at: t.created_at
+        })) || []
+      });
       
     } catch (error) {
       console.error('❌ Failed to load sales:', error);
@@ -408,7 +441,7 @@ export const SalesHistory: React.FC = () => {
     }
   }, [filteredProducts, allSales, updatePaginatedSales, itemsPerPage]);
 
-  // Calculate summary statistics using transaction-level data (same as Dashboard)
+  // Calculate summary statistics using filtered data
   const summaryStats = useMemo(() => {
     // Get unique transactions from filtered products
     const uniqueTransactionIds = new Set(filteredProducts.map(item => item.transactionId));
@@ -435,13 +468,14 @@ export const SalesHistory: React.FC = () => {
       totalRevenue,
       totalQuantity,
       uniqueProducts,
-      totalTransactions
+      totalTransactions,
+      filteredTransactions // Include filtered transactions for payment method calculations
     };
   }, [filteredProducts, allSales]);
 
-  // Calculate payment method amounts directly from transactions (not from individual products)
+  // Calculate payment method amounts from filtered transactions
   const paymentMethodAmounts = useMemo(() => {
-    const result = allSales.reduce((acc, transaction) => {
+    const result = summaryStats.filteredTransactions.reduce((acc, transaction) => {
       
       // Handle multiple payment methods
       if (transaction.payment_methods && transaction.payment_methods.length > 0) {
@@ -487,10 +521,17 @@ export const SalesHistory: React.FC = () => {
       return acc;
     }, {} as Record<string, number>);
     
-    console.log('Payment Method Amounts Debug:', {
-      totalTransactions: sales.length,
+    console.log('🔍 Sales History Payment Method Debug:', {
+      totalTransactions: summaryStats.filteredTransactions.length,
       paymentMethodAmounts: result,
-      sampleTransactions: sales.slice(0, 3).map(t => ({
+      sampleTransactions: summaryStats.filteredTransactions.slice(0, 3).map(t => ({
+        id: t._id,
+        total_amount: t.total_amount,
+        payment_methods: t.payment_methods,
+        payment_method: t.payment_method,
+        created_at: t.created_at
+      })),
+      allTransactions: summaryStats.filteredTransactions.map(t => ({
         id: t._id,
         total_amount: t.total_amount,
         payment_methods: t.payment_methods,
@@ -499,7 +540,7 @@ export const SalesHistory: React.FC = () => {
     });
     
     return result;
-  }, [allSales]);
+  }, [summaryStats.filteredTransactions]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -689,130 +730,28 @@ export const SalesHistory: React.FC = () => {
           </div>
         </div>
 
-        {/* Enhanced Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Revenue</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">₺{summaryStats.totalRevenue.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From {summaryStats.totalTransactions} transactions</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl">
-                <DollarSign className="h-7 w-7 text-white" />
-              </div>
+        {/* Enhanced Search Bar */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <SearchBar
+                placeholder="Search sold products by name, category, or tags..."
+                onSearch={handleSearch}
+                enableRealTime={true}
+                debounceMs={300}
+                showBarcodeButton={false}
+              />
             </div>
-          </Card>
-
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Items Sold</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalQuantity.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Across all categories</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl">
-                <Package className="h-7 w-7 text-white" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Unique Products</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.uniqueProducts}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Different items sold</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl">
-                <TrendingUp className="h-7 w-7 text-white" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transactions</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalTransactions}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed sales</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl">
-                <Calendar className="h-7 w-7 text-white" />
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Payment Method Statistics */}
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <DollarSign className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
-            Payment Methods
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Cash Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Cash</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.cash || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            {/* POS Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">POS</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.pos || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
-                  <Package className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            {/* Transfer Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transfer</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.transfer || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            {/* Crypto Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Crypto</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.crypto || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
-                  <Coins className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </Card>
+            <Button
+              variant="outline"
+              onClick={() => setShowTransactionIds(!showTransactionIds)}
+              className="flex items-center space-x-2"
+            >
+              {showTransactionIds ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <span>{showTransactionIds ? 'Hide IDs' : 'Show IDs'}</span>
+            </Button>
           </div>
         </div>
-
 
         {/* Enhanced Filters */}
         {showFilters && (
@@ -941,26 +880,127 @@ export const SalesHistory: React.FC = () => {
           </Card>
         )}
 
-        {/* Enhanced Search Bar */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <SearchBar
-                placeholder="Search sold products by name, category, or tags..."
-                onSearch={handleSearch}
-                enableRealTime={true}
-                debounceMs={300}
-                showBarcodeButton={false}
-              />
+        {/* Enhanced Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Revenue</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">₺{summaryStats.totalRevenue.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From {summaryStats.totalTransactions} transactions</p>
+              </div>
+              <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl">
+                <DollarSign className="h-7 w-7 text-white" />
+              </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowTransactionIds(!showTransactionIds)}
-              className="flex items-center space-x-2"
-            >
-              {showTransactionIds ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              <span>{showTransactionIds ? 'Hide IDs' : 'Show IDs'}</span>
-            </Button>
+          </Card>
+
+          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Items Sold</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalQuantity.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Across all categories</p>
+              </div>
+              <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl">
+                <Package className="h-7 w-7 text-white" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Unique Products</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.uniqueProducts}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Different items sold</p>
+              </div>
+              <div className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl">
+                <TrendingUp className="h-7 w-7 text-white" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transactions</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalTransactions}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed sales</p>
+              </div>
+              <div className="p-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl">
+                <Calendar className="h-7 w-7 text-white" />
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Payment Method Statistics */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <DollarSign className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
+            Payment Methods
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Cash Payments */}
+            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Cash</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    ₺{(paymentMethodAmounts.cash || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </Card>
+
+            {/* POS Payments */}
+            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">POS</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    ₺{(paymentMethodAmounts.pos || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
+                  <Package className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Transfer Payments */}
+            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transfer</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    ₺{(paymentMethodAmounts.transfer || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Crypto Payments */}
+            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Crypto</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    ₺{(paymentMethodAmounts.crypto || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
+                  <Coins className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </Card>
           </div>
         </div>
 

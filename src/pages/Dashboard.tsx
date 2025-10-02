@@ -32,7 +32,7 @@ import { app } from '../config/environment';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 
 export const Dashboard: React.FC = () => {
-  const { inventoryAlerts, loading, dashboardMetrics } = useApp();
+  const { inventoryAlerts, loading, dashboardMetrics, refreshDashboard } = useApp();
   const { user } = useAuth();
   const { dailyProgress, monthlyProgress, updateGoalProgress } = useGoals();
   const { isDark } = useTheme();
@@ -76,6 +76,14 @@ export const Dashboard: React.FC = () => {
   const [dateRange, setDateRange] = useState<'today' | 'this_month' | 'custom'>('today');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Refresh dashboard data when component mounts to get latest payment method data
+  useEffect(() => {
+    if (user?.store_id) {
+      console.log('🔄 Dashboard - Refreshing dashboard data on mount');
+      refreshDashboard();
+    }
+  }, [user?.store_id, refreshDashboard]);
 
   // For initial load with 'today' filter, completely ignore dashboardMetrics to prevent flashing
   // Temporarily disable this to fix the empty KPI issue
@@ -409,6 +417,15 @@ export const Dashboard: React.FC = () => {
 
   // Use local dashboard metrics when available, otherwise use smart metrics
   const currentDashboardMetrics = localDashboardMetrics || dashboardMetrics;
+  
+  // Debug: Log dashboard metrics to see payment method data
+  console.log('🔍 Dashboard - Current Metrics:', {
+    hasLocalMetrics: !!localDashboardMetrics,
+    hasDashboardMetrics: !!dashboardMetrics,
+    paymentMethods: currentDashboardMetrics?.paymentMethods,
+    totalSales: currentDashboardMetrics?.totalSales,
+    metricsKeys: currentDashboardMetrics ? Object.keys(currentDashboardMetrics) : []
+  });
 
   // Use filtered sales data for charts when filters are applied, otherwise use API data
   const salesData = useMemo(() => {
@@ -523,8 +540,21 @@ export const Dashboard: React.FC = () => {
     return [];
   }, [currentDashboardMetrics?.topProducts, filteredSales, dateRange, customStartDate, customEndDate]);
 
-  // Generate payment method data from actual transactions (using AMOUNTS, not counts)
+  // Generate payment method data from dashboard metrics or actual transactions (using AMOUNTS, not counts)
   const paymentMethodData = useMemo(() => {
+    // Use dashboard metrics payment data if available (filtered by current period)
+    if (currentDashboardMetrics?.paymentMethods) {
+      const paymentMethods = currentDashboardMetrics.paymentMethods;
+      const totalAmount = Object.values(paymentMethods).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
+      
+      return Object.entries(paymentMethods).map(([method, amount]: [string, any]) => ({
+        name: method.charAt(0).toUpperCase() + method.slice(1),
+        value: amount || 0,
+        percentage: totalAmount > 0 ? ((amount || 0) / totalAmount * 100).toFixed(1) : '0.0',
+        color: getPaymentMethodColor(method)
+      }));
+    }
+
     // Use full transactions for payment methods (they have complete payment data)
     const sales = fullTransactions.length > 0 ? fullTransactions : (filteredSales.length > 0 ? filteredSales : (currentDashboardMetrics?.recentTransactions || []));
     
@@ -534,6 +564,13 @@ export const Dashboard: React.FC = () => {
       recentTransactionsLength: currentDashboardMetrics?.recentTransactions?.length || 0,
       salesLength: sales.length,
       dataSource: fullTransactions.length > 0 ? 'fullTransactions' : (filteredSales.length > 0 ? 'filteredSales' : 'recentTransactions'),
+      sampleTransactions: sales.slice(0, 3).map((s: any) => ({
+        id: s._id,
+        total_amount: s.total_amount,
+        payment_methods: s.payment_methods,
+        payment_method: s.payment_method,
+        created_at: s.created_at
+      })),
       salesData: sales.slice(0, 2), // Log first 2 transactions for debugging
       transactionStatuses: sales.map((s: any) => s.status || s.payment_status).filter(Boolean), // Log transaction statuses
       uniqueStatuses: Array.from(new Set(sales.map((s: any) => s.status || s.payment_status).filter(Boolean))),
@@ -549,14 +586,9 @@ export const Dashboard: React.FC = () => {
     });
     
     if (!sales || sales.length === 0) {
-      console.log('⚠️ No sales data available, using sample data');
-      // Generate sample payment method data
-      return [
-        { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
-        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
-        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
-        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
-      ];
+      console.log('⚠️ No sales data available, returning empty data');
+      // Return empty data instead of mock data
+      return [];
     }
     
     // Check if we have payment method data in the transactions
@@ -565,41 +597,29 @@ export const Dashboard: React.FC = () => {
     );
     
     if (!hasPaymentData) {
-      console.log('⚠️ No payment method data found in transactions');
-      
-      // If we have transactions but no payment method data, try to estimate from total sales
-      if (sales.length > 0 && currentDashboardMetrics?.totalSales) {
-        console.log('🔍 Attempting to estimate payment methods from total sales:', currentDashboardMetrics.totalSales);
-        const totalSales = currentDashboardMetrics.totalSales;
-        
-        // Create estimated payment method distribution based on common patterns
-        // This is a fallback when we have sales data but no payment method breakdown
-        return [
-          { name: 'Cash', value: Math.round(totalSales * 0.6), percentage: '60.0', color: '#22c55e' },
-          { name: 'POS', value: Math.round(totalSales * 0.3), percentage: '30.0', color: '#3b82f6' },
-          { name: 'Transfer', value: Math.round(totalSales * 0.08), percentage: '8.0', color: '#8b5cf6' },
-          { name: 'Crypto', value: Math.round(totalSales * 0.02), percentage: '2.0', color: '#f59e0b' }
-        ];
-      }
-      
-      console.log('⚠️ No sales data available, using sample data');
-      // Generate sample payment method data
-      return [
-        { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
-        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
-        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
-        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
-      ];
+      console.log('⚠️ No payment method data found in transactions - returning empty data');
+      // Return empty data instead of estimating - we want real payment method data
+      return [];
     }
     
     const paymentMethods: { [key: string]: number } = {};
     let totalAmount = 0;
     
     sales.forEach((sale: any) => {
+      console.log('Processing sale for payment methods:', {
+        saleId: sale._id,
+        totalAmount: sale.total_amount,
+        hasPaymentMethods: !!(sale.payment_methods && sale.payment_methods.length > 0),
+        hasPaymentMethod: !!sale.payment_method,
+        paymentMethods: sale.payment_methods,
+        paymentMethod: sale.payment_method
+      });
+      
       // Handle both new (payment_methods array) and legacy (single payment_method) formats
       if (sale.payment_methods && sale.payment_methods.length > 0) {
         // New format: payment_methods array
         sale.payment_methods.forEach((method: any) => {
+          console.log('Processing payment method:', method);
           let methodKey: string;
           switch (method.type) {
             case 'pos_isbank_transfer':
@@ -615,6 +635,7 @@ export const Dashboard: React.FC = () => {
             default:
               methodKey = method.type;
           }
+          console.log(`Adding ${method.amount} to ${methodKey}`);
           paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
           totalAmount += method.amount;
         });
@@ -643,13 +664,22 @@ export const Dashboard: React.FC = () => {
       }
     });
     
-    return Object.entries(paymentMethods).map(([method, amount]) => ({
+    const result = Object.entries(paymentMethods).map(([method, amount]) => ({
       name: method.charAt(0).toUpperCase() + method.slice(1),
       value: amount,
       percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
       color: getPaymentMethodColor(method)
     }));
-  }, [fullTransactions, filteredSales, currentDashboardMetrics?.recentTransactions]);
+    
+    console.log('🔍 Final Payment Method Calculation:', {
+      paymentMethods,
+      totalAmount,
+      result,
+      salesProcessed: sales.length
+    });
+    
+    return result;
+  }, [currentDashboardMetrics?.paymentMethods, fullTransactions, filteredSales, currentDashboardMetrics?.recentTransactions]);
 
   const getPaymentMethodColor = (method: string) => {
     const colors: { [key: string]: string } = {
@@ -936,6 +966,18 @@ export const Dashboard: React.FC = () => {
             </p>
             <div className="mt-4 flex justify-center items-center space-x-4">
               <NotificationStatus />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('🔄 Manual dashboard refresh triggered');
+                  refreshDashboard();
+                }}
+                className="flex items-center space-x-2"
+              >
+                <Activity className="h-4 w-4" />
+                <span>Refresh</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

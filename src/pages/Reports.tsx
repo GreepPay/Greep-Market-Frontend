@@ -69,7 +69,7 @@ export const Reports: React.FC = () => {
   });
 
   const navigate = useNavigate();
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('this_month');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('30d');
   const [periodStartDate, setPeriodStartDate] = useState<Date | undefined>();
   const [periodEndDate, setPeriodEndDate] = useState<Date | undefined>();
   const [analyticsData, setAnalyticsData] = useState<any>(null);
@@ -154,15 +154,6 @@ export const Reports: React.FC = () => {
           period: selectedPeriod
         };
 
-        // Log the payload for debugging
-        console.log('🔍 Reports Filtering Debug:', {
-          selectedPeriod,
-          periodStartDate,
-          periodEndDate,
-          calculatedDateRange: dateRange,
-          analyticsParams,
-          timestamp: new Date().toISOString()
-        });
 
         // Load all analytics data with standardized parameters
         const [dashboardAnalytics, productPerformance, inventoryAnalytics] = await Promise.all([
@@ -171,24 +162,6 @@ export const Reports: React.FC = () => {
           apiService.getInventoryAnalytics(user.store_id)
         ]);
 
-        // Log the response for debugging
-        console.log('🔍 Reports API Response Debug:', {
-          dashboardAnalytics: {
-            hasData: !!dashboardAnalytics,
-            keys: dashboardAnalytics ? Object.keys(dashboardAnalytics) : [],
-            totalSales: dashboardAnalytics?.totalSales,
-            totalExpenses: dashboardAnalytics?.totalExpenses,
-            totalTransactions: dashboardAnalytics?.totalTransactions
-          },
-          productPerformance: {
-            hasData: !!productPerformance,
-            keys: productPerformance ? Object.keys(productPerformance) : []
-          },
-          inventoryAnalytics: {
-            hasData: !!inventoryAnalytics,
-            keys: inventoryAnalytics ? Object.keys(inventoryAnalytics) : []
-          }
-        });
         
         setAnalyticsData({ 
           dashboardAnalytics, 
@@ -207,30 +180,11 @@ export const Reports: React.FC = () => {
   }, [user?.store_id, selectedPeriod, periodStartDate, periodEndDate]);
 
   const handlePeriodChange = (period: string, startDate?: Date, endDate?: Date) => {
-    console.log('🔍 Period Change Debug:', {
-      period,
-      startDate,
-      endDate,
-      timestamp: new Date().toISOString()
-    });
-    
     setSelectedPeriod(period);
     setPeriodStartDate(startDate);
     setPeriodEndDate(endDate);
   };
 
-  // Test function to debug filtering
-  const testFiltering = () => {
-    const dateRange = getDateRange(selectedPeriod, periodStartDate, periodEndDate);
-    console.log('🧪 Filtering Test:', {
-      selectedPeriod,
-      periodStartDate,
-      periodEndDate,
-      calculatedDateRange: dateRange,
-      analyticsData: analyticsData ? 'Data loaded' : 'No data',
-      timestamp: new Date().toISOString()
-    });
-  };
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
@@ -251,19 +205,6 @@ export const Reports: React.FC = () => {
       const productData = analyticsData?.productPerformance;
       const inventoryData = analyticsData?.inventoryAnalytics;
       
-      // Debug: Log the actual data structure
-      console.log('🔍 Export Debug - Analytics Data:', {
-        dashboardData: dashboardData,
-        todaySales: dashboardData?.todaySales,
-        monthlySales: dashboardData?.monthlySales,
-        selectedPeriod: selectedPeriod,
-        periodStartDate: periodStartDate,
-        periodEndDate: periodEndDate,
-        topProducts: dashboardData?.topProducts,
-        recentTransactions: dashboardData?.recentTransactions,
-        productData: productData,
-        inventoryData: inventoryData
-      });
       
       // Generate comprehensive report data
       const reportData = [];
@@ -354,14 +295,8 @@ export const Reports: React.FC = () => {
           reportData.push(['PRODUCT PERFORMANCE']);
           reportData.push(['Product Name', 'Category', 'Stock', 'Sold', 'Revenue (₺)']);
           products.forEach((product: any) => {
-            // Better category handling with debugging
+            // Better category handling
             const category = product.category || product.categoryName || 'No Category';
-            console.log('Product category debug:', {
-              productName: product.productName || product.name,
-              category: product.category,
-              categoryName: product.categoryName,
-              finalCategory: category
-            });
             
             reportData.push([
               product.productName || product.name || 'Unknown Product',
@@ -474,22 +409,48 @@ export const Reports: React.FC = () => {
 
   const salesData = generateSalesData() || [];
 
-  // Generate payment method data from actual transactions (using AMOUNTS, not counts)
+  // Generate payment method data from actual analytics data (filtered by selected period)
   const generatePaymentMethodData = () => {
+    // Use analytics data first (filtered by period), then fallback to sales data
+    if (analyticsData?.dashboardAnalytics?.paymentMethods) {
+      const paymentMethods = analyticsData.dashboardAnalytics.paymentMethods;
+      const totalAmount = Object.values(paymentMethods).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
+      
+      return Object.entries(paymentMethods).map(([method, amount]: [string, any]) => ({
+        name: method.charAt(0).toUpperCase() + method.slice(1),
+        value: amount || 0,
+        percentage: totalAmount > 0 ? ((amount || 0) / totalAmount * 100).toFixed(1) : '0.0',
+        color: getPaymentMethodColor(method)
+      }));
+    }
+    
     if (!sales || sales.length === 0) {
-      // Generate sample payment method data
-      return [
-        { name: 'Cash', value: 45, percentage: '45.0', color: '#22c55e' },
-        { name: 'POS', value: 35, percentage: '35.0', color: '#3b82f6' },
-        { name: 'Transfer', value: 15, percentage: '15.0', color: '#8b5cf6' },
-        { name: 'Crypto', value: 5, percentage: '5.0', color: '#f59e0b' }
-      ];
+      // Return empty data instead of mock data
+      return [];
     }
     
     const paymentMethods: { [key: string]: number } = {};
     let totalAmount = 0;
     
+    console.log('🔍 Reports: Processing sales for payment methods:', {
+      salesCount: sales.length,
+      sampleSales: sales.slice(0, 3).map(s => ({
+        id: s._id,
+        total_amount: s.total_amount,
+        payment_methods: s.payment_methods,
+        payment_method: s.payment_method
+      }))
+    });
+    
     sales.forEach(sale => {
+      console.log('🔍 Reports: Processing sale:', {
+        saleId: sale._id,
+        totalAmount: sale.total_amount,
+        hasPaymentMethods: !!(sale.payment_methods && sale.payment_methods.length > 0),
+        hasPaymentMethod: !!sale.payment_method,
+        paymentMethods: sale.payment_methods,
+        paymentMethod: sale.payment_method
+      });
       // Handle both new (payment_methods array) and legacy (single payment_method) formats
       if (sale.payment_methods && sale.payment_methods.length > 0) {
         // New format: payment_methods array
@@ -509,6 +470,7 @@ export const Reports: React.FC = () => {
             default:
               methodKey = method.type;
           }
+          console.log(`🔍 Reports: Adding ${method.amount} to ${methodKey}`);
           paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
           totalAmount += method.amount;
         });
@@ -535,12 +497,21 @@ export const Reports: React.FC = () => {
       }
     });
     
-    return Object.entries(paymentMethods).map(([method, amount]) => ({
+    const result = Object.entries(paymentMethods).map(([method, amount]) => ({
       name: method.charAt(0).toUpperCase() + method.slice(1),
       value: amount,
       percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
       color: getPaymentMethodColor(method)
     }));
+    
+    console.log('🔍 Reports: Final Payment Method Calculation:', {
+      paymentMethods,
+      totalAmount,
+      result,
+      salesProcessed: sales.length
+    });
+    
+    return result;
   };
 
   const getPaymentMethodColor = (method: string) => {
@@ -568,6 +539,8 @@ export const Reports: React.FC = () => {
     revenue: product.revenue || 0,
     quantity: product.quantitySold || 0,
   }));
+
+
 
   const inventoryStatusData = [
     { name: 'In Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) > (p?.min_stock_level || 0)).length, color: '#22c55e' },
@@ -958,6 +931,7 @@ export const Reports: React.FC = () => {
                     
                     const categoryArray = Object.values(categoryData);
                     
+                    
                     return categoryArray.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={categoryArray}>
@@ -1045,6 +1019,7 @@ export const Reports: React.FC = () => {
                     
                     const categoryArray = Array.isArray(categoryData) ? categoryData : Object.values(categoryData);
                     
+                    
                     return categoryArray.length > 0 ? (
                       categoryArray.map((cat: any) => (
                         <div key={cat.category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -1090,33 +1065,6 @@ export const Reports: React.FC = () => {
           </>
         )}
 
-        {/* Debug Section - Remove in production */}
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Debug Panel</h3>
-              <p className="text-xs text-yellow-600 dark:text-yellow-400">Test filtering and check console logs</p>
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                onClick={testFiltering}
-                variant="outline"
-                size="sm"
-                className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
-              >
-                Test Filtering
-              </Button>
-              <Button
-                onClick={() => console.log('Current Analytics Data:', analyticsData)}
-                variant="outline"
-                size="sm"
-                className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
-              >
-                Log Data
-              </Button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
