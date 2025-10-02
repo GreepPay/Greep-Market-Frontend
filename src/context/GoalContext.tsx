@@ -84,7 +84,16 @@ export function GoalProvider({ children }: { children: ReactNode }) {
 
   // Load goals from API or set defaults
   const loadGoals = useCallback(async () => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !user) {
+      console.log('User not authenticated, skipping goal loading');
+      return;
+    }
+
+    // Check if user has valid store_id
+    if (!user.store_id) {
+      console.log('User has no store_id, skipping goal loading');
+      return;
+    }
 
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -150,116 +159,20 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         return true; // If no period dates, assume it's valid
       }) || null;
 
-      // 3) If missing, create sensible defaults ONCE and persist them
-      // Check if we already tried to create goals today to prevent repeated API calls
-      const todayKey = `goal-creation-${now.toDateString()}`;
-      const hasTriedCreatingToday = localStorage.getItem(todayKey);
-      
-      if (!dailyGoal && !hasTriedCreatingToday) {
-        console.log('No valid daily goal found, creating new one for today');
-        const today = new Date();
-        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-        
-        const newDailyGoal = {
-          store_id: user.store_id || 'default-store',
-          goal_type: 'daily' as const,
-          target_amount: 5000,
-          goal_name: 'Daily Sales Target',
-          is_active: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          period_start: startOfDay.toISOString(),
-          period_end: endOfDay.toISOString(),
-          currency: 'TRY',
-          user_id: user.id
-        };
-        try {
-          dailyGoal = await (apiService as any).createGoal(newDailyGoal);
-          console.log('Created new daily goal:', dailyGoal);
-        } catch (err) {
-          console.error('Failed to create default daily goal:', err);
-          // Create a local goal object to prevent app crashes
-          dailyGoal = {
-            _id: `local-daily-${Date.now()}`,
-            ...newDailyGoal
-          } as any;
-          console.log('Using local daily goal as fallback:', dailyGoal);
-        } finally {
-          // Mark that we tried to create goals today
-          localStorage.setItem(todayKey, 'true');
-        }
-      } else if (!dailyGoal && hasTriedCreatingToday) {
-        console.log('Already tried creating daily goal today, using local fallback');
-        dailyGoal = {
-          _id: `local-daily-${Date.now()}`,
-          store_id: user.store_id || 'default-store',
-          goal_type: 'daily' as const,
-          target_amount: 5000,
-          goal_name: 'Daily Sales Target',
-          is_active: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          period_start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString(),
-          period_end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString(),
-          currency: 'TRY',
-          user_id: user.id
-        } as any;
+      // 3) If no daily goal exists, don't auto-create - let admin set manually
+      if (!dailyGoal) {
+        console.log('No daily goal found - admin can set one manually');
+        // Don't auto-create goals - let the admin set them manually
+        dailyGoal = null;
       } else {
         console.log('Using existing daily goal:', dailyGoal);
       }
 
-      if (!monthlyGoal && !hasTriedCreatingToday) {
-        console.log('No valid monthly goal found, creating new one for this month');
-        const today = new Date();
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
-        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        
-        const newMonthlyGoal = {
-          store_id: user.store_id || 'default-store',
-          goal_type: 'monthly' as const,
-          target_amount: 150000,
-          goal_name: 'Monthly Sales Target',
-          is_active: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          period_start: startOfMonth.toISOString(),
-          period_end: endOfMonth.toISOString(),
-          currency: 'TRY',
-          user_id: user.id
-        };
-        try {
-          monthlyGoal = await (apiService as any).createGoal(newMonthlyGoal);
-          console.log('Created new monthly goal:', monthlyGoal);
-        } catch (err) {
-          console.error('Failed to create default monthly goal:', err);
-          // Create a local goal object to prevent app crashes
-          monthlyGoal = {
-            _id: `local-monthly-${Date.now()}`,
-            ...newMonthlyGoal
-          } as any;
-          console.log('Using local monthly goal as fallback:', monthlyGoal);
-        }
-      } else if (!monthlyGoal && hasTriedCreatingToday) {
-        console.log('Already tried creating monthly goal today, using local fallback');
-        monthlyGoal = {
-          _id: `local-monthly-${Date.now()}`,
-          store_id: user.store_id || 'default-store',
-          goal_type: 'monthly' as const,
-          target_amount: 150000,
-          goal_name: 'Monthly Sales Target',
-          is_active: true,
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          period_start: new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString(),
-          period_end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString(),
-          currency: 'TRY',
-          user_id: user.id
-        } as any;
+      // If no monthly goal exists, don't auto-create - let admin set manually
+      if (!monthlyGoal) {
+        console.log('No monthly goal found - admin can set one manually');
+        // Don't auto-create goals - let the admin set them manually
+        monthlyGoal = null;
       } else {
         console.log('Using existing monthly goal:', monthlyGoal);
       }
@@ -513,12 +426,16 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_MONTHLY_GOAL', payload: goal });
   }, []);
 
-  // Load goals on mount
+  // Load goals on mount - only if user is properly authenticated
   useEffect(() => {
-    if (isAuthenticated && user) {
-      loadGoals();
+    if (isAuthenticated && user && user.store_id) {
+      console.log('Loading goals for authenticated user:', { userId: user.id, storeId: user.store_id });
+      loadGoals().catch(error => {
+        console.error('Failed to load goals:', error);
+        // Don't show error toast here - just log it
+      });
     }
-  }, [isAuthenticated, user, loadGoals]);
+  }, [isAuthenticated, user?.id, user?.store_id]); // Remove loadGoals from dependencies to prevent infinite loop
 
   // Update progress every 30 minutes (significantly reduced frequency to prevent API spam)
   useEffect(() => {

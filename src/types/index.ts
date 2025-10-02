@@ -181,6 +181,10 @@ export interface DashboardMetrics {
     id: string;
     totalAmount: number;
     paymentMethod: string;
+    paymentMethods?: Array<{
+      type: string;
+      amount: number;
+    }>;
     createdAt: Date;
   }>;
   salesByMonth: Array<{
@@ -188,6 +192,10 @@ export interface DashboardMetrics {
     sales: number;
     transactions: number;
   }>;
+  // Payment method breakdown
+  paymentMethods?: {
+    [method: string]: number;
+  };
 }
 
 export interface SalesReport {

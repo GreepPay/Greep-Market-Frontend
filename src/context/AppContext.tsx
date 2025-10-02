@@ -458,7 +458,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshDashboard = async (filters?: {
+  const refreshDashboard = useCallback(async (filters?: {
     dateRange?: string;
     paymentMethod?: string;
     orderSource?: string;
@@ -472,6 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     
     try {
+      console.log('🔄 AppContext - Refreshing dashboard metrics', { filters, store_id: user?.store_id });
       const metrics = await apiService.getDashboardAnalytics({
         store_id: user?.store_id,
         ...filters
@@ -481,7 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Failed to refresh dashboard:', error);
       toast.error('Failed to refresh dashboard');
     }
-  };
+  }, [isAuthenticated, user?.store_id, user?.id]);
 
   const value: AppContextType = {
     ...state,

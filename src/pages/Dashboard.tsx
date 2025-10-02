@@ -79,11 +79,20 @@ export const Dashboard: React.FC = () => {
 
   // Refresh dashboard data when component mounts to get latest payment method data
   useEffect(() => {
-    if (user?.store_id) {
-      console.log('🔄 Dashboard - Refreshing dashboard data on mount');
+    if (user?.store_id && !dashboardMetrics) {
+      console.log('🔄 Dashboard - Refreshing dashboard data on mount (no existing metrics)');
       refreshDashboard();
     }
-  }, [user?.store_id, refreshDashboard]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.store_id]); // Remove refreshDashboard from dependencies to prevent infinite loop
+
+  // Cleanup effect to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Cleanup any pending operations when component unmounts
+      isRefreshingRef.current = false;
+    };
+  }, []);
 
   // For initial load with 'today' filter, completely ignore dashboardMetrics to prevent flashing
   // Temporarily disable this to fix the empty KPI issue
@@ -109,13 +118,17 @@ export const Dashboard: React.FC = () => {
         filterParams
       });
       
+      // Convert ISO timestamps to date strings for backend compatibility
+      const startDate = filterParams.startDate ? new Date(filterParams.startDate).toISOString().split('T')[0] : undefined;
+      const endDate = filterParams.endDate ? new Date(filterParams.endDate).toISOString().split('T')[0] : undefined;
+      
       const response = await apiService.getTransactions({
         store_id: user?.store_id,
         page: 1,
         limit: 1000, // Get all transactions
         status: 'all',
-        start_date: filterParams.startDate,
-        end_date: filterParams.endDate,
+        start_date: startDate,
+        end_date: endDate,
       });
       
       console.log('🔍 Full Transactions API Response:', {
@@ -258,6 +271,10 @@ export const Dashboard: React.FC = () => {
           filterParams = { dateRange: '30d' };
       }
 
+      // Convert ISO timestamps to date strings for backend compatibility
+      const startDate = filterParams.startDate ? new Date(filterParams.startDate).toISOString().split('T')[0] : undefined;
+      const endDate = filterParams.endDate ? new Date(filterParams.endDate).toISOString().split('T')[0] : undefined;
+
       // Single API call to get all dashboard data
       try {
         console.log('🔍 Dashboard API Call Debug:', {
@@ -266,13 +283,15 @@ export const Dashboard: React.FC = () => {
           customStartDate,
           customEndDate,
           todayDate: new Date().toISOString().split('T')[0],
-          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&dateRange=${filterParams.dateRange}&startDate=${filterParams.startDate}&endDate=${filterParams.endDate}`
+          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&dateRange=${filterParams.dateRange}&startDate=${startDate}&endDate=${endDate}`
         });
 
         const metrics = await apiService.getDashboardAnalytics({
           store_id: user?.store_id,
           status: 'all', // Explicitly request all transaction statuses
-          ...filterParams
+          dateRange: filterParams.dateRange,
+          startDate: startDate,
+          endDate: endDate,
         });
 
         // Check if expenses are missing and fetch them separately if needed
@@ -282,8 +301,8 @@ export const Dashboard: React.FC = () => {
           try {
             const expensesResponse = await apiService.getExpenses({
               store_id: user?.store_id,
-              start_date: filterParams.startDate,
-              end_date: filterParams.endDate,
+              start_date: startDate,
+              end_date: endDate,
               limit: 1000 // Get all expenses for the period
             });
             
@@ -319,7 +338,7 @@ export const Dashboard: React.FC = () => {
           recentTransactionsData: metrics?.recentTransactions?.slice(0, 2), // Log first 2 transactions
           salesByMonth: metrics?.salesByMonth?.length || 0,
           topProducts: metrics?.topProducts?.length || 0,
-          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&startDate=${filterParams.startDate}&endDate=${filterParams.endDate}`,
+          apiUrl: `/analytics/dashboard?store_id=${user?.store_id}&startDate=${startDate}&endDate=${endDate}`,
           // Additional debugging for payment method data
           fullMetricsStructure: {
             hasRecentTransactions: !!metrics?.recentTransactions,
@@ -540,12 +559,34 @@ export const Dashboard: React.FC = () => {
     return [];
   }, [currentDashboardMetrics?.topProducts, filteredSales, dateRange, customStartDate, customEndDate]);
 
+  const getPaymentMethodColor = (method: string) => {
+    const colors: { [key: string]: string } = {
+      'cash': '#22c55e',      // Green
+      'pos': '#3b82f6',       // Blue (for pos_isbank_transfer and card)
+      'transfer': '#8b5cf6',  // Purple (for naira_transfer)
+      'crypto': '#f59e0b',    // Orange (for crypto_payment)
+      // Legacy support
+      'pos_isbank_transfer': '#3b82f6',      // Blue  
+      'naira_transfer': '#8b5cf6',  // Purple
+      'crypto_payment': '#f59e0b',       // Orange
+      'card': '#3b82f6',      // Blue (legacy)
+      'unknown': '#6b7280'    // Gray
+    };
+    return colors[method] || '#6b7280';
+  };
+
   // Generate payment method data from dashboard metrics or actual transactions (using AMOUNTS, not counts)
   const paymentMethodData = useMemo(() => {
     // Use dashboard metrics payment data if available (filtered by current period)
-    if (currentDashboardMetrics?.paymentMethods) {
+    if (currentDashboardMetrics?.paymentMethods && Object.keys(currentDashboardMetrics.paymentMethods).length > 0) {
       const paymentMethods = currentDashboardMetrics.paymentMethods;
       const totalAmount = Object.values(paymentMethods).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
+      
+      console.log('🔍 Using API payment methods data:', {
+        paymentMethods,
+        totalAmount,
+        methodCount: Object.keys(paymentMethods).length
+      });
       
       return Object.entries(paymentMethods).map(([method, amount]: [string, any]) => ({
         name: method.charAt(0).toUpperCase() + method.slice(1),
@@ -555,31 +596,37 @@ export const Dashboard: React.FC = () => {
       }));
     }
 
-    // Use full transactions for payment methods (they have complete payment data)
-    const sales = fullTransactions.length > 0 ? fullTransactions : (filteredSales.length > 0 ? filteredSales : (currentDashboardMetrics?.recentTransactions || []));
+    // Use recentTransactions from dashboard metrics first (most up-to-date), then fallback to other sources
+    const sales = (currentDashboardMetrics?.recentTransactions && currentDashboardMetrics.recentTransactions.length > 0) 
+      ? currentDashboardMetrics.recentTransactions 
+      : (fullTransactions.length > 0 ? fullTransactions : filteredSales);
     
     console.log('🔍 Payment Method Data Debug:', {
+      hasDashboardMetrics: !!currentDashboardMetrics,
+      hasPaymentMethods: !!currentDashboardMetrics?.paymentMethods,
+      paymentMethodsKeys: currentDashboardMetrics?.paymentMethods ? Object.keys(currentDashboardMetrics.paymentMethods) : [],
       fullTransactionsLength: fullTransactions.length,
       filteredSalesLength: filteredSales.length,
       recentTransactionsLength: currentDashboardMetrics?.recentTransactions?.length || 0,
       salesLength: sales.length,
-      dataSource: fullTransactions.length > 0 ? 'fullTransactions' : (filteredSales.length > 0 ? 'filteredSales' : 'recentTransactions'),
+      dataSource: currentDashboardMetrics?.recentTransactions?.length > 0 ? 'recentTransactions' : (fullTransactions.length > 0 ? 'fullTransactions' : 'filteredSales'),
       sampleTransactions: sales.slice(0, 3).map((s: any) => ({
-        id: s._id,
+        id: s.id || s._id,
+        totalAmount: s.totalAmount,
         total_amount: s.total_amount,
         payment_methods: s.payment_methods,
-        payment_method: s.payment_method,
-        created_at: s.created_at
+        payment_method: s.paymentMethod || s.payment_method,
+        createdAt: s.createdAt || s.created_at
       })),
       salesData: sales.slice(0, 2), // Log first 2 transactions for debugging
       transactionStatuses: sales.map((s: any) => s.status || s.payment_status).filter(Boolean), // Log transaction statuses
       uniqueStatuses: Array.from(new Set(sales.map((s: any) => s.status || s.payment_status).filter(Boolean))),
       // Additional debugging for payment method structure
       paymentMethodFields: sales.map((s: any) => ({
-        hasPaymentMethods: !!s.payment_methods,
-        hasPaymentMethod: !!s.payment_method,
+        hasPaymentMethods: !!(s.payment_methods && s.payment_methods.length > 0),
+        hasPaymentMethod: !!(s.paymentMethod || s.payment_method),
         paymentMethods: s.payment_methods,
-        paymentMethod: s.payment_method,
+        paymentMethod: s.paymentMethod || s.payment_method,
         totalAmount: s.totalAmount,
         total_amount: s.total_amount
       })).slice(0, 2)
@@ -607,12 +654,12 @@ export const Dashboard: React.FC = () => {
     
     sales.forEach((sale: any) => {
       console.log('Processing sale for payment methods:', {
-        saleId: sale._id,
-        totalAmount: sale.total_amount,
+        saleId: sale.id || sale._id,
+        totalAmount: sale.totalAmount || sale.total_amount,
         hasPaymentMethods: !!(sale.payment_methods && sale.payment_methods.length > 0),
-        hasPaymentMethod: !!sale.payment_method,
+        hasPaymentMethod: !!(sale.paymentMethod || sale.payment_method),
         paymentMethods: sale.payment_methods,
-        paymentMethod: sale.payment_method
+        paymentMethod: sale.paymentMethod || sale.payment_method
       });
       
       // Handle both new (payment_methods array) and legacy (single payment_method) formats
@@ -639,9 +686,9 @@ export const Dashboard: React.FC = () => {
           paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
           totalAmount += method.amount;
         });
-      } else if (sale.payment_method) {
-        // Legacy format: single payment_method field
-        const method = sale.payment_method.toLowerCase();
+      } else if (sale.paymentMethod || sale.payment_method) {
+        // Legacy format: single payment_method field (handle both camelCase and snake_case)
+        const method = (sale.paymentMethod || sale.payment_method || '').toLowerCase();
         let methodKey: string;
         switch (method) {
           case 'pos_isbank_transfer':
@@ -654,11 +701,15 @@ export const Dashboard: React.FC = () => {
           case 'crypto_payment':
             methodKey = 'crypto';
             break;
+          case 'cash':
+            methodKey = 'cash';
+            break;
           default:
             methodKey = method;
         }
         // Use totalAmount for dashboard metrics format, total_amount for full transaction format
         const amount = sale.totalAmount || sale.total_amount || 0;
+        console.log(`Adding ${amount} to ${methodKey} from single payment method`);
         paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + amount;
         totalAmount += amount;
       }
@@ -680,22 +731,6 @@ export const Dashboard: React.FC = () => {
     
     return result;
   }, [currentDashboardMetrics?.paymentMethods, fullTransactions, filteredSales, currentDashboardMetrics?.recentTransactions]);
-
-  const getPaymentMethodColor = (method: string) => {
-    const colors: { [key: string]: string } = {
-      'cash': '#22c55e',      // Green
-      'pos': '#3b82f6',       // Blue (for pos_isbank_transfer and card)
-      'transfer': '#8b5cf6',  // Purple (for naira_transfer)
-      'crypto': '#f59e0b',    // Orange (for crypto_payment)
-      // Legacy support
-      'pos_isbank_transfer': '#3b82f6',      // Blue  
-      'naira_transfer': '#8b5cf6',  // Purple
-      'crypto_payment': '#f59e0b',       // Orange
-      'card': '#3b82f6',      // Blue (legacy)
-      'unknown': '#6b7280'    // Gray
-    };
-    return colors[method] || '#6b7280';
-  };
 
   // Smart filtering system that affects all dashboard content
   const getSmartFilteringData = () => {
