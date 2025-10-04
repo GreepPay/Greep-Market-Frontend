@@ -3,6 +3,7 @@ import { SalesGoal, GoalProgress, GoalCelebration } from '../types/goals';
 import { useAuth } from './AuthContext';
 import { apiService } from '../services/api';
 import { notificationManager } from '../utils/notificationUtils';
+import { getCurrentDateTime, getTodayRange, getThisMonthRange } from '../utils/timezoneUtils';
 
 interface GoalState {
   dailyGoal: SalesGoal | null;
@@ -108,7 +109,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       }
 
       // 2) Find daily and monthly goals if they already exist and are still valid
-      const now = new Date();
+      const now = getCurrentDateTime();
       
       console.log('Goal validation debug:', {
         currentTime: now.toISOString(),

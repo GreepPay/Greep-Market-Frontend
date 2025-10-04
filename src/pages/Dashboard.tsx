@@ -28,6 +28,7 @@ import { NotificationStatus } from '../components/ui/NotificationStatus';
 import { GoalSettingModal } from '../components/ui/GoalSettingModal';
 import { apiService } from '../services/api';
 import { app } from '../config/environment';
+import { getTodayRange, getThisMonthRange, getCurrentDateTime, debugTimezoneInfo } from '../utils/timezoneUtils';
 // import { usePageRefresh } from '../hooks/usePageRefresh'; // Temporarily disabled
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -209,9 +210,9 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    // Throttle API calls to prevent spam (minimum 5 seconds between calls)
+    // Throttle API calls to prevent spam (minimum 2 seconds between calls)
     const now = Date.now();
-    if (now - lastRefreshRef.current < 5000) {
+    if (now - lastRefreshRef.current < 2000) {
       console.log('🔄 Unified refresh throttled - too frequent');
       return;
     }
@@ -228,27 +229,21 @@ export const Dashboard: React.FC = () => {
       
       switch (dateRange) {
         case 'today':
-          // Use local timezone to ensure correct "today" calculation
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-          // Send explicit ISO timestamps to avoid timezone confusion
+          // Use system timezone to ensure correct "today" calculation
+          const todayRange = getTodayRange();
           filterParams = {
             dateRange: 'today',
-            startDate: today.toISOString(), // Full ISO timestamp for start of day
-            endDate: todayEnd.toISOString() // Full ISO timestamp for end of day
+            startDate: todayRange.start.toISOString(), // Full ISO timestamp for start of day
+            endDate: todayRange.end.toISOString() // Full ISO timestamp for end of day
           };
           break;
         case 'this_month':
-          // Use local timezone for month boundaries
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-          // Send explicit ISO timestamps to avoid timezone confusion
+          // Use system timezone for month boundaries
+          const monthRange = getThisMonthRange();
           filterParams = {
             dateRange: 'this_month',
-            startDate: monthStart.toISOString(), // Full ISO timestamp for start of month
-            endDate: monthEnd.toISOString() // Full ISO timestamp for end of month
+            startDate: monthRange.start.toISOString(), // Full ISO timestamp for start of month
+            endDate: monthRange.end.toISOString() // Full ISO timestamp for end of month
           };
           break;
         case 'custom':
@@ -427,7 +422,7 @@ export const Dashboard: React.FC = () => {
     
     const timeoutId = setTimeout(() => {
       unifiedRefresh();
-    }, 1000); // Increased to 1 second debounce to prevent API spam
+    }, 500); // 500ms debounce to prevent API spam
 
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,6 +440,11 @@ export const Dashboard: React.FC = () => {
     totalSales: currentDashboardMetrics?.totalSales,
     metricsKeys: currentDashboardMetrics ? Object.keys(currentDashboardMetrics) : []
   });
+
+  // Debug timezone information
+  useEffect(() => {
+    debugTimezoneInfo();
+  }, []);
 
   // Use filtered sales data for charts when filters are applied, otherwise use API data
   const salesData = useMemo(() => {
