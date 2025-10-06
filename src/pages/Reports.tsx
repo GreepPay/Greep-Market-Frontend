@@ -168,6 +168,14 @@ export const Reports: React.FC = () => {
           productPerformance, 
           inventoryAnalytics 
         });
+
+        // Debug logging for order source data
+        console.log('🔍 Reports: Analytics data loaded:', {
+          hasDashboardAnalytics: !!dashboardAnalytics,
+          hasOrderSources: !!dashboardAnalytics?.orderSources,
+          orderSources: dashboardAnalytics?.orderSources,
+          sampleTransaction: dashboardAnalytics?.recentTransactions?.[0]
+        });
       } catch (error) {
         console.error('❌ Failed to load analytics:', error);
         toast.error('Failed to load report data. Please try again.');
@@ -372,7 +380,9 @@ export const Reports: React.FC = () => {
       return dashboardData.salesByMonth.map((item: any) => ({
         date: item.month || item.date,
         sales: item.sales || 0,
-        transactions: item.transactions || 0
+        transactions: item.transactions || 0,
+        onlineSales: item.onlineSales || 0,
+        inStoreSales: item.inStoreSales || 0
       }));
     }
     
@@ -397,10 +407,21 @@ export const Reports: React.FC = () => {
       const totalSales = daySales.reduce((sum, sale) => sum + sale.total_amount, 0);
       const transactionCount = daySales.length;
       
+      // Calculate online vs in-store sales for this day
+      const onlineSales = daySales
+        .filter(sale => sale.order_source === 'online')
+        .reduce((sum, sale) => sum + sale.total_amount, 0);
+      
+      const inStoreSales = daySales
+        .filter(sale => sale.order_source === 'in_store' || !sale.order_source)
+        .reduce((sum, sale) => sum + sale.total_amount, 0);
+      
       data.push({
         date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         sales: totalSales,
-        transactions: transactionCount
+        transactions: transactionCount,
+        onlineSales: onlineSales,
+        inStoreSales: inStoreSales
       });
     }
     
@@ -532,6 +553,66 @@ export const Reports: React.FC = () => {
 
   const paymentMethodData = generatePaymentMethodData() || [];
 
+  // Generate order source data (online vs in-store)
+  const generateOrderSourceData = () => {
+    // First try to get order source data from analytics API
+    if (analyticsData?.dashboardAnalytics?.orderSources) {
+      const orderSources = analyticsData.dashboardAnalytics.orderSources;
+      const totalAmount = Object.values(orderSources).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
+      
+      return Object.entries(orderSources).map(([source, amount]: [string, any]) => ({
+        name: source === 'online' ? 'Online' : 'In-Store',
+        value: amount || 0,
+        percentage: totalAmount > 0 ? (((amount || 0) / totalAmount) * 100).toFixed(1) : '0.0',
+        color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
+      }));
+    }
+    
+    // Fallback to processing sales data if analytics data is not available
+    if (!sales || sales.length === 0) {
+      return [];
+    }
+    
+    const orderSources: { [key: string]: number } = {
+      'online': 0,
+      'in_store': 0
+    };
+    let totalAmount = 0;
+    
+    console.log('🔍 Reports: Processing sales for order sources (fallback):', {
+      salesCount: sales.length,
+      sampleSales: sales.slice(0, 3).map(s => ({
+        id: s._id,
+        total_amount: s.total_amount,
+        order_source: s.order_source
+      }))
+    });
+    
+    sales.forEach(sale => {
+      const source = sale.order_source || 'in_store'; // Default to in_store if not specified
+      orderSources[source] = (orderSources[source] || 0) + sale.total_amount;
+      totalAmount += sale.total_amount;
+    });
+    
+    const result = Object.entries(orderSources).map(([source, amount]) => ({
+      name: source === 'online' ? 'Online' : 'In-Store',
+      value: amount,
+      percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
+      color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
+    }));
+    
+    console.log('🔍 Reports: Order Source Calculation (fallback):', {
+      orderSources,
+      totalAmount,
+      result,
+      salesProcessed: sales.length
+    });
+    
+    return result;
+  };
+
+  const orderSourceData = generateOrderSourceData() || [];
+
   const topProductsData = (analyticsData?.productPerformance?.topSellingProducts || []).map((product: any) => ({
     name: (product.productName || '').length > 15 
       ? (product.productName || '').substring(0, 15) + '...' 
@@ -616,14 +697,15 @@ export const Reports: React.FC = () => {
   };
 
   const calculatedMetrics = calculateMetricsFromSales();
-  
-  const totalSales = dashboardData?.totalSales || dashboardMetrics?.totalSales || calculatedMetrics.totalSales;
-  const totalTransactions = dashboardData?.totalTransactions || dashboardMetrics?.totalTransactions || calculatedMetrics.totalTransactions;
-  const averageTransactionValue = dashboardData?.averageTransactionValue || 
-    (dashboardMetrics?.totalTransactions > 0 
-      ? (dashboardMetrics?.totalSales || 0) / (dashboardMetrics?.totalTransactions || 1)
-      : calculatedMetrics.averageTransactionValue);
-  const growthRate = dashboardData?.growthRate || dashboardMetrics?.growthRate || calculatedMetrics.growthRate;
+
+  // KPIs should be driven by the active filter on this page.
+  // Prefer filtered analytics returned by this page's API call; only if absent, fall back to local calculation.
+  const totalSales = dashboardData?.totalSales ?? calculatedMetrics.totalSales;
+  const totalTransactions = dashboardData?.totalTransactions ?? calculatedMetrics.totalTransactions;
+  const averageTransactionValue = dashboardData?.averageTransactionValue ?? (
+    totalTransactions > 0 ? totalSales / totalTransactions : calculatedMetrics.averageTransactionValue
+  );
+  const growthRate = dashboardData?.growthRate ?? calculatedMetrics.growthRate;
 
   const reportTabs = [
     { id: 'performance', label: 'Performance Dashboard', icon: Trophy },
@@ -871,6 +953,122 @@ export const Reports: React.FC = () => {
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
                     No payment method data available
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Order Source Analytics */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Order Source Breakdown</h3>
+              <div className="h-64">
+                {orderSourceData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={orderSourceData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {orderSourceData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number, name: string, props: any) => [
+                          formatPrice(value), 
+                          `${props.payload.name} (${props.payload.percentage}%)`
+                        ]}
+                        {...getTooltipStyles()}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                      <Package className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <p className="text-sm font-medium mb-2">No Order Source Data</p>
+                    <p className="text-xs text-center max-w-xs">
+                      Start making sales with order source tracking to see online vs in-store breakdown
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Order Source Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <Card className="p-4 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Online Sales</h3>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {formatPrice(orderSourceData.find(item => item.name === 'Online')?.value || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {orderSourceData.find(item => item.name === 'Online')?.percentage || '0.0'}% of total
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                  <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">In-Store Sales</h3>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {formatPrice(orderSourceData.find(item => item.name === 'In-Store')?.value || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {orderSourceData.find(item => item.name === 'In-Store')?.percentage || '0.0'}% of total
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                  <ShoppingCart className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Order Source Trends Over Time */}
+          <div className="mt-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Order Source Trends</h3>
+              <div className="h-80">
+                {salesData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={salesData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" />
+                      <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
+                      <Tooltip 
+                        formatter={(value: number) => [formatPrice(value), 'Sales']}
+                        {...getTooltipStyles()}
+                      />
+                      <Legend />
+                      <Bar dataKey="onlineSales" stackId="a" fill="#3b82f6" name="Online" />
+                      <Bar dataKey="inStoreSales" stackId="a" fill="#22c55e" name="In-Store" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                      <BarChart3 className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                    </div>
+                    <p className="text-sm font-medium mb-2">No Trend Data</p>
+                    <p className="text-xs text-center max-w-xs">
+                      Order source trend data will appear once you have sales with order source tracking
+                    </p>
                   </div>
                 )}
               </div>

@@ -197,6 +197,10 @@ export interface DashboardMetrics {
   paymentMethods?: {
     [method: string]: number;
   };
+  // Order source breakdown
+  orderSources?: {
+    [source: string]: number;
+  };
 }
 
 export interface SalesReport {

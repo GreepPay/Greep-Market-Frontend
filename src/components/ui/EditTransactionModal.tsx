@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Save, AlertTriangle, Plus, CreditCard, Banknote, Smartphone, Coins } from 'lucide-react';
+import { X, Save, AlertTriangle, Plus, CreditCard, Banknote, Smartphone, Coins, Package, ShoppingBag } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Modal } from './Modal';
@@ -27,6 +27,7 @@ interface EditTransactionModalProps {
     payment_methods: PaymentMethod[];
     customer_id?: string;
     notes?: string;
+    order_source: 'online' | 'in_store';
   }) => Promise<void>;
 }
 
@@ -40,6 +41,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [customerId, setCustomerId] = useState('');
   const [notes, setNotes] = useState('');
+  const [orderSource, setOrderSource] = useState<'online' | 'in_store'>('in_store');
   const [isSaving, setIsSaving] = useState(false);
   const [remainingAmount, setRemainingAmount] = useState(0);
 
@@ -48,6 +50,11 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
     { id: 'pos_isbank_transfer', label: 'POS/Isbank Transfer', icon: CreditCard, color: 'blue' },
     { id: 'naira_transfer', label: 'Naira Transfer', icon: Smartphone, color: 'purple' },
     { id: 'crypto_payment', label: 'Crypto Payment', icon: Coins, color: 'orange' },
+  ];
+
+  const orderSourceOptions = [
+    { id: 'in_store', label: 'In-Store', icon: ShoppingBag, color: 'green' },
+    { id: 'online', label: 'Online', icon: Package, color: 'blue' },
   ];
 
   // Initialize form data when transaction changes
@@ -70,6 +77,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       
       setCustomerId(transaction.customer_id || '');
       setNotes(transaction.notes || '');
+      setOrderSource(transaction.order_source || 'in_store');
     }
   }, [transaction]);
 
@@ -182,7 +190,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         })),
         payment_methods: paymentMethods,
         customer_id: customerId || undefined,
-        notes: notes || undefined
+        notes: notes || undefined,
+        order_source: orderSource
       };
 
       await onSave(transaction._id, updates);
@@ -380,6 +389,72 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Order Source */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Order Source
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              {orderSourceOptions.map((option) => {
+                const IconComponent = option.icon;
+                const isSelected = orderSource === option.id;
+                
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setOrderSource(option.id as 'online' | 'in_store')}
+                    className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                      isSelected
+                        ? option.color === 'green'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                          : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        isSelected
+                          ? option.color === 'green'
+                            ? 'bg-green-100 dark:bg-green-900/30'
+                            : 'bg-blue-100 dark:bg-blue-900/30'
+                          : 'bg-gray-100 dark:bg-gray-700'
+                      }`}>
+                        <IconComponent className={`h-5 w-5 ${
+                          isSelected
+                            ? option.color === 'green'
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`} />
+                      </div>
+                      <div className="text-left">
+                        <div className={`font-medium ${
+                          isSelected
+                            ? option.color === 'green'
+                              ? 'text-green-900 dark:text-green-100'
+                              : 'text-blue-900 dark:text-blue-100'
+                            : 'text-gray-900 dark:text-white'
+                        }`}>
+                          {option.label}
+                        </div>
+                        <div className={`text-sm ${
+                          isSelected
+                            ? option.color === 'green'
+                              ? 'text-green-600 dark:text-green-300'
+                              : 'text-blue-600 dark:text-blue-300'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {option.id === 'online' ? 'Online order' : 'In-store purchase'}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Customer ID */}
