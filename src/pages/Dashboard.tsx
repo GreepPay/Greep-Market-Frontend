@@ -646,24 +646,29 @@ export const Dashboard: React.FC = () => {
       return dateA.getTime() - dateB.getTime();
     });
 
-    // Intelligent aggregation based on data size
+    // Respect user's chart period selection, but apply intelligent aggregation only for very large datasets
     let finalPeriod = chartPeriod;
+    
+    // Only override user selection for extremely large datasets (>365 days) to prevent performance issues
     if (rawData.length > 365) {
-      // For 365+ days, default to monthly view
+      console.log(`⚠️ Large dataset detected (${rawData.length} points), switching to monthly view for performance`);
       finalPeriod = 'monthly';
-    } else if (rawData.length > 90) {
-      // For 90+ days, default to weekly view
-      finalPeriod = 'weekly';
-    } else if (rawData.length > 30 && chartPeriod === 'daily') {
-      // For 30+ days with daily view, suggest weekly
-      finalPeriod = 'weekly';
+    }
+    // For datasets between 90-365 days, respect user choice but warn in console
+    else if (rawData.length > 90) {
+      console.log(`📊 Large dataset detected (${rawData.length} points), using user-selected period: ${chartPeriod}`);
+    }
+    // For smaller datasets, always respect user selection
+    else {
+      console.log(`📈 Using user-selected period: ${chartPeriod} for ${rawData.length} data points`);
     }
 
     // Apply aggregation
     const aggregatedData = aggregateDataByPeriod(rawData, finalPeriod);
 
-    // Limit final data points for optimal chart display
+    // Limit final data points for optimal chart display, but respect user's period choice
     if (aggregatedData.length > 24) {
+      console.log(`📉 Limiting ${aggregatedData.length} data points to 24 for optimal display while preserving ${chartPeriod} period`);
       // For very large datasets, limit to 24 points max
       const step = Math.floor(aggregatedData.length / 22);
       const limitedData = [aggregatedData[0]]; // Always include first point
