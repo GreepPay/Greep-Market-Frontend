@@ -48,6 +48,7 @@ interface SoldProduct {
   paymentMethods: PaymentMethod[];
   paymentMethod: string; // Legacy field for backward compatibility
   customerId?: string;
+  orderSource: 'online' | 'in_store';
 }
 
 export const SalesHistory: React.FC = () => {
@@ -160,11 +161,10 @@ export const SalesHistory: React.FC = () => {
     }
   }, [user?.store_id]);
 
-  // Apply client-side filtering to the loaded data
+  // Refresh sales from server and re-apply client-side filtering
   const loadSales = useCallback(async () => {
-    // Just trigger a re-render to apply client-side filters
-    // The actual filtering is done in the filteredProducts useMemo
-  }, []);
+    await loadAllSales();
+  }, [loadAllSales]);
 
   // Load all sales data on initial mount
   useEffect(() => {
@@ -302,7 +302,8 @@ export const SalesHistory: React.FC = () => {
               transactionId: transaction._id,
               paymentMethods: paymentMethods,
               paymentMethod: paymentMethod,
-              customerId: transaction.customer_id
+              customerId: transaction.customer_id,
+              orderSource: transaction.order_source || 'in_store' // Default to in_store if not specified
             });
           }
         });
@@ -616,7 +617,7 @@ export const SalesHistory: React.FC = () => {
     try {
       const csvContent = [
         // CSV Header
-        ['Product Name', 'Category', 'Tags', 'Quantity Sold', 'Unit Price', 'Total Revenue', 'Sale Date', 'Payment Method'].join(','),
+        ['Product Name', 'Category', 'Tags', 'Quantity Sold', 'Unit Price', 'Total Revenue', 'Sale Date', 'Payment Method', 'Order Source'].join(','),
         // CSV Data
         ...filteredProducts.map(item => [
           `"${item.productName}"`,
@@ -626,7 +627,8 @@ export const SalesHistory: React.FC = () => {
           item.unitPrice.toFixed(2),
           item.totalRevenue.toFixed(2),
           item.saleDate.toLocaleDateString(),
-          item.paymentMethod
+          item.paymentMethod,
+          item.orderSource === 'online' ? 'Online' : 'In-Store'
         ].join(','))
       ].join('\n');
 
@@ -1135,6 +1137,19 @@ export const SalesHistory: React.FC = () => {
                           )}
                         </div>
                       </th>
+                      <th 
+                        className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 border-r border-gray-200 dark:border-gray-600"
+                        onClick={() => handleSort('orderSource')}
+                      >
+                        <div className="flex items-center space-x-1">
+                          <span>Order Source</span>
+                          {sortField === 'orderSource' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                          )}
+                        </div>
+                      </th>
                       {showTransactionIds && (
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                           Transaction ID
@@ -1202,6 +1217,15 @@ export const SalesHistory: React.FC = () => {
                             showAmounts={false}
                           />
                         </td>
+                        <td className="px-4 py-3 text-sm border-r border-gray-200 dark:border-gray-700">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            item.orderSource === 'online' 
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' 
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                          }`}>
+                            {item.orderSource === 'online' ? 'Online' : 'In-Store'}
+                          </span>
+                        </td>
                         {showTransactionIds && (
                           <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 font-mono">
                             #{item.transactionId.slice(-8)}
@@ -1238,7 +1262,7 @@ export const SalesHistory: React.FC = () => {
                   </tbody>
                   <tfoot className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
                     <tr>
-                      <td colSpan={showTransactionIds ? (isAdmin ? 10 : 9) : (isAdmin ? 9 : 8)} className="px-4 py-3">
+                      <td colSpan={showTransactionIds ? (isAdmin ? 11 : 10) : (isAdmin ? 10 : 9)} className="px-4 py-3">
                         <div className="flex justify-between items-center text-sm font-semibold text-gray-700 dark:text-gray-300">
                           <div className="flex items-center space-x-6">
                             <span>Total Records: <span className="text-blue-600 dark:text-blue-400">{filteredProducts.length}</span></span>

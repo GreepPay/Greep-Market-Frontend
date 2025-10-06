@@ -764,32 +764,15 @@ export const Dashboard: React.FC = () => {
     return colors[method] || '#6b7280';
   };
 
-  // Generate payment method data from dashboard metrics or actual transactions (using AMOUNTS, not counts)
+  // Generate payment method data from actual transactions first; merge with API metrics if present (using AMOUNTS, not counts)
   const paymentMethodData = useMemo(() => {
-    // Use dashboard metrics payment data if available (filtered by current period)
-    if (currentDashboardMetrics?.paymentMethods && Object.keys(currentDashboardMetrics.paymentMethods).length > 0) {
-      const paymentMethods = currentDashboardMetrics.paymentMethods;
-      const totalAmount = Object.values(paymentMethods).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
-      
-      console.log('🔍 Using API payment methods data:', {
-        paymentMethods,
-        totalAmount,
-        methodCount: Object.keys(paymentMethods).length
-      });
-      
-      return Object.entries(paymentMethods).map(([method, amount]: [string, any]) => ({
-        name: method.charAt(0).toUpperCase() + method.slice(1),
-        value: amount || 0,
-        percentage: totalAmount > 0 ? ((amount || 0) / totalAmount * 100).toFixed(1) : '0.0',
-        color: getPaymentMethodColor(method)
-      }));
-    }
+    // Prefer real transactions to ensure we capture ALL methods actually used
+    const sales = (fullTransactions.length > 0)
+      ? fullTransactions
+      : ((currentDashboardMetrics?.recentTransactions && currentDashboardMetrics.recentTransactions.length > 0)
+          ? currentDashboardMetrics.recentTransactions
+          : filteredSales);
 
-    // Use recentTransactions from dashboard metrics first (most up-to-date), then fallback to other sources
-    const sales = (currentDashboardMetrics?.recentTransactions && currentDashboardMetrics.recentTransactions.length > 0) 
-      ? currentDashboardMetrics.recentTransactions 
-      : (fullTransactions.length > 0 ? fullTransactions : filteredSales);
-    
     console.log('🔍 Payment Method Data Debug:', {
       hasDashboardMetrics: !!currentDashboardMetrics,
       hasPaymentMethods: !!currentDashboardMetrics?.paymentMethods,
@@ -821,9 +804,19 @@ export const Dashboard: React.FC = () => {
       })).slice(0, 2)
     });
     
+    // We'll compute from sales if available; otherwise fallback entirely to API metrics
     if (!sales || sales.length === 0) {
-      console.log('⚠️ No sales data available, returning empty data');
-      // Return empty data instead of mock data
+      if (currentDashboardMetrics?.paymentMethods && Object.keys(currentDashboardMetrics.paymentMethods).length > 0) {
+        const pm = currentDashboardMetrics.paymentMethods as Record<string, number>;
+        const totalAmount = Object.values(pm).reduce((s, a) => s + (a || 0), 0);
+        return Object.entries(pm).map(([method, amount]) => ({
+          name: method.charAt(0).toUpperCase() + method.slice(1),
+          value: amount || 0,
+          percentage: totalAmount > 0 ? (((amount || 0) / totalAmount) * 100).toFixed(1) : '0.0',
+          color: getPaymentMethodColor(method)
+        }));
+      }
+      console.log('⚠️ No sales or metric payment data available, returning empty data');
       return [];
     }
     
@@ -904,7 +897,30 @@ export const Dashboard: React.FC = () => {
       }
     });
     
-    const result = Object.entries(paymentMethods).map(([method, amount]) => ({
+    // Merge in additional categories from API metrics if they exist but were not present in sales (e.g., filtered out by date)
+    const apiPM = (currentDashboardMetrics?.paymentMethods as Record<string, number>) || {};
+    for (const [apiKey, apiAmount] of Object.entries(apiPM)) {
+      // Normalize API keys to our buckets for consistency
+      let key = apiKey;
+      if (apiKey === 'pos_isbank_transfer' || apiKey === 'card') key = 'pos';
+      if (apiKey === 'naira_transfer') key = 'transfer';
+      if (apiKey === 'crypto_payment') key = 'crypto';
+      paymentMethods[key] = (paymentMethods[key] || 0) + (apiAmount || 0);
+      totalAmount += apiAmount || 0;
+    }
+
+    // Ensure stable order: cash, pos, transfer, crypto, then any others
+    const preferredOrder = ['cash', 'pos', 'transfer', 'crypto'];
+    const entries = Object.entries(paymentMethods).sort((a, b) => {
+      const ai = preferredOrder.indexOf(a[0]);
+      const bi = preferredOrder.indexOf(b[0]);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+    const result = entries.map(([method, amount]) => ({
       name: method.charAt(0).toUpperCase() + method.slice(1),
       value: amount,
       percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
@@ -920,6 +936,50 @@ export const Dashboard: React.FC = () => {
     
     return result;
   }, [currentDashboardMetrics?.paymentMethods, fullTransactions, filteredSales, currentDashboardMetrics?.recentTransactions]);
+
+  // Generate order source data from dashboard analytics or transactions
+  const orderSourceData = useMemo(() => {
+    // First try to get order source data from analytics API
+    if (currentDashboardMetrics?.orderSources) {
+      const orderSources = currentDashboardMetrics.orderSources;
+      const totalAmount = Object.values(orderSources).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
+      
+      return Object.entries(orderSources).map(([source, amount]: [string, any]) => ({
+        name: source === 'online' ? 'Online' : 'In-Store',
+        value: amount || 0,
+        percentage: totalAmount > 0 ? (((amount || 0) / totalAmount) * 100).toFixed(1) : '0.0',
+        color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
+      }));
+    }
+    
+    // Fallback to processing transactions data if analytics data is not available
+    const sales = (fullTransactions.length > 0)
+      ? fullTransactions
+      : ((filteredSales && filteredSales.length > 0) ? filteredSales : []);
+    
+    if (!sales || sales.length === 0) {
+      return [];
+    }
+    
+    const orderSources: { [key: string]: number } = {
+      'online': 0,
+      'in_store': 0
+    };
+    let totalAmount = 0;
+    
+    sales.forEach(sale => {
+      const source = sale.order_source || 'in_store'; // Default to in_store if not specified
+      orderSources[source] = (orderSources[source] || 0) + (sale.total_amount || 0);
+      totalAmount += (sale.total_amount || 0);
+    });
+    
+    return Object.entries(orderSources).map(([source, amount]) => ({
+      name: source === 'online' ? 'Online' : 'In-Store',
+      value: amount,
+      percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
+      color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
+    }));
+  }, [currentDashboardMetrics?.orderSources, fullTransactions, filteredSales]);
 
   // Smart filtering system that affects all dashboard content
   const getSmartFilteringData = () => {
@@ -1867,6 +1927,101 @@ export const Dashboard: React.FC = () => {
                       <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Payment Data</h4>
                       <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
                         Payment method breakdown will appear here once you have transaction data
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Order Source Analytics */}
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-green-600/5 dark:from-blue-400/5 dark:to-green-400/5"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-600 rounded-lg flex items-center justify-center">
+                      <ShoppingCart className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Order Source Analytics</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Online vs In-Store breakdown</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="h-[28rem]">
+                {orderSourceData.length > 0 ? (
+                  <div className="flex flex-col h-full">
+                    {/* Chart Section */}
+                    <div className="flex-1 flex items-center justify-center p-6">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={orderSourceData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={45}
+                            outerRadius={70}
+                            paddingAngle={2}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {orderSourceData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: number, name: string, props: any) => [
+                              formatPrice(value), 
+                              `${props.payload.name} (${props.payload.percentage}%)`
+                            ]}
+                            {...getTooltipStyles()}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Online</span>
+                        </div>
+                        <div className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                          {formatPrice(orderSourceData.find(item => item.name === 'Online')?.value || 0)}
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                          {orderSourceData.find(item => item.name === 'Online')?.percentage || '0.0'}%
+                        </div>
+                      </div>
+                      
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-800">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-xs font-medium text-green-700 dark:text-green-300">In-Store</span>
+                        </div>
+                        <div className="text-sm font-bold text-green-900 dark:text-green-100">
+                          {formatPrice(orderSourceData.find(item => item.name === 'In-Store')?.value || 0)}
+                        </div>
+                        <div className="text-xs text-green-600 dark:text-green-400">
+                          {orderSourceData.find(item => item.name === 'In-Store')?.percentage || '0.0'}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-green-100 dark:from-blue-900/30 dark:to-green-900/30 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                        <ShoppingCart className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Order Source Data</h4>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
+                        Order source analytics will appear here once you have sales with order source tracking
                       </p>
                     </div>
                   </div>
