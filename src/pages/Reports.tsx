@@ -377,6 +377,10 @@ export const Reports: React.FC = () => {
   const generateSalesData = () => {
     // Use dashboard analytics data if available
     if (dashboardData?.salesByMonth && dashboardData.salesByMonth.length > 0) {
+      console.log('🔍 Using dashboard analytics salesByMonth:', {
+        count: dashboardData.salesByMonth.length,
+        sample: dashboardData.salesByMonth.slice(0, 2)
+      });
       return dashboardData.salesByMonth.map((item: any) => ({
         date: item.month || item.date,
         sales: item.sales || 0,
@@ -385,6 +389,13 @@ export const Reports: React.FC = () => {
         inStoreSales: item.inStoreSales || 0
       }));
     }
+    
+    console.log('🔍 Using fallback sales data from transactions:', {
+      salesCount: sales?.length || 0,
+      dashboardDataExists: !!dashboardData,
+      salesByMonthExists: !!dashboardData?.salesByMonth,
+      salesByMonthLength: dashboardData?.salesByMonth?.length || 0
+    });
     
     if (!sales || sales.length === 0) {
       // Return empty data when no real data exists
@@ -429,6 +440,16 @@ export const Reports: React.FC = () => {
   };
 
   const salesData = generateSalesData() || [];
+  
+  // Debug: Log sales data for Order Source Trends
+  console.log('🔍 Order Source Trends Debug:', {
+    salesDataLength: salesData.length,
+    sampleData: salesData.slice(0, 3),
+    hasOnlineSales: salesData.some((d: any) => d.onlineSales > 0),
+    hasInStoreSales: salesData.some((d: any) => d.inStoreSales > 0),
+    totalOnline: salesData.reduce((sum: number, d: any) => sum + d.onlineSales, 0),
+    totalInStore: salesData.reduce((sum: number, d: any) => sum + d.inStoreSales, 0)
+  });
 
   // Generate payment method data from actual analytics data (filtered by selected period)
   const generatePaymentMethodData = () => {
