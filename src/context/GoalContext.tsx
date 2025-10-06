@@ -277,12 +277,14 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       // Get dashboard metrics data using dateRange parameter (uses our fixed backend logic)
       const dailyMetrics = await apiService.getDashboardAnalytics({
         store_id: user.store_id,
+        status: 'all', // Explicitly request all transaction statuses
         dateRange: 'today' // Use our fixed dateRange logic
       });
 
       // Get monthly data using dateRange parameter
       const monthlyMetricsData = await apiService.getDashboardAnalytics({
         store_id: user.store_id,
+        status: 'all', // Explicitly request all transaction statuses
         dateRange: 'this_month' // Use our fixed dateRange logic
       });
 
@@ -298,7 +300,10 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         dailyAmount,
         monthlyAmount,
         dailyGoalTarget: state.dailyGoal.target_amount,
-        monthlyGoalTarget: state.monthlyGoal.target_amount
+        monthlyGoalTarget: state.monthlyGoal.target_amount,
+        transactionStatus: 'all', // Confirming we're using all transaction statuses
+        dailyApiCall: 'getDashboardAnalytics with status=all',
+        monthlyApiCall: 'getDashboardAnalytics with status=all'
       });
       
       const now = new Date();

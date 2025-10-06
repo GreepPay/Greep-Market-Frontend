@@ -32,6 +32,43 @@ import { getTodayRange, getThisMonthRange, getCurrentDateTime, debugTimezoneInfo
 // import { usePageRefresh } from '../hooks/usePageRefresh'; // Temporarily disabled
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 
+// Custom hook for animated numbers
+const useAnimatedNumber = (targetValue: number, duration: number = 1000) => {
+  const [currentValue, setCurrentValue] = useState(targetValue);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (targetValue === currentValue) return;
+
+    setIsAnimating(true);
+    const startValue = currentValue;
+    const difference = targetValue - startValue;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+      const newValue = startValue + (difference * easeOutCubic);
+      
+      setCurrentValue(newValue);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setCurrentValue(targetValue);
+        setIsAnimating(false);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [targetValue, duration]);
+
+  return { currentValue, isAnimating };
+};
+
 export const Dashboard: React.FC = () => {
   const { inventoryAlerts, loading, dashboardMetrics, refreshDashboard } = useApp();
   const { user } = useAuth();
@@ -78,6 +115,51 @@ export const Dashboard: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+  // Chart aggregation states
+  const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  
+  // Auto-refresh states
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-refresh functionality
+  const startAutoRefresh = useCallback(() => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    // Refresh interval based on current filter
+    const refreshInterval = dateRange === 'today' ? 30000 : 60000; // 30s for today, 1min for others
+    
+    refreshIntervalRef.current = setInterval(() => {
+      if (autoRefreshEnabled) {
+        console.log('🔄 Auto-refreshing dashboard data...');
+        unifiedRefresh();
+        setLastRefreshTime(new Date());
+      }
+    }, refreshInterval);
+  }, [autoRefreshEnabled, dateRange]);
+
+  // Stop auto-refresh
+  const stopAutoRefresh = useCallback(() => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+  }, []);
+
+  // Start auto-refresh when component mounts or settings change
+  useEffect(() => {
+    if (autoRefreshEnabled) {
+      startAutoRefresh();
+    } else {
+      stopAutoRefresh();
+    }
+
+    return () => stopAutoRefresh();
+  }, [autoRefreshEnabled, startAutoRefresh, stopAutoRefresh]);
+
   // Refresh dashboard data when component mounts to get latest payment method data
   useEffect(() => {
     if (user?.store_id && !dashboardMetrics) {
@@ -120,8 +202,9 @@ export const Dashboard: React.FC = () => {
       });
       
       // Convert ISO timestamps to date strings for backend compatibility
-      const startDate = filterParams.startDate ? new Date(filterParams.startDate).toISOString().split('T')[0] : undefined;
-      const endDate = filterParams.endDate ? new Date(filterParams.endDate).toISOString().split('T')[0] : undefined;
+      // Use the original filterParams dates directly to avoid timezone conversion issues
+      const startDate = filterParams.startDate ? filterParams.startDate.split('T')[0] : undefined;
+      const endDate = filterParams.endDate ? filterParams.endDate.split('T')[0] : undefined;
       
       const response = await apiService.getTransactions({
         store_id: user?.store_id,
@@ -165,7 +248,7 @@ export const Dashboard: React.FC = () => {
   };
 
   // Format date for chart display (user-friendly format)
-  const formatChartDate = (dateString: string) => {
+  const formatChartDate = (dateString: string, period: 'daily' | 'weekly' | 'monthly' = 'daily') => {
     try {
       // Handle different date formats from API
       let date: Date;
@@ -186,18 +269,68 @@ export const Dashboard: React.FC = () => {
         return dateString; // Return original if invalid
       }
 
-      // Format as "Sep 26", "Sep 21", etc.
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+      switch (period) {
+        case 'weekly':
+          // Format as "Week of Sep 26"
       const month = monthNames[date.getMonth()];
       const day = date.getDate();
-
-      return `${month} ${day}`;
+          return `W${month} ${day}`;
+        case 'monthly':
+          // Format as "Sep 2023"
+          return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        default:
+          // Format as "Sep 26"
+          const dayMonth = monthNames[date.getMonth()];
+          const dayNum = date.getDate();
+          return `${dayMonth} ${dayNum}`;
+      }
     } catch (error) {
       console.error('Error formatting chart date:', error);
       return dateString; // Return original if error
     }
+  };
+
+  // Helper function to aggregate data by time period
+  const aggregateDataByPeriod = (data: any[], period: 'daily' | 'weekly' | 'monthly') => {
+    if (data.length === 0) return [];
+
+    const aggregated = new Map<string, number>();
+
+    data.forEach(item => {
+      let key: string;
+      const date = new Date(item.day || item.month || item.created_at);
+      
+      switch (period) {
+        case 'weekly':
+          // Group by week (Monday as start of week)
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay() + 1); // Monday
+          weekStart.setHours(0, 0, 0, 0);
+          key = weekStart.toISOString().split('T')[0];
+          break;
+        case 'monthly':
+          // Group by month
+          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          break;
+        default:
+          // Daily grouping
+          key = date.toISOString().split('T')[0];
+      }
+
+      const existingValue = aggregated.get(key) || 0;
+      aggregated.set(key, existingValue + (item.sales || 0));
+    });
+
+    return Array.from(aggregated.entries())
+      .map(([key, sales]) => ({
+        day: formatChartDate(key, period),
+        sales,
+        originalDate: key
+      }))
+      .sort((a, b) => a.originalDate.localeCompare(b.originalDate));
   };
 
   // Filter sales data locally from AppContext instead of making separate API calls
@@ -267,8 +400,9 @@ export const Dashboard: React.FC = () => {
       }
 
       // Convert ISO timestamps to date strings for backend compatibility
-      const startDate = filterParams.startDate ? new Date(filterParams.startDate).toISOString().split('T')[0] : undefined;
-      const endDate = filterParams.endDate ? new Date(filterParams.endDate).toISOString().split('T')[0] : undefined;
+      // Use the original filterParams dates directly to avoid timezone conversion issues
+      const startDate = filterParams.startDate ? filterParams.startDate.split('T')[0] : undefined;
+      const endDate = filterParams.endDate ? filterParams.endDate.split('T')[0] : undefined;
 
       // Single API call to get all dashboard data
       try {
@@ -292,7 +426,13 @@ export const Dashboard: React.FC = () => {
         // Check if expenses are missing and fetch them separately if needed
         let finalMetrics = { ...metrics };
         if (metrics && (metrics.totalExpenses === undefined || metrics.totalExpenses === null || metrics.totalExpenses === 0)) {
-          console.log('🔍 Expenses missing from dashboard metrics, fetching separately...');
+          console.log('🔍 Expenses missing from dashboard metrics, fetching separately...', {
+            dateRange,
+            startDate,
+            endDate,
+            filterParams,
+            todayDate: new Date().toISOString().split('T')[0]
+          });
           try {
             const expensesResponse = await apiService.getExpenses({
               store_id: user?.store_id,
@@ -311,7 +451,12 @@ export const Dashboard: React.FC = () => {
             console.log('🔍 Expenses fetched separately:', {
               expenseCount: expensesResponse.expenses.length,
               totalExpenses,
-              sampleExpenses: expensesResponse.expenses.slice(0, 3)
+              sampleExpenses: expensesResponse.expenses.slice(0, 3),
+              expenseDates: expensesResponse.expenses.map((expense: any) => ({
+                date: expense.date,
+                amount: expense.amount,
+                description: expense.description || expense.product_name
+              }))
             });
           } catch (expenseError) {
             console.error('❌ Failed to fetch expenses separately:', expenseError);
@@ -448,50 +593,89 @@ export const Dashboard: React.FC = () => {
 
   // Use filtered sales data for charts when filters are applied, otherwise use API data
   const salesData = useMemo(() => {
-    // If filters are applied (not default 'this_month'), use filtered sales
+    let rawData: any[] = [];
+
+    // Get raw data based on filters
     if (dateRange !== 'this_month' || customStartDate || customEndDate) {
       if (!filteredSales || filteredSales.length === 0) {
         // If filtered sales is empty, try to use currentDashboardMetrics data as fallback
         if (currentDashboardMetrics?.salesByMonth && currentDashboardMetrics.salesByMonth.length > 0) {
-          return currentDashboardMetrics.salesByMonth.map((item: any) => ({
-            day: formatChartDate(item.month), // Format date for better UX
-            sales: item.sales
+          rawData = currentDashboardMetrics.salesByMonth.map((item: any) => ({
+            day: item.month,
+            sales: item.sales,
+            created_at: item.month
           }));
         }
-        return [];
-      }
-
+      } else {
       // Group filtered sales by day
       const dailySales = filteredSales.reduce((acc, sale) => {
         const saleDate = new Date(sale.created_at);
         const dayKey = `${saleDate.getFullYear()}-${String(saleDate.getMonth() + 1).padStart(2, '0')}-${String(saleDate.getDate()).padStart(2, '0')}`;
         
         if (!acc[dayKey]) {
-          acc[dayKey] = { day: formatChartDate(dayKey), sales: 0 }; // Format date for better UX
+            acc[dayKey] = { day: dayKey, sales: 0 };
         }
         acc[dayKey].sales += sale.total_amount;
         
         return acc;
       }, {} as Record<string, { day: string; sales: number }>);
 
-      return Object.values(dailySales).sort((a: any, b: any) => {
-        // Sort by original date string, not formatted string
-        const aDate = Object.keys(dailySales).find(key => dailySales[key] === a);
-        const bDate = Object.keys(dailySales).find(key => dailySales[key] === b);
-        return (aDate || '').localeCompare(bDate || '');
-      });
-    }
-    
+        rawData = (Object.values(dailySales) as { day: string; sales: number }[]).map((item) => ({
+          day: item.day,
+          sales: item.sales,
+          created_at: item.day
+        }));
+      }
+    } else {
     // Use API data when no filters are applied
     if (currentDashboardMetrics?.salesByMonth && currentDashboardMetrics.salesByMonth.length > 0) {
-      return currentDashboardMetrics.salesByMonth.map((item: any) => ({
-        day: formatChartDate(item.month), // Format date for better UX
-    sales: item.sales
-      }));
+        rawData = currentDashboardMetrics.salesByMonth.map((item: any) => ({
+          day: item.month,
+          sales: item.sales,
+          created_at: item.month
+        }));
+      }
     }
-    
-    return [];
-  }, [currentDashboardMetrics?.salesByMonth, filteredSales, dateRange, customStartDate, customEndDate]);
+
+    if (rawData.length === 0) return [];
+
+    // Sort raw data by date
+    rawData.sort((a, b) => {
+      const dateA = new Date(a.day || a.created_at);
+      const dateB = new Date(b.day || b.created_at);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    // Intelligent aggregation based on data size
+    let finalPeriod = chartPeriod;
+    if (rawData.length > 365) {
+      // For 365+ days, default to monthly view
+      finalPeriod = 'monthly';
+    } else if (rawData.length > 90) {
+      // For 90+ days, default to weekly view
+      finalPeriod = 'weekly';
+    } else if (rawData.length > 30 && chartPeriod === 'daily') {
+      // For 30+ days with daily view, suggest weekly
+      finalPeriod = 'weekly';
+    }
+
+    // Apply aggregation
+    const aggregatedData = aggregateDataByPeriod(rawData, finalPeriod);
+
+    // Limit final data points for optimal chart display
+    if (aggregatedData.length > 24) {
+      // For very large datasets, limit to 24 points max
+      const step = Math.floor(aggregatedData.length / 22);
+      const limitedData = [aggregatedData[0]]; // Always include first point
+      for (let i = step; i < aggregatedData.length - 1; i += step) {
+        limitedData.push(aggregatedData[i]);
+      }
+      limitedData.push(aggregatedData[aggregatedData.length - 1]); // Always include last point
+      return limitedData;
+    }
+
+    return aggregatedData;
+  }, [currentDashboardMetrics?.salesByMonth, filteredSales, dateRange, customStartDate, customEndDate, chartPeriod]);
 
   // Use filtered sales data for top products when filters are applied, otherwise use API data
   const topProductsData = useMemo(() => {
@@ -848,6 +1032,12 @@ export const Dashboard: React.FC = () => {
   const totalTransactions = currentDashboardMetrics?.totalTransactions ?? 0;
   const averageTransactionValue = currentDashboardMetrics?.averageTransactionValue ?? 0;
   const growthRate = currentDashboardMetrics?.growthRate ?? 0;
+
+  // Animated numbers for key metrics
+  const animatedTotalSales = useAnimatedNumber(totalSales);
+  const animatedTotalTransactions = useAnimatedNumber(totalTransactions);
+  const animatedTotalExpenses = useAnimatedNumber(currentDashboardMetrics?.totalExpenses ?? 0);
+  const animatedNetProfit = useAnimatedNumber(currentDashboardMetrics?.netProfit ?? 0);
   
   // New individual vs yesterday metrics
   const salesVsYesterday = currentDashboardMetrics?.salesVsYesterday ?? 0;
@@ -924,7 +1114,9 @@ export const Dashboard: React.FC = () => {
   const metricCards = [
     {
       title: 'Total Sales',
-      value: formatPrice(totalSales),
+      value: formatPrice(animatedTotalSales.currentValue),
+      animatedValue: animatedTotalSales.currentValue,
+      isAnimating: animatedTotalSales.isAnimating,
       icon: DollarSign,
       gradient: 'from-emerald-500 to-teal-600',
       iconBg: 'bg-gradient-to-br from-emerald-100 to-teal-100',
@@ -934,7 +1126,9 @@ export const Dashboard: React.FC = () => {
     },
     {
       title: 'Total Expenses',
-      value: formatPrice(totalExpensesFromMetrics),
+      value: formatPrice(animatedTotalExpenses.currentValue),
+      animatedValue: animatedTotalExpenses.currentValue,
+      isAnimating: animatedTotalExpenses.isAnimating,
       icon: TrendingDown,
       gradient: 'from-red-500 to-pink-600',
       iconBg: 'bg-gradient-to-br from-red-100 to-pink-100',
@@ -944,17 +1138,21 @@ export const Dashboard: React.FC = () => {
     },
     {
       title: 'Net Profit',
-      value: formatPrice(netProfit),
+      value: formatPrice(animatedNetProfit.currentValue),
+      animatedValue: animatedNetProfit.currentValue,
+      isAnimating: animatedNetProfit.isAnimating,
       icon: Activity,
-      gradient: netProfit >= 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-rose-600',
-      iconBg: netProfit >= 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-red-100 to-rose-100',
-      iconColor: netProfit >= 0 ? 'text-green-600' : 'text-red-600',
+      gradient: animatedNetProfit.currentValue >= 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-rose-600',
+      iconBg: animatedNetProfit.currentValue >= 0 ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-red-100 to-rose-100',
+      iconColor: animatedNetProfit.currentValue >= 0 ? 'text-green-600' : 'text-red-600',
       change: `${profitVsYesterday > 0 ? '+' : ''}${profitVsYesterday.toFixed(1)}% ${comparisonLabel}`,
       changeColor: profitVsYesterday >= 0 ? 'text-green-600' : 'text-red-600',
     },
     {
       title: 'Transactions',
-      value: totalTransactions.toString(),
+      value: Math.round(animatedTotalTransactions.currentValue).toString(),
+      animatedValue: animatedTotalTransactions.currentValue,
+      isAnimating: animatedTotalTransactions.isAnimating,
       icon: ShoppingCart,
       gradient: 'from-green-500 to-green-700',
       iconBg: 'bg-gradient-to-br from-green-100 to-green-200',
@@ -999,19 +1197,43 @@ export const Dashboard: React.FC = () => {
             <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
               Welcome to {app.name} Management System
             </p>
-            <div className="mt-4 flex justify-center items-center space-x-4">
+            <div className="mt-4 flex justify-center items-center space-x-4 flex-wrap gap-2">
               <NotificationStatus />
+              
+              {/* Auto-refresh Toggle */}
+              <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1">
+                <button
+                  onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                  className={`flex items-center space-x-1 text-xs font-medium transition-all duration-200 ${
+                    autoRefreshEnabled 
+                      ? 'text-green-600 dark:text-green-400' 
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                  <span>Auto-refresh</span>
+                </button>
+              </div>
+
+              {/* Last refresh time */}
+              {lastRefreshTime && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Last updated: {lastRefreshTime.toLocaleTimeString()}
+                </div>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   console.log('🔄 Manual dashboard refresh triggered');
-                  refreshDashboard();
+                  unifiedRefresh();
+                  setLastRefreshTime(new Date());
                 }}
                 className="flex items-center space-x-2"
               >
                 <Activity className="h-4 w-4" />
-                <span>Refresh</span>
+                <span>Refresh Now</span>
               </Button>
               <Button
                 variant="outline"
@@ -1175,7 +1397,9 @@ export const Dashboard: React.FC = () => {
                   <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
                     {metric.title}
                   </h3>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                  <p className={`text-lg font-bold text-gray-900 dark:text-white mb-2 transition-all duration-300 ${
+                    metric.isAnimating ? 'scale-105 text-green-600 dark:text-green-400' : ''
+                  }`}>
                     {metric.value}
                   </p>
                   <div className="flex items-center space-x-1">
@@ -1341,30 +1565,74 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sales Overview</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Daily sales performance</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {chartPeriod === 'daily' ? 'Daily' : chartPeriod === 'weekly' ? 'Weekly' : 'Monthly'} sales performance
+                  </p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  {/* Period Selector */}
+                  <div className="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                    <button
+                      onClick={() => setChartPeriod('daily')}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                        chartPeriod === 'daily'
+                          ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Daily
+                    </button>
+                    <button
+                      onClick={() => setChartPeriod('weekly')}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                        chartPeriod === 'weekly'
+                          ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Weekly
+                    </button>
+                    <button
+                      onClick={() => setChartPeriod('monthly')}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                        chartPeriod === 'monthly'
+                          ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Monthly
+                    </button>
                 </div>
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
                   <BarChart3 className="h-6 w-6 text-white" />
+                  </div>
                 </div>
               </div>
               <div className="h-80">
                 {salesData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                      <CartesianGrid strokeDasharray="2 4" stroke="#e5e7eb" opacity={0.2} />
                       <XAxis 
                         dataKey="day"
                         stroke="#6b7280" 
-                        fontSize={12}
+                        fontSize={chartPeriod === 'monthly' ? 12 : 11}
                         tickLine={false}
                         axisLine={false}
+                        interval={chartPeriod === 'monthly' ? 0 : "preserveStartEnd"}
+                        tick={{ fontSize: chartPeriod === 'monthly' ? 12 : 11 }}
+                        height={chartPeriod === 'monthly' ? 40 : 50}
+                        angle={chartPeriod === 'monthly' ? 0 : -45}
+                        textAnchor={chartPeriod === 'monthly' ? 'middle' : 'end'}
                       />
                       <YAxis 
                         stroke="#6b7280" 
-                        fontSize={12}
+                        fontSize={11}
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`}
+                        tick={{ fontSize: 11 }}
+                        width={60}
                       />
                       <Tooltip 
                         formatter={(value: number) => [formatPrice(value), 'Sales']}
@@ -1375,9 +1643,10 @@ export const Dashboard: React.FC = () => {
                         type="monotone" 
                         dataKey="sales" 
                         stroke="url(#salesGradient)" 
-                        strokeWidth={4}
-                        dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
-                        activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 3, fill: '#ffffff' }}
+                        strokeWidth={3}
+                        dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                        activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: '#ffffff' }}
+                        connectNulls={false}
                       />
                       <defs>
                         <linearGradient id="salesGradient" x1="0" y1="0" x2="1" y2="0">
