@@ -125,16 +125,38 @@ export const ShoppingCartComponent: React.FC<ShoppingCartProps> = ({
             key={item.product_id}
             className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
           >
-            <div className="flex-1 min-w-0">
-              <h4 
-                className="font-medium text-gray-900 dark:text-white truncate" 
-                title={item.product_name}
-              >
-                {item.product_name}
-              </h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {formatPrice(item.unit_price)} each
-              </p>
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
+              {/* Product Image */}
+              <div className="flex-shrink-0">
+                {item.product_image ? (
+                  <img
+                    src={item.product_image}
+                    alt={item.product_name}
+                    className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+                    onError={(e) => {
+                      // Hide image if it fails to load
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-gray-200 dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">No Image</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Product Details */}
+              <div className="flex-1 min-w-0">
+                <h4 
+                  className="font-medium text-gray-900 dark:text-white truncate" 
+                  title={item.product_name}
+                >
+                  {item.product_name}
+                </h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {formatPrice(item.unit_price)} each
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">

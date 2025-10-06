@@ -105,6 +105,7 @@ export interface TransactionItem {
   unit_price: number;
   total_price: number;
   discount_amount?: number;
+  product_image?: string; // Primary product image URL
 }
 
 export interface InventoryAlert {
