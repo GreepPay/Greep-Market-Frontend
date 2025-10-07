@@ -968,8 +968,9 @@ export const Dashboard: React.FC = () => {
     let totalAmount = 0;
     
     sales.forEach(sale => {
-      const source = sale.order_source || 'in_store'; // Default to in_store if not specified
-      orderSources[source] = (orderSources[source] || 0) + (sale.total_amount || 0);
+      const src = sale.order_source;
+      const normalized = src === 'in-store' ? 'in_store' : (src || 'in_store');
+      orderSources[normalized] = (orderSources[normalized] || 0) + (sale.total_amount || 0);
       totalAmount += (sale.total_amount || 0);
     });
     
@@ -1751,8 +1752,8 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Second Row: Top Products and Payment Methods */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Second Row: Top Products */}
+          <div className="grid grid-cols-1 gap-8">
             {/* Top Products Chart */}
           <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-r from-green-600/5 to-green-700/5 dark:from-green-400/5 dark:to-green-500/5"></div>
@@ -1844,96 +1845,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Payment Methods Chart */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-pink-600/5 dark:from-purple-400/5 dark:to-pink-400/5"></div>
-            <div className="relative">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                      <DollarSign className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Payment Methods</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Revenue distribution by type</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-               <div className="h-[28rem]">
-                 {paymentMethodData.length > 0 ? (
-                   <div className="flex flex-col h-full">
-                     {/* Chart Section */}
-                     <div className="flex-1 flex items-center justify-center p-6">
-                       <ResponsiveContainer width="100%" height="100%">
-                         <PieChart>
-                           <Pie
-                             data={paymentMethodData}
-                             cx="50%"
-                             cy="50%"
-                             innerRadius={45}
-                             outerRadius={70}
-                             paddingAngle={2}
-                             dataKey="value"
-                             stroke="none"
-                           >
-                             {paymentMethodData.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={entry.color} />
-                             ))}
-                           </Pie>
-                           <Tooltip 
-                             formatter={(value: number, name: string, props: any) => [
-                               formatPrice(value), 
-                               `${props.payload.name} (${props.payload.percentage}%)`
-                             ]}
-                             {...getTooltipStyles()}
-                           />
-                         </PieChart>
-                       </ResponsiveContainer>
-                     </div>
-                     
-                     {/* Legend Section */}
-                     <div className="mt-4 space-y-3">
-                       {paymentMethodData.map((method, index) => (
-                         <div key={index} className="flex items-center justify-between group">
-                           <div className="flex items-center space-x-3">
-                             <div 
-                               className="w-3 h-3 rounded-full shadow-sm" 
-                               style={{ backgroundColor: method.color }}
-                             ></div>
-                             <span className="text-sm font-medium text-gray-600 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                               {method.name}
-                             </span>
-                           </div>
-                           <div className="text-right">
-                             <div className="text-sm font-bold text-gray-900 dark:text-white">
-                               {formatPrice(method.value)}
-                             </div>
-                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                               {method.percentage}%
-                             </div>
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                 ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                        <DollarSign className="h-10 w-10 text-purple-600 dark:text-purple-400" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Payment Data</h4>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
-                        Payment method breakdown will appear here once you have transaction data
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Payment Methods Chart removed per request */}
 
           {/* Order Source Analytics */}
           <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">

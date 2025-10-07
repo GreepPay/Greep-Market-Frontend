@@ -88,7 +88,8 @@ export interface Transaction {
   payment_method?: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card'; // Legacy single payment method (for backward compatibility)
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   status: 'pending' | 'completed' | 'cancelled' | 'voided';
-  order_source: 'in_store' | 'online' ;
+  // Accept both legacy underscore and new hyphenated variants
+  order_source: 'in_store' | 'in-store' | 'online';
   rider_id?: string; // Optional rider for delivery orders
   delivery_fee?: number;
   cashier_id: string;
