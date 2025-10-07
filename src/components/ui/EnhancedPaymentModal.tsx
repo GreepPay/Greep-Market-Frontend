@@ -20,7 +20,7 @@ interface EnhancedPaymentModalProps {
 
 export interface PaymentData {
   payment_methods: PaymentMethod[];
-  order_source: 'in_store' | 'online';
+  order_source: 'in-store' | 'online';
   rider_id?: string;
   delivery_fee?: number;
   customer_id?: string;
@@ -139,7 +139,8 @@ export const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
     const paymentData: PaymentData = {
       payment_methods: paymentMethods,
-      order_source: orderSource,
+      // Normalize to backend-expected values (hyphenated, lowercase)
+      order_source: (orderSource === 'in_store' ? 'in-store' : 'online'),
       customer_id: customerId || undefined,
       notes: notes || undefined,
     };

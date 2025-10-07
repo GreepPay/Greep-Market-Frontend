@@ -303,7 +303,7 @@ export const SalesHistory: React.FC = () => {
               paymentMethods: paymentMethods,
               paymentMethod: paymentMethod,
               customerId: transaction.customer_id,
-              orderSource: transaction.order_source || 'in_store' // Default to in_store if not specified
+              orderSource: (transaction.order_source === 'in-store' ? 'in_store' : (transaction.order_source || 'in_store')) // Normalize to underscore variant
             });
           }
         });

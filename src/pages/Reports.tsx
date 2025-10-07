@@ -424,7 +424,7 @@ export const Reports: React.FC = () => {
         .reduce((sum, sale) => sum + sale.total_amount, 0);
       
       const inStoreSales = daySales
-        .filter(sale => sale.order_source === 'in_store' || !sale.order_source)
+        .filter(sale => (sale.order_source as any) === 'in_store' || (sale.order_source as any) === 'in-store' || !sale.order_source)
         .reduce((sum, sale) => sum + sale.total_amount, 0);
       
       data.push({
@@ -610,8 +610,9 @@ export const Reports: React.FC = () => {
     });
     
     sales.forEach(sale => {
-      const source = sale.order_source || 'in_store'; // Default to in_store if not specified
-      orderSources[source] = (orderSources[source] || 0) + sale.total_amount;
+      const src = sale.order_source as any;
+      const normalized = src === 'in-store' ? 'in_store' : (src || 'in_store');
+      orderSources[normalized] = (orderSources[normalized] || 0) + sale.total_amount;
       totalAmount += sale.total_amount;
     });
     
@@ -1061,40 +1062,7 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
-          {/* Order Source Trends Over Time */}
-          <div className="mt-6">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Order Source Trends</h3>
-              <div className="h-80">
-                {salesData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="date" stroke="#9CA3AF" />
-                      <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
-                      <Tooltip 
-                        formatter={(value: number) => [formatPrice(value), 'Sales']}
-                        {...getTooltipStyles()}
-                      />
-                      <Legend />
-                      <Bar dataKey="onlineSales" stackId="a" fill="#3b82f6" name="Online" />
-                      <Bar dataKey="inStoreSales" stackId="a" fill="#22c55e" name="In-Store" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
-                      <BarChart3 className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-                    </div>
-                    <p className="text-sm font-medium mb-2">No Trend Data</p>
-                    <p className="text-xs text-center max-w-xs">
-                      Order source trend data will appear once you have sales with order source tracking
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Order Source Trends Over Time removed per request */}
         </>
       )}
 

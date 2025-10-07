@@ -27,7 +27,7 @@ interface EditTransactionModalProps {
     payment_methods: PaymentMethod[];
     customer_id?: string;
     notes?: string;
-    order_source: 'online' | 'in_store';
+    order_source: 'online' | 'in-store';
   }) => Promise<void>;
 }
 
@@ -77,7 +77,12 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
       
       setCustomerId(transaction.customer_id || '');
       setNotes(transaction.notes || '');
-      setOrderSource(transaction.order_source || 'in_store');
+      // Accept both legacy 'in_store' and new 'in-store'
+      const os = transaction.order_source as any;
+      const normalized = (os === 'in-store' || os === 'online')
+        ? (os === 'in-store' ? 'in_store' : 'online')
+        : (os || 'in_store');
+      setOrderSource(normalized);
     }
   }, [transaction]);
 
@@ -191,7 +196,8 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         payment_methods: paymentMethods,
         customer_id: customerId || undefined,
         notes: notes || undefined,
-        order_source: orderSource
+        // Normalize to backend-expected hyphenated format
+        order_source: (orderSource === 'in_store' ? 'in-store' as 'in-store' : 'online' as 'online')
       };
 
       await onSave(transaction._id, updates);
