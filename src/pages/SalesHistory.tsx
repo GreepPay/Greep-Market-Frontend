@@ -104,29 +104,39 @@ export const SalesHistory: React.FC = () => {
     console.log('🚀 Loading sales data...', { 
       store_id: user?.store_id, 
       user_id: user?.id,
-      isAuthenticated: !!user 
+      isAuthenticated: !!user,
+      role: user?.role
     });
     
-    if (!user?.store_id) {
+    // For cashiers without store_id, show a warning but still attempt to load data
+    if (!user?.store_id && user?.role !== 'cashier') {
       console.warn('⚠️ No store_id found for user:', user);
       toast.error('Store ID not found. Please contact support.');
       return;
     }
     
+    // For cashiers without store_id, show a different message
+    if (!user?.store_id && user?.role === 'cashier') {
+      console.warn('⚠️ Cashier without store_id - attempting to load transactions without store filter');
+      toast.error('Store ID not found. Please contact support.');
+    }
+    
     setIsLoadingSales(true);
     try {
       // Load ALL transactions without any filters
-      console.log('🔍 Sales History - Making API call with params:', {
-        store_id: user.store_id,
+      const apiParams: any = {
         page: 1,
-        limit: 1000
-      });
+        limit: 1000 // Large limit to get all transactions
+      };
       
-      const response = await apiService.getTransactions({
-        store_id: user.store_id,
-        page: 1,
-        limit: 1000, // Large limit to get all transactions
-      });
+      // Only add store_id if it exists and is not null
+      if (user.store_id && user.store_id !== 'null') {
+        apiParams.store_id = user.store_id;
+      }
+      
+      console.log('🔍 Sales History - Making API call with params:', apiParams);
+      
+      const response = await apiService.getTransactions(apiParams);
       
       console.log('🔍 Sales History - Raw API Response:', response);
       
@@ -671,6 +681,24 @@ export const SalesHistory: React.FC = () => {
         </div>
 
         
+        {/* Store ID Notice for Cashiers */}
+        {user?.role === 'cashier' && !user?.store_id && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl shadow-lg p-6">
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-medium text-amber-800 dark:text-amber-300">Store Assignment Required</h3>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                  Your cashier account doesn't have a store assigned (store_id: null). This may limit your access to store-specific sales data. 
+                  Contact your administrator to assign you to a store for full functionality.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Enhanced Header */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

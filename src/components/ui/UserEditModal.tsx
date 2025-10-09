@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User as UserIcon, Save, Eye, EyeOff, Key, Shield } from 'lucide-react';
+import { User as UserIcon, Save, Eye, EyeOff, Key, Shield, Building2 } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -20,9 +20,17 @@ interface UserEditFormData {
   email: string;
   phone: string;
   role: 'admin' | 'cashier' | 'manager' | 'owner';
+  store_id: string;
   is_active: boolean;
   new_password: string;
   confirm_password: string;
+}
+
+interface Store {
+  id: string;
+  name: string;
+  address: string;
+  is_active: boolean;
 }
 
 export const UserEditModal: React.FC<UserEditModalProps> = ({
@@ -37,15 +45,24 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     email: '',
     phone: '',
     role: 'cashier',
+    store_id: '',
     is_active: true,
     new_password: '',
     confirm_password: '',
   });
 
+  const [stores, setStores] = useState<Store[]>([]);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
+
+  // Load stores when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadStores();
+    }
+  }, [isOpen]);
 
   // Initialize form data when user changes
   useEffect(() => {
@@ -56,12 +73,30 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         email: user.email || '',
         phone: user.phone || '',
         role: user.role || 'cashier',
+        store_id: user.store_id || '',
         is_active: user.is_active !== undefined ? user.is_active : true,
         new_password: '',
         confirm_password: '',
       });
     }
   }, [user]);
+
+  const loadStores = async () => {
+    try {
+      const response = await fetch('/api/v1/stores/for-assignment', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStores(data.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load stores:', error);
+    }
+  };
 
   const handleInputChange = (field: keyof UserEditFormData, value: string | boolean) => {
     setFormData(prev => ({
@@ -81,6 +116,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         email: formData.email,
         phone: formData.phone || undefined,
         role: formData.role,
+        store_id: formData.store_id || undefined,
         is_active: formData.is_active,
       };
 
@@ -210,6 +246,32 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               onChange={(e) => handleInputChange('phone', e.target.value)}
               placeholder="Enter phone number"
             />
+
+            {/* Store Assignment */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Building2 className="h-4 w-4 inline mr-1" />
+                Store Assignment
+              </label>
+              <select
+                value={formData.store_id}
+                onChange={(e) => handleInputChange('store_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                aria-label="Select store assignment"
+              >
+                <option value="">No Store Assigned</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name} - {store.address}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {formData.store_id 
+                  ? 'User is assigned to a specific store' 
+                  : 'User has no store assignment (store_id: null)'}
+              </p>
+            </div>
 
             {/* Role Selection */}
             <div>
