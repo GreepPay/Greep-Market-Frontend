@@ -592,7 +592,10 @@ class ApiService {
     search?: string;
   }): Promise<{ transactions: Transaction[]; total: number; page: number; limit: number }> {
     const queryParams = new URLSearchParams();
-    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    // Only add store_id if it's provided and not null
+    if (params?.store_id && params.store_id !== 'null') {
+      queryParams.append('store_id', params.store_id);
+    }
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     if (params?.status) queryParams.append('status', params.status);
