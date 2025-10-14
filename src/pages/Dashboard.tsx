@@ -591,6 +591,67 @@ export const Dashboard: React.FC = () => {
     debugTimezoneInfo();
   }, []);
 
+  // State for expense data
+  const [expenseData, setExpenseData] = useState<any[]>([]);
+
+  // Fetch expense data when filters change
+  useEffect(() => {
+    const fetchExpenseData = async () => {
+      if (!user?.store_id) return;
+
+      try {
+        // Calculate date range for expenses
+        const now = new Date();
+        let startDate: string;
+        let endDate: string;
+
+        if (customStartDate && customEndDate) {
+          startDate = customStartDate;
+          endDate = customEndDate;
+        } else {
+          switch (dateRange) {
+            case 'today':
+              startDate = endDate = now.toISOString().split('T')[0];
+              break;
+            case 'this_month':
+            default:
+              const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+              startDate = monthStart.toISOString().split('T')[0];
+              endDate = now.toISOString().split('T')[0];
+              break;
+          }
+        }
+
+        const expensesResponse = await apiService.getExpenses({
+          store_id: user.store_id,
+          start_date: startDate,
+          end_date: endDate,
+          limit: 1000
+        });
+
+        // Group expenses by day
+        const dailyExpenses = expensesResponse.expenses.reduce((acc: any, expense: any) => {
+          const expenseDate = new Date(expense.date);
+          const dayKey = `${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}-${String(expenseDate.getDate()).padStart(2, '0')}`;
+          
+          if (!acc[dayKey]) {
+            acc[dayKey] = { day: dayKey, expenses: 0 };
+          }
+          acc[dayKey].expenses += expense.amount || 0;
+          
+          return acc;
+        }, {} as Record<string, { day: string; expenses: number }>);
+
+        setExpenseData(Object.values(dailyExpenses));
+      } catch (error) {
+        console.error('Failed to fetch expense data for chart:', error);
+        setExpenseData([]);
+      }
+    };
+
+    fetchExpenseData();
+  }, [user?.store_id, dateRange, customStartDate, customEndDate]);
+
   // Use filtered sales data for charts when filters are applied, otherwise use API data
   const salesData = useMemo(() => {
     let rawData: any[] = [];
@@ -641,8 +702,8 @@ export const Dashboard: React.FC = () => {
 
     // Sort raw data by date
     rawData.sort((a, b) => {
-      const dateA = new Date(a.day || a.created_at);
-      const dateB = new Date(b.day || b.created_at);
+      const dateA = new Date(a.day || a.originalDate);
+      const dateB = new Date(b.day || b.originalDate);
       return dateA.getTime() - dateB.getTime();
     });
 
@@ -666,21 +727,51 @@ export const Dashboard: React.FC = () => {
     // Apply aggregation
     const aggregatedData = aggregateDataByPeriod(rawData, finalPeriod);
 
-    // Limit final data points for optimal chart display, but respect user's period choice
-    if (aggregatedData.length > 24) {
-      console.log(`📉 Limiting ${aggregatedData.length} data points to 24 for optimal display while preserving ${chartPeriod} period`);
-      // For very large datasets, limit to 24 points max
-      const step = Math.floor(aggregatedData.length / 22);
-      const limitedData = [aggregatedData[0]]; // Always include first point
-      for (let i = step; i < aggregatedData.length - 1; i += step) {
-        limitedData.push(aggregatedData[i]);
+    // Merge with expense data
+    const mergedData = aggregatedData.map(salesItem => {
+      // Find matching expense data for the same day
+      const matchingExpense = expenseData.find(expenseItem => expenseItem.day === salesItem.day);
+      return {
+        ...salesItem,
+        expenses: matchingExpense ? matchingExpense.expenses : 0
+      };
+    });
+
+    // If we have expense data for days not in sales data, add them
+    expenseData.forEach(expenseItem => {
+      const hasMatchingSales = mergedData.some(salesItem => salesItem.day === expenseItem.day);
+      if (!hasMatchingSales) {
+        mergedData.push({
+          day: expenseItem.day,
+          sales: 0,
+          expenses: expenseItem.expenses,
+          originalDate: expenseItem.day
+        });
       }
-      limitedData.push(aggregatedData[aggregatedData.length - 1]); // Always include last point
+    });
+
+    // Sort the merged data by date
+    mergedData.sort((a, b) => {
+      const dateA = new Date(a.day || a.originalDate);
+      const dateB = new Date(b.day || b.originalDate);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    // Limit final data points for optimal chart display, but respect user's period choice
+    if (mergedData.length > 24) {
+      console.log(`📉 Limiting ${mergedData.length} data points to 24 for optimal display while preserving ${chartPeriod} period`);
+      // For very large datasets, limit to 24 points max
+      const step = Math.floor(mergedData.length / 22);
+      const limitedData = [mergedData[0]]; // Always include first point
+      for (let i = step; i < mergedData.length - 1; i += step) {
+        limitedData.push(mergedData[i]);
+      }
+      limitedData.push(mergedData[mergedData.length - 1]); // Always include last point
       return limitedData;
     }
 
-    return aggregatedData;
-  }, [currentDashboardMetrics?.salesByMonth, filteredSales, dateRange, customStartDate, customEndDate, chartPeriod]);
+    return mergedData;
+  }, [currentDashboardMetrics?.salesByMonth, filteredSales, dateRange, customStartDate, customEndDate, chartPeriod, expenseData]);
 
   // Use filtered sales data for top products when filters are applied, otherwise use API data
   const topProductsData = useMemo(() => {
@@ -944,8 +1035,14 @@ export const Dashboard: React.FC = () => {
       const orderSources = currentDashboardMetrics.orderSources;
       const totalAmount = Object.values(orderSources).reduce((sum: number, amount: any) => sum + (amount || 0), 0);
       
+      console.log('🔍 Dashboard: Order source data from API:', {
+        orderSources,
+        totalAmount,
+        entries: Object.entries(orderSources)
+      });
+      
       return Object.entries(orderSources).map(([source, amount]: [string, any]) => ({
-        name: source === 'online' ? 'Online' : 'In-Store',
+        name: (source === 'online') ? 'Online' : 'In-Store',
         value: amount || 0,
         percentage: totalAmount > 0 ? (((amount || 0) / totalAmount) * 100).toFixed(1) : '0.0',
         color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
@@ -958,6 +1055,7 @@ export const Dashboard: React.FC = () => {
       : ((filteredSales && filteredSales.length > 0) ? filteredSales : []);
     
     if (!sales || sales.length === 0) {
+      console.log('🔍 Dashboard: No sales data for order source calculation');
       return [];
     }
     
@@ -967,11 +1065,27 @@ export const Dashboard: React.FC = () => {
     };
     let totalAmount = 0;
     
+    console.log('🔍 Dashboard: Processing sales for order source (fallback):', {
+      salesCount: sales.length,
+      sampleSales: sales.slice(0, 3).map(s => ({
+        id: s._id,
+        total_amount: s.total_amount,
+        order_source: s.order_source
+      }))
+    });
+    
     sales.forEach(sale => {
       const src = sale.order_source;
-      const normalized = src === 'in-store' ? 'in_store' : (src || 'in_store');
+      // Normalize both 'in-store' and 'in_store' to 'in_store' for frontend consistency
+      const normalized = (src === 'in-store' || src === 'in_store') ? 'in_store' : (src || 'in_store');
       orderSources[normalized] = (orderSources[normalized] || 0) + (sale.total_amount || 0);
       totalAmount += (sale.total_amount || 0);
+    });
+    
+    console.log('🔍 Dashboard: Order source calculation (fallback):', {
+      orderSources,
+      totalAmount,
+      salesProcessed: sales.length
     });
     
     return Object.entries(orderSources).map(([source, amount]) => ({
@@ -1630,9 +1744,9 @@ export const Dashboard: React.FC = () => {
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sales Overview</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sales & Expenses Overview</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {chartPeriod === 'daily' ? 'Daily' : chartPeriod === 'weekly' ? 'Weekly' : 'Monthly'} sales performance
+                    {chartPeriod === 'daily' ? 'Daily' : chartPeriod === 'weekly' ? 'Weekly' : 'Monthly'} performance trends
                   </p>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -1701,7 +1815,10 @@ export const Dashboard: React.FC = () => {
                         width={60}
                       />
                       <Tooltip 
-                        formatter={(value: number) => [formatPrice(value), 'Sales']}
+                        formatter={(value: number, name: string) => {
+                          const label = name === 'sales' ? 'Sales' : name === 'expenses' ? 'Expenses' : name;
+                          return [formatPrice(value), label];
+                        }}
                         labelFormatter={(label) => `Day: ${label}`}
                         {...getTooltipStyles()}
                       />
@@ -1713,11 +1830,26 @@ export const Dashboard: React.FC = () => {
                         dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
                         activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: '#ffffff' }}
                         connectNulls={false}
+                        name="Sales"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="expenses" 
+                        stroke="url(#expensesGradient)" 
+                        strokeWidth={3}
+                        dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
+                        activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: '#ffffff' }}
+                        connectNulls={false}
+                        name="Expenses"
                       />
                       <defs>
                         <linearGradient id="salesGradient" x1="0" y1="0" x2="1" y2="0">
                           <stop offset="0%" stopColor="#10b981" />
                           <stop offset="100%" stopColor="#14b8a6" />
+                        </linearGradient>
+                        <linearGradient id="expensesGradient" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#ef4444" />
+                          <stop offset="100%" stopColor="#dc2626" />
                         </linearGradient>
                       </defs>
                     </LineChart>

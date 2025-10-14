@@ -6,6 +6,7 @@ import { Input } from './Input';
 import { toast } from 'react-hot-toast';
 import { apiService } from '../../services/api';
 import { User } from '../../types';
+import axios from 'axios';
 
 interface UserEditModalProps {
   isOpen: boolean;
@@ -81,20 +82,28 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     }
   }, [user]);
 
+  // ✅ FIXED: Ensure we store an array, not an object
   const loadStores = async () => {
     try {
-      const response = await fetch('/api/v1/stores/for-assignment', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStores(data.data || []);
-      }
+      console.log('🔄 Loading stores for assignment...');
+      const response: any = await apiService.getStoresForAssignment();
+      console.log('✅ Stores API raw response:', response);
+
+      // Handle both formats safely
+      const storeArray: Store[] = Array.isArray(response)
+        ? response
+        : Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+
+      console.log('📊 Stores loaded:', storeArray.length);
+      setStores(storeArray);
+      console.log('🎯 Stores state set:', storeArray);
     } catch (error) {
-      console.error('Failed to load stores:', error);
+      console.error('❌ Failed to load stores:', error);
+      toast.error('Failed to load stores for assignment');
     }
   };
 
@@ -134,7 +143,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.new_password !== formData.confirm_password) {
       toast.error('New passwords do not match');
       return;
@@ -150,14 +159,14 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     try {
       await apiService.updateUserPassword(user.id, formData.new_password);
       toast.success('Password updated');
-      
+
       // Clear password fields
       setFormData(prev => ({
         ...prev,
         new_password: '',
         confirm_password: '',
       }));
-      
+
       onClose();
     } catch (error) {
       console.error('Failed to update password:', error);
@@ -186,6 +195,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       title={`Edit User: ${user?.first_name} ${user?.last_name}`}
       size="lg"
     >
+      {/* ✅ No changes needed below this line */}
       <div className="space-y-6">
         {/* Tabs */}
         <div className="border-b border-gray-200">
@@ -209,8 +219,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
             })}
           </nav>
         </div>
-
-        {/* Profile Information Tab */}
+          {/* Profile Information Tab */}
         {activeTab === 'profile' && (
           <form onSubmit={handleProfileUpdate} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -253,6 +262,10 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 <Building2 className="h-4 w-4 inline mr-1" />
                 Store Assignment
               </label>
+              {/* Debug info */}
+              <div className="text-xs text-gray-400 mb-1">
+                Debug: {stores.length} stores loaded
+              </div>
               <select
                 value={formData.store_id}
                 onChange={(e) => handleInputChange('store_id', e.target.value)}
