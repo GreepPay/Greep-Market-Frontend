@@ -18,6 +18,7 @@ import { normalizeCategoryName, getAllAvailableCategories } from '../utils/categ
 import { TagsDropdown } from '../components/ui/TagsDropdown';
 import { EnhancedProductForm } from '../components/ui/EnhancedProductForm';
 import { CategoryFilterSidebar } from '../components/ui/CategoryFilterSidebar';
+import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { useApp } from '../context/AppContext';
 import { Product, PriceHistory } from '../types';
 
@@ -1206,7 +1207,16 @@ export const Products: React.FC = () => {
               priceHistory={priceHistory}
             />
 
-          </div>
-        </div>
-      );
-    };
+        {/* Floating Action Button */}
+        <FloatingActionButton
+          onClick={() => setIsAddModalOpen(true)}
+          icon={Plus}
+          label="Add Product"
+          color="blue"
+          size="lg"
+          position="bottom-right"
+        />
+      </div>
+    </div>
+  );
+};

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { AlertTriangle, Package, TrendingDown, TrendingUp, Filter, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Package, TrendingDown, TrendingUp, Filter, RefreshCw, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -8,6 +8,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { BackButton } from '../components/ui/BackButton';
 import { Breadcrumb } from '../components/ui/Breadcrumb';
+import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
@@ -405,6 +406,16 @@ export const Inventory: React.FC = () => {
             </div>
           )}
         </Modal>
+
+        {/* Floating Action Button */}
+        <FloatingActionButton
+          onClick={() => window.location.href = '/products'}
+          icon={Plus}
+          label="Add New Product"
+          color="purple"
+          size="lg"
+          position="bottom-right"
+        />
       </div>
     </div>
   );

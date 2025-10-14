@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { NumberInput } from '../components/ui/NumberInput';
 import { Modal } from '../components/ui/Modal';
+import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import toast from 'react-hot-toast';
 
 interface Expense {
@@ -942,6 +943,16 @@ export const Expenses: React.FC = () => {
         </Modal>
         </div>
       </div>
+
+      {/* Floating Action Button */}
+      <FloatingActionButton
+        onClick={() => setShowAddExpense(true)}
+        icon={Plus}
+        label="Add Expense"
+        color="green"
+        size="lg"
+        position="bottom-right"
+      />
     </>
   );
 };

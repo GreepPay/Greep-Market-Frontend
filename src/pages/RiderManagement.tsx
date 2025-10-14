@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
+import { UserPlus } from 'lucide-react';
 import { RiderManagement } from '../components/ui/RiderManagement';
+import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { useRiders } from '../context/RiderContext';
 import { BackButton } from '../components/ui/BackButton';
 import { Breadcrumb } from '../components/ui/Breadcrumb';
@@ -28,6 +30,21 @@ export const RiderManagementPage: React.FC = () => {
           onUpdateRider={updateRider}
           onReconcileRider={reconcileRider}
           onGiveCashToRider={giveCashToRider}
+        />
+
+        {/* Floating Action Button */}
+        <FloatingActionButton
+          onClick={() => {
+            // Trigger the add rider action from the RiderManagement component
+            // This will open the add rider modal
+            const event = new CustomEvent('addRider');
+            window.dispatchEvent(event);
+          }}
+          icon={UserPlus}
+          label="Add New Rider"
+          color="orange"
+          size="lg"
+          position="bottom-right"
         />
       </div>
     </div>
