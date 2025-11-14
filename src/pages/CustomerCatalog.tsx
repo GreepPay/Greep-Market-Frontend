@@ -225,9 +225,6 @@ export const CustomerCatalog: React.FC = () => {
         let errorData;
         try {
           const responseText = await response.text();
-          console.log('Error response text:', responseText);
-          console.log('Response status:', response.status);
-          console.log('Response headers:', Object.fromEntries(response.headers.entries()));
           
           if (responseText) {
             errorData = JSON.parse(responseText);
@@ -269,9 +266,6 @@ export const CustomerCatalog: React.FC = () => {
       let responseText;
       try {
         responseText = await response.text();
-        console.log('Success response text:', responseText);
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
         if (responseText) {
           result = JSON.parse(responseText);
@@ -322,7 +316,6 @@ export const CustomerCatalog: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -474,7 +467,7 @@ export const CustomerCatalog: React.FC = () => {
 
       {/* Order Modal */}
       {isOrderModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center pt-0 px-4 pb-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

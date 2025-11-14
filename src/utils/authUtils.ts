@@ -20,7 +20,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
     
     // No token found
     if (!token) {
-      console.log('No access token found');
       return {
         isValid: false,
         shouldRedirect: true,
@@ -30,7 +29,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
 
     // Check if token is valid locally first
       if (!apiService.isAuthenticated()) {
-        console.log('Token is invalid or expired locally');
         // Clear any invalid tokens
         apiService.clearTokensSilently();
         return {
@@ -43,7 +41,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
     // Try to validate token with server
     try {
       await apiService.getCurrentUser();
-      console.log('Token validation successful');
       return {
         isValid: true,
         shouldRedirect: false
@@ -58,7 +55,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
                         error.message?.toLowerCase().includes('401');
       
       if (isAuthError) {
-        console.log('Authentication error detected, clearing tokens');
         apiService.clearTokensSilently();
         return {
           isValid: false,
@@ -70,7 +66,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
       // For network errors, we might want to allow the user to stay logged in
       // but show a warning about connectivity issues
       if (error.message?.includes('Failed to fetch') || error.message?.includes('Network')) {
-        console.log('Network error during auth check, but keeping user logged in');
         return {
           isValid: true,
           shouldRedirect: false,
@@ -102,7 +97,6 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
  * Clears all authentication data and redirects to login
  */
 export const clearAuthAndRedirect = (): void => {
-  console.log('Clearing authentication and redirecting to login');
   
   // Clear all tokens WITHOUT triggering the callback to prevent infinite loop
   apiService.clearTokensSilently();

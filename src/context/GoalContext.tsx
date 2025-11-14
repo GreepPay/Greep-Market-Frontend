@@ -86,13 +86,11 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   // Load goals from API or set defaults
   const loadGoals = useCallback(async () => {
     if (!isAuthenticated || !user) {
-      console.log('User not authenticated, skipping goal loading');
       return;
     }
 
     // Check if user has valid store_id
     if (!user.store_id) {
-      console.log('User has no store_id, skipping goal loading');
       return;
     }
 
@@ -105,10 +103,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       
       try {
         existingGoals = await (apiService as any).getGoals({ store_id: user.store_id, is_active: true });
-        console.log('✅ Successfully loaded goals from API:', existingGoals.length);
         apiSuccess = true;
       } catch (err) {
-        console.warn('❌ Failed to fetch existing goals from API, trying localStorage backup:', err);
         apiSuccess = false;
       }
 
@@ -118,7 +114,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
           const backupDaily = localStorage.getItem(`goal_daily_${user.store_id}`);
           const backupMonthly = localStorage.getItem(`goal_monthly_${user.store_id}`);
           if (backupDaily || backupMonthly) {
-            console.log('📦 Loading goals from localStorage backup');
             if (backupDaily) {
               const dailyGoal = JSON.parse(backupDaily);
               existingGoals.push(dailyGoal);
@@ -127,27 +122,14 @@ export function GoalProvider({ children }: { children: ReactNode }) {
               const monthlyGoal = JSON.parse(backupMonthly);
               existingGoals.push(monthlyGoal);
             }
-            console.log('📦 Loaded', existingGoals.length, 'goals from localStorage backup');
           }
         } catch (localErr) {
-          console.warn('Failed to load from localStorage backup:', localErr);
         }
       }
 
       // 2) Find daily and monthly goals if they already exist and are still valid
       const now = getCurrentDateTime();
-      
-      console.log('Goal validation debug:', {
-        currentTime: now.toISOString(),
-        existingGoalsCount: existingGoals.length,
-        existingGoals: existingGoals.map(g => ({
-          type: g.goal_type,
-          period_start: g.period_start,
-          period_end: g.period_end,
-          target_amount: g.target_amount
-        }))
-      });
-      
+
       let dailyGoal = existingGoals.find(g => {
         if (g.goal_type !== 'daily') return false;
         // Check if the goal is for today (more flexible validation)
@@ -158,15 +140,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
           const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
           const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           const isValid = startDate <= todayEnd && endDate >= todayStart;
-          console.log('Daily goal validation:', {
-            goalId: g._id,
-            period_start: g.period_start,
-            period_end: g.period_end,
-            currentTime: now.toISOString(),
-            todayStart: todayStart.toISOString(),
-            todayEnd: todayEnd.toISOString(),
-            isValid
-          });
           return isValid;
         }
         return true; // If no period dates, assume it's valid
@@ -182,15 +155,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
           const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
           const isValid = startDate <= monthEnd && endDate >= monthStart;
-          console.log('Monthly goal validation:', {
-            goalId: g._id,
-            period_start: g.period_start,
-            period_end: g.period_end,
-            currentTime: now.toISOString(),
-            monthStart: monthStart.toISOString(),
-            monthEnd: monthEnd.toISOString(),
-            isValid
-          });
           return isValid;
         }
         return true; // If no period dates, assume it's valid
@@ -198,11 +162,9 @@ export function GoalProvider({ children }: { children: ReactNode }) {
 
       // 3) If no daily goal exists, don't auto-create - let admin set manually
       if (!dailyGoal) {
-        console.log('No daily goal found - admin can set one manually');
         // Don't auto-create goals - let the admin set them manually
         dailyGoal = null;
       } else {
-        console.log('Using existing daily goal:', dailyGoal);
       }
 
       // If no monthly goal exists for current month, auto-carry over from last month or create default
@@ -242,9 +204,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
             } as any;
             // Persist backup immediately so UI shows reliably after hard refresh
             localStorage.setItem(`goal_monthly_${user.store_id}`, JSON.stringify(monthlyGoal));
-            console.log('✅ Auto-carried monthly goal for current month (API or local):', monthlyGoal);
           } catch (e) {
-            console.warn('❌ Failed to auto-carry monthly goal from API, trying localStorage:', e);
             // Try to create from localStorage backup
             try {
               const backupMonthly = localStorage.getItem(`goal_monthly_${user.store_id}`);
@@ -274,9 +234,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
                 } as any;
               }
               localStorage.setItem(`goal_monthly_${user.store_id}`, JSON.stringify(monthlyGoal));
-              console.log('📦 Created monthly goal from local/localStorage fallback:', monthlyGoal);
             } catch (localErr) {
-              console.warn('Failed to create from localStorage backup:', localErr);
             }
           }
         } else {
@@ -294,45 +252,25 @@ export function GoalProvider({ children }: { children: ReactNode }) {
                 period_end: endOfMonth.toISOString(),
                 updated_at: new Date().toISOString()
               };
-              console.log('📦 Created monthly goal from localStorage backup (no previous goal):', monthlyGoal);
             }
           } catch (localErr) {
-            console.warn('Failed to create from localStorage backup:', localErr);
           }
         }
         
         if (!monthlyGoal) {
-          console.log('No monthly goal found - admin can set one manually');
           monthlyGoal = null;
         }
       } else {
-        console.log('Using existing monthly goal:', monthlyGoal);
       }
 
       // 4) Update context state with persistent goals
-      console.log('Setting goals in context:', {
-        dailyGoal: dailyGoal ? {
-          id: dailyGoal._id,
-          target_amount: dailyGoal.target_amount,
-          period_start: dailyGoal.period_start,
-          period_end: dailyGoal.period_end
-        } : null,
-        monthlyGoal: monthlyGoal ? {
-          id: monthlyGoal._id,
-          target_amount: monthlyGoal.target_amount,
-          period_start: monthlyGoal.period_start,
-          period_end: monthlyGoal.period_end
-        } : null
-      });
 
       // Save to localStorage as backup
       if (dailyGoal) {
         localStorage.setItem(`goal_daily_${user.store_id}`, JSON.stringify(dailyGoal));
-        console.log('💾 Saved daily goal to localStorage backup');
       }
       if (monthlyGoal) {
         localStorage.setItem(`goal_monthly_${user.store_id}`, JSON.stringify(monthlyGoal));
-        console.log('💾 Saved monthly goal to localStorage backup');
       }
       
       dispatch({ type: 'SET_DAILY_GOAL', payload: dailyGoal as any });
@@ -358,9 +296,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
             store_id: user.store_id
           } as any);
           dailyGoal = createdDaily as any;
-          console.log('Auto-created daily goal from monthly goal:', dailyGoal);
         } catch (e) {
-          console.warn('Failed to auto-create daily goal from monthly:', e);
         }
       }
 
@@ -391,7 +327,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     
     // If it's a new day, reset daily achievements and progress
     if (lastDailyCelebration && lastDailyCelebration !== today) {
-      console.log('New day detected, resetting daily goal achievements and progress');
       
       // Clear any existing daily celebration for the new day
       dispatch({ type: 'CLEAR_LAST_CELEBRATION' });
@@ -427,7 +362,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
 
       // Always make separate API calls for daily and monthly data to ensure accuracy
       // The provided metrics from dashboard might be for different date ranges
-      console.log('Goal Progress: Making separate API calls for daily and monthly data');
       
       // Calculate explicit date ranges using local timezone to avoid timezone issues
       const year = today.getFullYear();
@@ -457,37 +391,13 @@ export function GoalProvider({ children }: { children: ReactNode }) {
 
       dailyAmount = dailyMetrics.totalSales || 0;
       monthlyAmount = monthlyMetricsData.totalSales || 0;
-      
-      console.log('Goal Progress Debug:', {
-        todayDate: today.toDateString(),
-        startOfDayStr,
-        endOfDayStr,
-        startOfMonthStr,
-        endOfMonthStr,
-        dailyAmount,
-        monthlyAmount,
-        dailyGoalTarget: state.dailyGoal.target_amount,
-        monthlyGoalTarget: state.monthlyGoal.target_amount,
-        transactionStatus: 'all', // Confirming we're using all transaction statuses
-        dailyApiCall: 'getDashboardAnalytics with status=all',
-        monthlyApiCall: 'getDashboardAnalytics with status=all'
-      });
-      
+
       const now = new Date();
       
       // Safety check to prevent division by zero
       const dailyTargetAmount = state.dailyGoal?.target_amount || 0;
       const monthlyTargetAmount = state.monthlyGoal?.target_amount || 0;
-      
-      console.log('Goal progress calculation:', {
-        dailyAmount,
-        dailyTargetAmount,
-        monthlyAmount,
-        monthlyTargetAmount,
-        dailyGoalExists: !!state.dailyGoal,
-        monthlyGoalExists: !!state.monthlyGoal
-      });
-      
+
       const dailyProgress: GoalProgress = {
         goal: state.dailyGoal!,
         current_amount: dailyAmount,
@@ -526,7 +436,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     
     // Check if we need to reset daily achievements for a new day
     if (lastDailyCelebration && lastDailyCelebration !== today) {
-      console.log('New day detected, resetting daily goal achievements');
       // Clear any existing daily celebration for the new day
       dispatch({ type: 'CLEAR_LAST_CELEBRATION' });
     }
@@ -602,7 +511,6 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   // Load goals on mount - only if user is properly authenticated
   useEffect(() => {
     if (isAuthenticated && user && user.store_id) {
-      console.log('Loading goals for authenticated user:', { userId: user.id, storeId: user.store_id });
       loadGoals().catch(error => {
         console.error('Failed to load goals:', error);
         // Don't show error toast here - just log it

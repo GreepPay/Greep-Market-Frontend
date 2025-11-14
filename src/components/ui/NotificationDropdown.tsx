@@ -113,7 +113,6 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           {unreadCount > 0 && (
             <button
               onClick={() => {
-                console.log('Marking all notifications as read');
                 onMarkAllAsRead();
               }}
               className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 px-2 py-1 rounded hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors duration-200"
@@ -157,7 +156,6 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   }`}
                   onClick={() => {
                     if (!notification.read) {
-                      console.log('Marking notification as read:', notification.id);
                       onMarkAsRead(notification.id);
                     }
                   }}

@@ -194,6 +194,17 @@ export interface DashboardMetrics {
     sales: number;
     transactions: number;
   }>;
+  // Sales series data (timezone-aware, grouped by period) - for daily/weekly charts
+  salesByPeriod?: Array<{
+    period: string; // YYYY-MM-DD format for daily, YYYY-MM for monthly
+    revenue: number;
+    transactions?: number;
+  }>;
+  // Expense series data (timezone-aware, grouped by period)
+  expensesByPeriod?: Array<{
+    period: string; // YYYY-MM-DD format for daily, YYYY-MM for monthly
+    amount: number;
+  }>;
   // Payment method breakdown
   paymentMethods?: {
     [method: string]: number;
@@ -231,5 +242,4 @@ export interface AppState {
     limit: number;
   };
 }
-
 

@@ -49,14 +49,12 @@ export const Modal: React.FC<ModalProps> = ({
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (closeOnOverlayClick && e.target === e.currentTarget) {
-      console.log('Overlay clicked - closing modal');
       onClose();
     }
   };
 
   const handleModalClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    console.log('Modal content clicked - preventing close');
   };
 
   if (!isOpen) return null;
@@ -83,7 +81,7 @@ export const Modal: React.FC<ModalProps> = ({
       onClick={handleOverlayClick}
     >
       {/* Modal container */}
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center pt-0 px-4 pb-4">
         <div 
           ref={modalRef}
           className={`relative w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-2xl transition-all duration-300 scale-100`}

@@ -60,7 +60,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           setSelectedCamera(cameras[0].deviceId);
         }
       } catch (error) {
-        console.warn('Could not enumerate cameras:', error);
       }
     };
 
@@ -183,7 +182,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         try {
           scannerRef.current.clear();
         } catch (err) {
-          console.warn('Error clearing scanner:', err);
         }
         scannerRef.current = null;
       }
@@ -195,7 +193,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   // Show HTTPS warning if not secure
   if (!isHttps) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center pt-0 px-4 pb-4">
         <div className="relative w-full max-w-md mx-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
@@ -236,7 +234,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center pt-0 px-4 pb-4">
       <div className="relative w-full max-w-md mx-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">

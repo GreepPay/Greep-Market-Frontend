@@ -17,7 +17,6 @@ import { formatStockQuantity } from '../utils/formatUtils';
 import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PerformanceDashboard } from '../components/ui/PerformanceDashboard';
-import { ReportPeriodFilter } from '../components/ui/ReportPeriodFilter';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -154,7 +153,6 @@ export const Reports: React.FC = () => {
           period: selectedPeriod
         };
 
-
         // Load all analytics data with standardized parameters
         const [dashboardAnalytics, productPerformance, inventoryAnalytics] = await Promise.all([
           apiService.getDashboardAnalytics(analyticsParams),
@@ -162,7 +160,6 @@ export const Reports: React.FC = () => {
           apiService.getInventoryAnalytics(user.store_id)
         ]);
 
-        
         setAnalyticsData({ 
           dashboardAnalytics, 
           productPerformance, 
@@ -170,12 +167,6 @@ export const Reports: React.FC = () => {
         });
 
         // Debug logging for order source data
-        console.log('🔍 Reports: Analytics data loaded:', {
-          hasDashboardAnalytics: !!dashboardAnalytics,
-          hasOrderSources: !!dashboardAnalytics?.orderSources,
-          orderSources: dashboardAnalytics?.orderSources,
-          sampleTransaction: dashboardAnalytics?.recentTransactions?.[0]
-        });
       } catch (error) {
         console.error('❌ Failed to load analytics:', error);
         toast.error('Failed to load report data. Please try again.');
@@ -192,7 +183,6 @@ export const Reports: React.FC = () => {
     setPeriodStartDate(startDate);
     setPeriodEndDate(endDate);
   };
-
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('tr-TR', {
@@ -212,8 +202,7 @@ export const Reports: React.FC = () => {
       const dashboardData = analyticsData?.dashboardAnalytics;
       const productData = analyticsData?.productPerformance;
       const inventoryData = analyticsData?.inventoryAnalytics;
-      
-      
+
       // Generate comprehensive report data
       const reportData = [];
       
@@ -377,10 +366,6 @@ export const Reports: React.FC = () => {
   const generateSalesData = () => {
     // Use dashboard analytics data if available
     if (dashboardData?.salesByMonth && dashboardData.salesByMonth.length > 0) {
-      console.log('🔍 Using dashboard analytics salesByMonth:', {
-        count: dashboardData.salesByMonth.length,
-        sample: dashboardData.salesByMonth.slice(0, 2)
-      });
       return dashboardData.salesByMonth.map((item: any) => ({
         date: item.month || item.date,
         sales: item.sales || 0,
@@ -389,14 +374,7 @@ export const Reports: React.FC = () => {
         inStoreSales: item.inStoreSales || 0
       }));
     }
-    
-    console.log('🔍 Using fallback sales data from transactions:', {
-      salesCount: sales?.length || 0,
-      dashboardDataExists: !!dashboardData,
-      salesByMonthExists: !!dashboardData?.salesByMonth,
-      salesByMonthLength: dashboardData?.salesByMonth?.length || 0
-    });
-    
+
     if (!sales || sales.length === 0) {
       // Return empty data when no real data exists
       return [];
@@ -405,10 +383,31 @@ export const Reports: React.FC = () => {
     const now = new Date();
     const data = [];
     
-    for (let i = 29; i >= 0; i--) {
+    // Limit to 20 data points for better chart visibility
+    const daysToShow = 20;
+    const step = Math.ceil(30 / daysToShow); // Sample every Nth day from last 30 days
+    const includedDays = new Set<string>(); // Track which days we've included
+    
+    // Always include today (day 0)
+    const todayDate = new Date(now);
+    const todayStr = todayDate.toISOString().split('T')[0];
+    includedDays.add(todayStr);
+    
+    // Sample days going back, ensuring we include today
+    for (let i = 29; i >= 0; i -= step) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
+      
+      if (!includedDays.has(dateStr)) {
+        includedDays.add(dateStr);
+      }
+    }
+    
+    // Process all included days
+    const sortedDays = Array.from(includedDays).sort();
+    for (const dateStr of sortedDays) {
+      const date = new Date(dateStr + 'T00:00:00');
       
       const daySales = sales.filter(sale => {
         const saleDate = new Date(sale.created_at).toISOString().split('T')[0];
@@ -442,14 +441,6 @@ export const Reports: React.FC = () => {
   const salesData = generateSalesData() || [];
   
   // Debug: Log sales data for Order Source Trends
-  console.log('🔍 Order Source Trends Debug:', {
-    salesDataLength: salesData.length,
-    sampleData: salesData.slice(0, 3),
-    hasOnlineSales: salesData.some((d: any) => d.onlineSales > 0),
-    hasInStoreSales: salesData.some((d: any) => d.inStoreSales > 0),
-    totalOnline: salesData.reduce((sum: number, d: any) => sum + d.onlineSales, 0),
-    totalInStore: salesData.reduce((sum: number, d: any) => sum + d.inStoreSales, 0)
-  });
 
   // Generate payment method data from actual analytics data (filtered by selected period)
   const generatePaymentMethodData = () => {
@@ -473,26 +464,8 @@ export const Reports: React.FC = () => {
     
     const paymentMethods: { [key: string]: number } = {};
     let totalAmount = 0;
-    
-    console.log('🔍 Reports: Processing sales for payment methods:', {
-      salesCount: sales.length,
-      sampleSales: sales.slice(0, 3).map(s => ({
-        id: s._id,
-        total_amount: s.total_amount,
-        payment_methods: s.payment_methods,
-        payment_method: s.payment_method
-      }))
-    });
-    
+
     sales.forEach(sale => {
-      console.log('🔍 Reports: Processing sale:', {
-        saleId: sale._id,
-        totalAmount: sale.total_amount,
-        hasPaymentMethods: !!(sale.payment_methods && sale.payment_methods.length > 0),
-        hasPaymentMethod: !!sale.payment_method,
-        paymentMethods: sale.payment_methods,
-        paymentMethod: sale.payment_method
-      });
       // Handle both new (payment_methods array) and legacy (single payment_method) formats
       if (sale.payment_methods && sale.payment_methods.length > 0) {
         // New format: payment_methods array
@@ -512,7 +485,6 @@ export const Reports: React.FC = () => {
             default:
               methodKey = method.type;
           }
-          console.log(`🔍 Reports: Adding ${method.amount} to ${methodKey}`);
           paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + method.amount;
           totalAmount += method.amount;
         });
@@ -545,14 +517,7 @@ export const Reports: React.FC = () => {
       percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
       color: getPaymentMethodColor(method)
     }));
-    
-    console.log('🔍 Reports: Final Payment Method Calculation:', {
-      paymentMethods,
-      totalAmount,
-      result,
-      salesProcessed: sales.length
-    });
-    
+
     return result;
   };
 
@@ -599,16 +564,7 @@ export const Reports: React.FC = () => {
       'in_store': 0
     };
     let totalAmount = 0;
-    
-    console.log('🔍 Reports: Processing sales for order sources (fallback):', {
-      salesCount: sales.length,
-      sampleSales: sales.slice(0, 3).map(s => ({
-        id: s._id,
-        total_amount: s.total_amount,
-        order_source: s.order_source
-      }))
-    });
-    
+
     sales.forEach(sale => {
       const src = sale.order_source as any;
       const normalized = src === 'in-store' ? 'in_store' : (src || 'in_store');
@@ -622,14 +578,7 @@ export const Reports: React.FC = () => {
       percentage: totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0.0',
       color: source === 'online' ? '#3b82f6' : '#22c55e' // Blue for online, Green for in-store
     }));
-    
-    console.log('🔍 Reports: Order Source Calculation (fallback):', {
-      orderSources,
-      totalAmount,
-      result,
-      salesProcessed: sales.length
-    });
-    
+
     return result;
   };
 
@@ -642,8 +591,6 @@ export const Reports: React.FC = () => {
     revenue: product.revenue || 0,
     quantity: product.quantitySold || 0,
   }));
-
-
 
   const inventoryStatusData = [
     { name: 'In Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) > (p?.min_stock_level || 0)).length, color: '#22c55e' },
@@ -736,7 +683,6 @@ export const Reports: React.FC = () => {
     { id: 'products', label: 'Product Performance', icon: BarChart3 },
   ];
 
-
   if (loading || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
@@ -828,8 +774,6 @@ export const Reports: React.FC = () => {
           </div>
         </div>
 
-
-
         {/* Enhanced Report Tabs */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
           <div className="space-y-4">
@@ -855,13 +799,6 @@ export const Reports: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Enhanced Period Filter */}
-        <ReportPeriodFilter
-          selectedPeriod={selectedPeriod}
-          onPeriodChange={handlePeriodChange}
-        />
-
 
       {/* Performance Dashboard */}
       {selectedReport === 'performance' && (
@@ -1117,8 +1054,7 @@ export const Reports: React.FC = () => {
                     }, {});
                     
                     const categoryArray = Object.values(categoryData);
-                    
-                    
+
                     return categoryArray.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={categoryArray}>
@@ -1205,8 +1141,7 @@ export const Reports: React.FC = () => {
                       }, {});
                     
                     const categoryArray = Array.isArray(categoryData) ? categoryData : Object.values(categoryData);
-                    
-                    
+
                     return categoryArray.length > 0 ? (
                       categoryArray.map((cat: any) => (
                         <div key={cat.category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">

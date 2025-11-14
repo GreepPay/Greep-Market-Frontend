@@ -188,12 +188,6 @@ export const AuditAnalytics: React.FC<AuditAnalyticsProps> = ({ storeId }) => {
   }));
 
   // Debug logging for user data
-  console.log('🔍 Most Active Users Debug:', {
-    mostActiveUsers: stats.most_active_users,
-    userData: userData,
-    hasData: userData.length > 0,
-    totalCount: userData.reduce((sum, user) => sum + user.count, 0)
-  });
 
   return (
     <div className="space-y-6">

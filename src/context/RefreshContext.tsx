@@ -50,9 +50,7 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
 
   const refreshTransactions = useCallback(async () => {
     if (!isAuthenticated || !user) return;
-    
-    console.log('🔄 RefreshContext.refreshTransactions called');
-    
+
     try {
       await loadTransactions();
     } catch (error) {
@@ -62,9 +60,7 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
 
   const refreshDashboardData = useCallback(async () => {
     if (!isAuthenticated || !user) return;
-    
-    console.log('🔄 RefreshContext.refreshDashboardData called');
-    
+
     try {
       await refreshDashboard();
     } catch (error) {
@@ -84,9 +80,7 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
 
   const refreshAll = useCallback(async () => {
     if (!isAuthenticated || !user) return;
-    
-    console.log('🔄 RefreshContext.refreshAll called');
-    
+
     try {
       await Promise.all([
         refreshProducts(),
@@ -111,13 +105,11 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
 
     // Early return if not authenticated
     if (!isAuthenticated || !user) {
-      console.log('Refresh skipped: User not authenticated');
       return;
     }
 
     // Prevent concurrent refreshes
     if (isRefreshing) {
-      console.log('Refresh skipped: Already refreshing');
       return;
     }
 

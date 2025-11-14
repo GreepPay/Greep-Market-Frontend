@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Filter, Grid, List, Package, Upload, Trash2, CheckSquare, Square, Download, FileText, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { IntelligentSearchBar } from '../components/ui/IntelligentSearchBar';
 import { useIntelligentSearch } from '../hooks/useIntelligentSearch';
@@ -25,6 +25,7 @@ import { Product, PriceHistory } from '../types';
 export const Products: React.FC = () => {
   const { products, addProduct, updateProduct, updateProductPrice, getProductPriceHistory, deleteProduct, exportProducts, importProducts, loading, loadProducts, productsPagination } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Intelligent search functionality
   const { suggestions, recentSearches, addToRecentSearches, searchProducts } = useIntelligentSearch({
@@ -90,6 +91,21 @@ export const Products: React.FC = () => {
     return Array.from(new Set(allTags));
   }, [products]);
 
+  // Check for searchQuery in location state (from ProductSelector redirect)
+  useEffect(() => {
+    const state = location.state as { searchQuery?: string } | null;
+    if (state?.searchQuery) {
+      // Pre-fill product name and open add modal
+      setNewProduct(prev => ({
+        ...prev,
+        name: state.searchQuery || '',
+      }));
+      setIsAddModalOpen(true);
+      // Clear the state to prevent re-triggering
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
+
   // Load products when search query or category changes
   useEffect(() => {
     const categoryParam = selectedCategories.includes('all') ? 'all' : selectedCategories.join(',');
@@ -153,7 +169,6 @@ export const Products: React.FC = () => {
   const handleClearAllCategories = () => {
     setSelectedCategories(['all']);
   };
-
 
   const handleExcelImportSuccess = () => {
     // Refresh products list after successful import
@@ -236,7 +251,6 @@ export const Products: React.FC = () => {
       setIsBulkDeleting(false);
     }
   };
-
 
   const handleExportProducts = async () => {
     try {
@@ -428,8 +442,6 @@ export const Products: React.FC = () => {
     setIsDeleteModalOpen(false);
     setDeletingProduct(null);
   };
-
-
 
   const handleEditImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -1065,7 +1077,6 @@ export const Products: React.FC = () => {
           </div>
         </div>
       </Modal>
-
 
             {/* Delete Confirmation Modal */}
             <Modal

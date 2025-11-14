@@ -12,10 +12,13 @@ import {
   Receipt
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { apiService } from '../services/api';
 import { NumberInput } from '../components/ui/NumberInput';
 import { Modal } from '../components/ui/Modal';
 import { FloatingActionButton } from '../components/ui/FloatingActionButton';
+import { ProductSelector } from '../components/ui/ProductSelector';
+import { Product } from '../types';
 import toast from 'react-hot-toast';
 
 interface Expense {
@@ -24,6 +27,7 @@ interface Expense {
   date: string;
   month_year: string;
   product_name: string;
+  product_id?: string; // Optional: link to product for stock sync
   unit: string;
   quantity: number;
   amount: number;
@@ -67,6 +71,7 @@ interface NewExpense {
   store_id: string;
   date: string;
   product_name: string;
+  product_id?: string; // Optional: link to product for stock sync
   unit: string;
   quantity: number;
   amount: number;
@@ -78,6 +83,7 @@ interface NewExpense {
 
 export const Expenses: React.FC = () => {
   const { user } = useAuth();
+  const { products, updateProduct, loadAllProducts } = useApp();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stats, setStats] = useState<ExpenseStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,10 +96,12 @@ export const Expenses: React.FC = () => {
   const [filterDateRange, setFilterDateRange] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newExpense, setNewExpense] = useState<NewExpense>({
     store_id: user?.store_id || '',
     date: new Date().toISOString().split('T')[0],
     product_name: '',
+    product_id: undefined,
     unit: 'pieces',
     quantity: 1,
     amount: 0,
@@ -145,6 +153,13 @@ export const Expenses: React.FC = () => {
     { value: 'this_month', label: 'This Month' },
     { value: 'this_year', label: 'This Year' }
   ];
+
+  // Load products when component mounts
+  useEffect(() => {
+    if (user?.store_id) {
+      loadAllProducts();
+    }
+  }, [user?.store_id, loadAllProducts]);
 
   useEffect(() => {
     loadExpenses();
@@ -230,16 +245,141 @@ export const Expenses: React.FC = () => {
     }
   };
 
+  // Normalize unit value to match expense API validation
+  const normalizeUnit = (unit: string): string => {
+    const unitLower = unit.toLowerCase().trim();
+    // Map common variations to valid expense units
+    const unitMap: { [key: string]: string } = {
+      'piece': 'pieces',
+      'pieces': 'pieces',
+      'kg': 'kgs',
+      'kgs': 'kgs',
+      'kilogram': 'kgs',
+      'kilograms': 'kgs',
+      'liter': 'liters',
+      'liters': 'liters',
+      'litre': 'liters',
+      'litres': 'liters',
+      'box': 'boxes',
+      'boxes': 'boxes',
+      'packet': 'packets',
+      'packets': 'packets',
+      'pack': 'packets',
+    };
+    return unitMap[unitLower] || (units.some(u => u.value === unitLower) ? unitLower : 'pieces');
+  };
+
+  // Normalize category value to match expense API validation
+  const normalizeCategory = (category: string): string => {
+    const categoryLower = category.toLowerCase().trim();
+    // Map common product categories to valid expense categories
+    const categoryMap: { [key: string]: string } = {
+      'drink': 'food',
+      'drinks': 'food',
+      'beverage': 'food',
+      'beverages': 'food',
+      'food': 'food',
+      'snack': 'food',
+      'snacks': 'food',
+      'supplies': 'supplies',
+      'supply': 'supplies',
+      'utility': 'utilities',
+      'utilities': 'utilities',
+      'equipment': 'equipment',
+      'maintenance': 'maintenance',
+      'other': 'other',
+    };
+    return categoryMap[categoryLower] || (categories.some(c => c.value === categoryLower) ? categoryLower : 'other');
+  };
+
+  // Handle product selection - auto-fill product details
+  const handleProductSelect = (product: Product | null) => {
+    setSelectedProduct(product);
+    
+    if (product && product._id && !product._id.startsWith('custom-')) {
+      // Product from inventory - auto-fill all product details
+      // Leave Amount, Payment Method, and Description for user to fill
+      setNewExpense(prev => ({
+        ...prev,
+        product_id: product._id,
+        product_name: product.name,
+        unit: normalizeUnit(product.unit || 'pieces'),
+        category: normalizeCategory(product.category || 'other'),
+        quantity: prev.quantity || 1, // Keep existing quantity or default to 1
+        currency: prev.currency || 'TRY', // Keep existing currency or default
+        // Amount, payment_method, and description are left unchanged for user to fill
+      }));
+    } else if (product && product._id?.startsWith('custom-')) {
+      // Custom product name - clear product_id, reset to defaults
+      setNewExpense(prev => ({
+        ...prev,
+        product_id: undefined,
+        product_name: product.name,
+        unit: 'pieces',
+        category: 'other',
+        quantity: 1,
+        // Amount, payment_method, and description are left unchanged for user to fill
+      }));
+    } else {
+      // No product selected - reset product-related fields
+      setNewExpense(prev => ({
+        ...prev,
+        product_id: undefined,
+        product_name: '',
+        unit: 'pieces',
+        category: 'other',
+        quantity: 1,
+        // Amount, payment_method, and description are left unchanged
+      }));
+    }
+  };
+
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Allow 0 value for expenses - explicitly check for null/undefined, not 0
+    if (newExpense.amount === null || newExpense.amount === undefined) {
+      toast.error('Please enter an amount');
+      return;
+    }
+    if (!newExpense.product_name.trim()) {
+      toast.error('Please select or enter a product name');
+      return;
+    }
+    
     try {
-      await apiService.createExpense(newExpense);
-      toast.success('Expense added successfully');
+      // Normalize unit and category before sending to API
+      const normalizedExpense = {
+        ...newExpense,
+        unit: normalizeUnit(newExpense.unit),
+        category: normalizeCategory(newExpense.category),
+      };
+      
+      // Create the expense
+      const createdExpense = await apiService.createExpense(normalizedExpense);
+      
+      // If expense is linked to a product, update stock
+      if (newExpense.product_id && selectedProduct && selectedProduct._id === newExpense.product_id) {
+        try {
+          const currentStock = selectedProduct.stock_quantity || 0;
+          const newStock = currentStock + newExpense.quantity;
+          await updateProduct(newExpense.product_id, { stock_quantity: newStock });
+          await loadAllProducts(); // Refresh products list
+          toast.success(`Expense added and stock updated! ${selectedProduct.name} stock: ${currentStock} → ${newStock}`);
+        } catch (stockError) {
+          console.error('Failed to update stock:', stockError);
+          toast.error('Expense added but failed to update stock. Please update manually.');
+        }
+      } else {
+        toast.success('Expense added successfully');
+      }
+      
       setShowAddExpense(false);
+      setSelectedProduct(null);
       setNewExpense({
         store_id: user?.store_id || '',
         date: new Date().toISOString().split('T')[0],
         product_name: '',
+        product_id: undefined,
         unit: 'pieces',
         quantity: 1,
         amount: 0,
@@ -255,11 +395,129 @@ export const Expenses: React.FC = () => {
     }
   };
 
+  // Handle product selection for edit mode
+  const [editSelectedProduct, setEditSelectedProduct] = useState<Product | null>(null);
+
+  // When opening edit modal, load the product if expense has product_id
+  useEffect(() => {
+    if (showEditExpense?.product_id) {
+      const product = products.find(p => p._id === showEditExpense.product_id);
+      setEditSelectedProduct(product || null);
+    } else {
+      setEditSelectedProduct(null);
+    }
+  }, [showEditExpense?.product_id, products]);
+
+  const handleEditProductSelect = (product: Product | null) => {
+    setEditSelectedProduct(product);
+    
+    if (showEditExpense) {
+      if (product && product._id && !product._id.startsWith('custom-')) {
+        // Product from inventory - auto-fill details with normalized values
+        setShowEditExpense({
+          ...showEditExpense,
+          product_id: product._id,
+          product_name: product.name,
+          unit: normalizeUnit(product.unit || showEditExpense.unit),
+          category: normalizeCategory(product.category || showEditExpense.category),
+        });
+      } else if (product && product._id?.startsWith('custom-')) {
+        // Custom product name - clear product_id
+        setShowEditExpense({
+          ...showEditExpense,
+          product_id: undefined,
+          product_name: product.name,
+        });
+      } else {
+        // No product selected
+        setShowEditExpense({
+          ...showEditExpense,
+          product_id: undefined,
+          product_name: '',
+        });
+      }
+    }
+  };
+
   const handleEditExpense = async (updatedExpense: Expense) => {
     try {
-      await apiService.updateExpense(updatedExpense._id, updatedExpense);
-      toast.success('Expense updated successfully');
+      // Get the original expense to calculate stock difference
+      const originalExpense = expenses.find(e => e._id === updatedExpense._id);
+      
+      // Normalize unit and category before sending to API
+      const normalizedExpense = {
+        ...updatedExpense,
+        unit: normalizeUnit(updatedExpense.unit),
+        category: normalizeCategory(updatedExpense.category),
+      };
+      
+      // Update the expense
+      await apiService.updateExpense(normalizedExpense._id, normalizedExpense);
+      
+      // Handle stock updates if product is linked (use normalizedExpense for consistency)
+      if (normalizedExpense.product_id) {
+        const product = products.find(p => p._id === normalizedExpense.product_id);
+        if (product) {
+          try {
+            let stockChange = normalizedExpense.quantity;
+            
+            // If original expense also had this product, calculate the difference
+            if (originalExpense?.product_id === normalizedExpense.product_id) {
+              // Same product - calculate quantity difference
+              stockChange = normalizedExpense.quantity - originalExpense.quantity;
+            } else if (originalExpense?.product_id && originalExpense.product_id !== normalizedExpense.product_id) {
+              // Product changed - need to reverse old stock and add new stock
+              const oldProduct = products.find(p => p._id === originalExpense.product_id);
+              if (oldProduct) {
+                const oldStock = oldProduct.stock_quantity || 0;
+                await updateProduct(originalExpense.product_id, { 
+                  stock_quantity: Math.max(0, oldStock - originalExpense.quantity) 
+                });
+              }
+              // Add new stock for the new product
+              stockChange = normalizedExpense.quantity;
+            }
+            // If original had no product_id, stockChange is already set to normalizedExpense.quantity
+            
+            if (stockChange !== 0) {
+              const currentStock = product.stock_quantity || 0;
+              const newStock = currentStock + stockChange;
+              await updateProduct(normalizedExpense.product_id, { stock_quantity: newStock });
+              await loadAllProducts();
+              toast.success(`Expense updated and stock adjusted! ${product.name} stock: ${currentStock} → ${newStock}`);
+            } else {
+              toast.success('Expense updated successfully');
+            }
+          } catch (stockError) {
+            console.error('Failed to update stock:', stockError);
+            toast.error('Expense updated but failed to update stock. Please update manually.');
+          }
+        } else {
+          toast.success('Expense updated successfully');
+        }
+      } else if (originalExpense?.product_id) {
+        // Product was removed - need to reverse the stock
+        const oldProduct = products.find(p => p._id === originalExpense.product_id);
+        if (oldProduct) {
+          try {
+            const oldStock = oldProduct.stock_quantity || 0;
+            const newStock = Math.max(0, oldStock - originalExpense.quantity);
+            await updateProduct(originalExpense.product_id, { stock_quantity: newStock });
+            await loadAllProducts();
+            toast.success(`Expense updated and stock reversed! ${oldProduct.name} stock: ${oldStock} → ${newStock}`);
+          } catch (stockError) {
+            console.error('Failed to reverse stock:', stockError);
+            toast.success('Expense updated successfully');
+          }
+        } else {
+          toast.success('Expense updated successfully');
+        }
+      } else {
+        toast.success('Expense updated successfully');
+      }
+      
       setShowEditExpense(null);
+      setEditSelectedProduct(null);
       loadExpenses();
       loadStats();
     } catch (error) {
@@ -276,8 +534,33 @@ export const Expenses: React.FC = () => {
 
   const handleDeleteExpense = async (expenseId: string) => {
     try {
+      // Get the expense before deleting to check if it's linked to a product
+      const expenseToDelete = expenses.find(e => e._id === expenseId);
+      
+      // Delete the expense
       await apiService.deleteExpense(expenseId);
-      toast.success('Expense deleted successfully');
+      
+      // If expense was linked to a product, reverse the stock update
+      if (expenseToDelete?.product_id) {
+        const product = products.find(p => p._id === expenseToDelete.product_id);
+        if (product) {
+          try {
+            const currentStock = product.stock_quantity || 0;
+            const newStock = Math.max(0, currentStock - expenseToDelete.quantity);
+            await updateProduct(expenseToDelete.product_id, { stock_quantity: newStock });
+            await loadAllProducts();
+            toast.success(`Expense deleted and stock reversed! ${product.name} stock: ${currentStock} → ${newStock}`);
+          } catch (stockError) {
+            console.error('Failed to reverse stock:', stockError);
+            toast.error('Expense deleted but failed to reverse stock. Please update manually.');
+          }
+        } else {
+          toast.success('Expense deleted successfully');
+        }
+      } else {
+        toast.success('Expense deleted successfully');
+      }
+      
       setShowDeleteConfirm(null);
       loadExpenses();
       loadStats();
@@ -502,7 +785,7 @@ export const Expenses: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => setShowEditExpense(expense)}
-                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200"
+                          className="p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors duration-200"
                           title="Edit expense"
                         >
                           <Edit className="h-4 w-4" />
@@ -625,14 +908,19 @@ export const Expenses: React.FC = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
-                      <input
-                        type="text"
-                        value={newExpense.product_name}
-                        onChange={(e) => setNewExpense({ ...newExpense, product_name: e.target.value })}
-                        placeholder="Enter product or service name"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      <ProductSelector
+                        products={products || []}
+                        selectedProduct={selectedProduct}
+                        onSelectProduct={handleProductSelect}
+                        placeholder="Search for a product or enter custom name..."
+                        label="Product Name"
                         required
+                        allowCustom={true}
+                        onCustomProductName={(name) => {
+                          if (name) {
+                            setNewExpense(prev => ({ ...prev, product_name: name, product_id: undefined }));
+                          }
+                        }}
                       />
                     </div>
                     
@@ -782,14 +1070,23 @@ export const Expenses: React.FC = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
-                      <input
-                        type="text"
-                        value={showEditExpense?.product_name || ''}
-                        onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, product_name: e.target.value })}
-                        placeholder="Enter product or service name"
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      <ProductSelector
+                        products={products || []}
+                        selectedProduct={editSelectedProduct}
+                        onSelectProduct={handleEditProductSelect}
+                        placeholder="Search for a product or enter custom name..."
+                        label="Product Name"
                         required
+                        allowCustom={true}
+                        onCustomProductName={(name) => {
+                          if (showEditExpense && name) {
+                            setShowEditExpense({ 
+                              ...showEditExpense, 
+                              product_name: name, 
+                              product_id: undefined 
+                            });
+                          }
+                        }}
                       />
                     </div>
                     

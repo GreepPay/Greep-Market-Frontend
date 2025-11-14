@@ -115,7 +115,7 @@ export const CheckoutLoader: React.FC<CheckoutLoaderProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl border border-gray-100 dark:border-gray-700">
         {/* Header with cancel button */}
         <div className="flex items-center justify-between mb-6">

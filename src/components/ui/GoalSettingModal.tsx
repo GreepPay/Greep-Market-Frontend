@@ -110,7 +110,6 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
       setDailyGoal(dailyGoalData);
       // Save to localStorage as backup
       localStorage.setItem(`goal_daily_${user.store_id}`, JSON.stringify(dailyGoalData));
-      console.log('💾 Saved daily goal to localStorage backup from modal');
 
       // 2) Persist Monthly Goal for this month (create or update)
       const monthlyPayload = {
@@ -147,7 +146,6 @@ export const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
       setMonthlyGoal(monthlyGoalData);
       // Save to localStorage as backup
       localStorage.setItem(`goal_monthly_${user.store_id}`, JSON.stringify(monthlyGoalData));
-      console.log('💾 Saved monthly goal to localStorage backup from modal');
 
       toast.success('Goals saved for today/this month!');
       onClose();

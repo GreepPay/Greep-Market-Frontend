@@ -84,7 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle token expiration - redirect to login
   const handleTokenExpiration = () => {
-    console.log('Token expired - redirecting to login');
     dispatch({ type: 'AUTH_LOGOUT' });
     toast.error('Your session has expired. Please sign in again.', {
       duration: 4000,
@@ -107,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check for existing authentication on app load
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('Starting authentication check...');
       
       try {
         dispatch({ type: 'AUTH_START' });
@@ -118,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Token is valid, get user data
           try {
             const user = await apiService.getCurrentUser();
-            console.log('getCurrentUser success:', user);
             dispatch({ type: 'AUTH_SUCCESS', payload: user });
             
             // Show warning if there are connectivity issues
@@ -136,7 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } else {
           // Token is invalid or authentication failed
-          console.log('Authentication check failed:', authResult.error);
           
           if (authResult.shouldRedirect) {
             // Clear tokens and redirect to login
@@ -163,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     // Prevent multiple simultaneous login attempts
     if (state.isLoading) {
-      console.log('Login already in progress, skipping duplicate attempt');
       return;
     }
 

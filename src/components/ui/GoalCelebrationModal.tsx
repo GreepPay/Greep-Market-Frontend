@@ -65,7 +65,7 @@ export const GoalCelebrationModal: React.FC<GoalCelebrationModalProps> = ({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center pt-0 px-4 pb-4 z-50">
         {/* Simple Confetti */}
         {showConfetti && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden">

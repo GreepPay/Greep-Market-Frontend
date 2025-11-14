@@ -101,7 +101,6 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
 
       // Use provided analytics data if available, otherwise load from API
       if (providedAnalyticsData) {
-        console.log('Performance Dashboard: Using provided analytics data');
         dashboardMetrics = providedAnalyticsData.dashboardAnalytics;
         salesAnalytics = providedAnalyticsData.salesAnalytics || null;
         
@@ -111,7 +110,6 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
           store_id: storeId,
           dateRange: 'today'
         }).catch(err => {
-          console.warn('Failed to load today data for Performance Dashboard:', err);
           return null;
         });
         
@@ -122,31 +120,22 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
             todaySales: todayData.todaySales,
             totalTransactions: todayData.totalTransactions || dashboardMetrics?.totalTransactions
           };
-          console.log('Performance Dashboard: Updated with today data:', {
-            todaySales: todayData.todaySales,
-            totalTransactions: todayData.totalTransactions
-          });
         }
         
         goals = await apiService.isAuthenticated() ?
           apiService.getGoals({ store_id: storeId, is_active: true }).catch(err => {
-            console.warn('Failed to load goals:', err);
             return [];
           }) : Promise.resolve([]);
       } else {
-        console.log('Performance Dashboard: Loading data from API (fallback)');
         // Load real data from existing API methods and goals
         const [dashboardData, salesData, goalsData] = await Promise.all([
           apiService.getDashboardAnalytics({ store_id: storeId }).catch(err => {
-            console.warn('Failed to load dashboard analytics:', err);
             return null;
           }),
           apiService.getSalesAnalytics({ store_id: storeId }).catch(err => {
-            console.warn('Failed to load sales analytics:', err);
             return null;
           }),
           apiService.isAuthenticated() ? apiService.getGoals({ store_id: storeId, is_active: true }).catch(err => {
-            console.warn('Failed to load goals:', err);
             return [];
           }) : Promise.resolve([])
         ]);
@@ -164,49 +153,21 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       // Set default goals in localStorage if not available
       if (!dailyGoal && !localStorage.getItem('local_daily_goal')) {
         localStorage.setItem('local_daily_goal', '5000'); // ₺5,000 for 25% progress with ₺1,264
-        console.log('Set default daily goal in localStorage: ₺5,000');
       }
       if (!monthlyGoal && !localStorage.getItem('local_monthly_goal')) {
         localStorage.setItem('local_monthly_goal', '140000'); // ₺140,000 for 6% progress with ₺8,301
-        console.log('Set default monthly goal in localStorage: ₺140,000');
       }
 
       // Debug logging with detailed information
-      console.log('Performance Dashboard Data:', {
-        dashboardMetrics,
-        salesAnalytics,
-        goals,
-        storeId,
-        isAuthenticated: apiService.isAuthenticated(),
-        dailyGoal,
-        monthlyGoal
-      });
 
       // Log specific field values to debug
       if (dashboardMetrics) {
-        console.log('Dashboard Metrics Details:', {
-          todaySales: dashboardMetrics.todaySales,
-          monthlySales: dashboardMetrics.monthlySales,
-          totalSales: dashboardMetrics.totalSales,
-          totalTransactions: dashboardMetrics.totalTransactions
-        });
       }
 
       // Use goal progress from GoalContext instead of calculating our own
       // The GoalContext has the correct daily/monthly data with proper date ranges
       const goalContextDailyProgress = dailyProgress?.progress_percentage || 0;
       const goalContextMonthlyProgress = monthlyProgress?.progress_percentage || 0;
-
-      console.log('PerformanceDashboard goal calculation (using GoalContext data):', {
-        goalContextDailyProgress,
-        goalContextMonthlyProgress,
-        goalContextDailyAmount: dailyProgress?.current_amount,
-        goalContextMonthlyAmount: monthlyProgress?.current_amount,
-        dashboardTodaySales: dashboardMetrics?.todaySales,
-        dashboardMonthlySales: dashboardMetrics?.monthlySales,
-        dailyTarget: dailyGoal?.target_amount,
-        monthlyTarget: monthlyGoal?.target_amount
-      });
 
       // Check if we have any meaningful data
       const hasData = (dashboardMetrics?.todaySales && dashboardMetrics.todaySales > 0) ||
@@ -218,20 +179,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         (localStorage.getItem('local_monthly_goal')) ||
         (salesAnalytics && Object.keys(salesAnalytics).length > 0);
 
-      console.log('Data validation check:', {
-        hasData,
-        todaySales: dashboardMetrics?.todaySales,
-        monthlySales: dashboardMetrics?.monthlySales,
-        totalSales: dashboardMetrics?.totalSales,
-        dailyGoalAmount: dailyGoal?.target_amount,
-        monthlyGoalAmount: monthlyGoal?.target_amount,
-        localDailyGoal: localStorage.getItem('local_daily_goal'),
-        localMonthlyGoal: localStorage.getItem('local_monthly_goal'),
-        salesAnalyticsKeys: salesAnalytics ? Object.keys(salesAnalytics) : 'null'
-      });
-
       if (!hasData) {
-        console.log('No meaningful data found, setting empty performance data');
         // Set empty performance data when no real data exists
         const emptyData: PerformanceData = {
           daily: {
@@ -318,8 +266,6 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         ]
       };
 
-      console.log('Created performance data:', performanceData);
-
       setPerformanceData(performanceData);
     } catch (error) {
       console.error('Failed to load performance data:', error);
@@ -342,10 +288,8 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
 
   // Add a method to manually refresh data
   const refreshData = useCallback(() => {
-    console.log('Manually refreshing performance data...');
     loadPerformanceData();
   }, [loadPerformanceData]);
-
 
   const calculateGrowth = (current: number, previous: number) => {
     if (previous === 0) return 0;

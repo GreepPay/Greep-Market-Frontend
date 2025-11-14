@@ -35,7 +35,6 @@ class ApiService {
 
   // Development utility: Force token expiration for testing
   forceTokenExpiration() {
-    console.log('Forcing token expiration for testing...');
     this.clearTokens();
   }
 
@@ -71,13 +70,11 @@ class ApiService {
       const isValid = payload.exp > now;
       
       if (!isValid) {
-        console.log('Token is expired, clearing tokens');
         this.clearTokensSilently();
       }
       
       return isValid;
     } catch (error) {
-      console.log('Token validation failed:', error);
       // Clear tokens if they're malformed or invalid
       this.clearTokensSilently();
       return false;
@@ -120,12 +117,9 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
-    console.log(`Making API request to: ${url}`);
-    
+
     // Validate access token before making request
     if (this.accessToken && !this.isTokenValid(this.accessToken)) {
-      console.log('Access token is invalid, clearing tokens');
       this.clearTokensSilently();
       throw new Error('Authentication token is invalid or expired');
     }
@@ -181,13 +175,10 @@ class ApiService {
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('Received 401 Unauthorized - handling token expiration');
           if (this.refreshToken && this.isTokenValid(this.refreshToken)) {
             // Try to refresh token
-            console.log('Attempting to refresh token...');
             const refreshed = await this.refreshAccessToken();
             if (refreshed) {
-              console.log('Token refreshed successfully, retrying request');
               // Retry the original request
               config.headers = {
                 ...config.headers,
@@ -198,7 +189,6 @@ class ApiService {
             }
           }
           // If refresh fails or no refresh token, clear all tokens and trigger logout
-          console.log('Token refresh failed or no refresh token - clearing tokens and redirecting to login');
           this.clearTokens();
         }
         throw new Error(data.error?.message || 'Request failed');
@@ -206,16 +196,14 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
-      
       // Handle different types of errors
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          console.error('Request timed out after 10 seconds');
-          throw new Error('Request timed out. Please check your connection and try again.');
+          // Silently handle abort errors - they're expected when requests are cancelled
+          throw error; // Re-throw to let caller handle it
         } else if (error.message.includes('Failed to fetch')) {
           console.error('Network error - server might be down');
-          throw new Error('Unable to connect to server. Please check if the backend is running.');
+          throw new Error('Connection issue. Please try again.');
         } else if (error.message.includes('Authentication token is invalid or expired')) {
           console.error('Token validation failed before request');
           // Token expiration callback will be triggered by clearTokens()
@@ -260,7 +248,6 @@ class ApiService {
     localStorage.setItem('access_token', accessToken);
     localStorage.setItem('refresh_token', refreshToken);
   }
-
 
   // Authentication
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -322,8 +309,7 @@ class ApiService {
     if (params?.tags && params.tags.length > 0) queryParams.append('tags', params.tags.join(','));
 
     const response = await this.privateRequest<{ success: boolean; data: { products: Product[]; total: number } }>(`/products?${queryParams}`) as any;
-    
-    
+
     // Handle response structure
     let data;
     if (response.data?.products) {
@@ -392,7 +378,6 @@ class ApiService {
   async updateProduct(id: string, updates: Partial<Product>, images?: File[], replaceImages: boolean = true): Promise<Product> {
     // If there are images, use FormData, otherwise use JSON
     if (images && images.length > 0) {
-      console.log('Using FormData for image update', { replaceImages });
       const formData = new FormData();
       
       // Add all the product updates as form data
@@ -444,7 +429,6 @@ class ApiService {
     change_reason?: string;
     changed_by: string;
   }): Promise<{ product: Product; priceHistory: PriceHistory[] }> {
-    console.log('Updating product price:', { id, data });
     
     // Use the standard product update endpoint
     const response = await this.privateRequest<Product>(`/products/${id}`, {
@@ -467,7 +451,6 @@ class ApiService {
       const response = await this.privateRequest<PriceHistory[]>(`/products/${productId}/price-history`);
       return response.data;
     } catch (error) {
-      console.warn('Price history endpoint not available, returning empty array');
       // Return empty array if the endpoint doesn't exist yet
       return [];
     }
@@ -483,9 +466,7 @@ class ApiService {
     const response = await this.privateRequest<{ success: boolean; data: { deletedCount: number } }>(`/products/bulk/all?store_id=${storeId}`, {
       method: 'DELETE',
     });
-    
-    console.log('Delete all products response:', response);
-    
+
     // Handle the nested response structure
     const data = response.data?.data || response.data;
     
@@ -499,7 +480,6 @@ class ApiService {
 
   // Export products to JSON file
   async exportProducts(storeId: string): Promise<Blob> {
-    console.log('Exporting products for store:', storeId);
     
     const response = await fetch(`${API_BASE_URL}/products/export?store_id=${storeId}`, {
       method: 'GET',
@@ -517,7 +497,6 @@ class ApiService {
 
   // Import products from JSON file
   async importProducts(storeId: string, file: File): Promise<{ imported: number; errors: string[] }> {
-    console.log('Importing products for store:', storeId);
     
     const formData = new FormData();
     formData.append('file', file);
@@ -528,8 +507,6 @@ class ApiService {
       body: formData,
     });
 
-    console.log('Import response:', response);
-    
     // Handle the nested response structure
     const data = response.data?.data || response.data;
     
@@ -721,25 +698,9 @@ class ApiService {
     queryParams.append('_t', Date.now().toString());
     
     const url = `/analytics/dashboard?${queryParams}`;
-    console.log('🔍 API getDashboardAnalytics call:', {
-      params,
-      queryParams: queryParams.toString(),
-      url,
-      timestamp: new Date().toISOString()
-    });
     
     const response = await this.privateRequest<{ success: boolean; data: DashboardMetrics }>(url);
-    
-    console.log('🔍 API getDashboardAnalytics response:', {
-      success: response.success,
-      dataKeys: (response as any).data ? Object.keys((response as any).data) : 'No data',
-      totalExpenses: (response as any).data?.totalExpenses,
-      monthlyExpenses: (response as any).data?.monthlyExpenses,
-      totalSales: (response as any).data?.totalSales,
-      totalTransactions: (response as any).data?.totalTransactions,
-      timestamp: new Date().toISOString()
-    });
-    
+
     return (response as any).data;
   }
 
@@ -765,24 +726,9 @@ class ApiService {
     if (endDate) queryParams.append('end_date', endDate.toISOString().split('T')[0]);
 
     const url = `/analytics/products?${queryParams}`;
-    console.log('🔍 API getProductPerformance call:', {
-      store_id,
-      period,
-      startDate: startDate?.toISOString(),
-      endDate: endDate?.toISOString(),
-      queryParams: queryParams.toString(),
-      url,
-      timestamp: new Date().toISOString()
-    });
 
     const response = await this.privateRequest(url);
-    
-    console.log('🔍 API getProductPerformance response:', {
-      hasData: !!response.data,
-      dataKeys: response.data ? Object.keys(response.data) : [],
-      timestamp: new Date().toISOString()
-    });
-    
+
     return response.data;
   }
 
@@ -928,6 +874,7 @@ class ApiService {
     store_id: string;
     date: string;
     product_name: string;
+    product_id?: string; // Optional: link to product for stock sync
     unit: string;
     quantity: number;
     amount: number;
@@ -948,6 +895,7 @@ class ApiService {
   async updateExpense(expenseId: string, expenseData: {
     date?: string;
     product_name?: string;
+    product_id?: string; // Optional: link to product for stock sync
     unit?: string;
     quantity?: number;
     amount?: number;
@@ -1211,20 +1159,16 @@ class ApiService {
   }
 
   async markNotificationAsRead(notificationId: string): Promise<{ success: boolean }> {
-    console.log('Marking notification as read:', notificationId);
     const response = await this.privateRequest<{ success: boolean }>(`/notifications/${notificationId}/read`, {
       method: 'PUT'
     });
-    console.log('Mark as read API response:', response);
     return response;
   }
 
   async markAllNotificationsAsRead(): Promise<{ success: boolean }> {
-    console.log('Marking all notifications as read');
     const response = await this.privateRequest<{ success: boolean }>('/notifications/read-all', {
       method: 'PUT'
     });
-    console.log('Mark all as read API response:', response);
     return response;
   }
 

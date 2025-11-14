@@ -46,15 +46,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // Apply theme to document
   useEffect(() => {
     const isDark = theme === 'dark' || (theme === 'auto' && systemTheme === 'dark');
-    
-    console.log('Theme changed:', { theme, systemTheme, isDark });
-    
+
     if (isDark) {
       document.documentElement.classList.add('dark');
-      console.log('Added dark class to document');
     } else {
       document.documentElement.classList.remove('dark');
-      console.log('Removed dark class from document');
     }
   }, [theme, systemTheme]);
 

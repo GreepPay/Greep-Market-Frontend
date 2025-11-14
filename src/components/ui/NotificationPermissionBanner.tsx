@@ -86,4 +86,3 @@ export const NotificationPermissionBanner: React.FC<NotificationPermissionBanner
   );
 };
 
-
