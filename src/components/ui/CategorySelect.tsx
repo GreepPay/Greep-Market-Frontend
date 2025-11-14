@@ -232,5 +232,3 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
 
 export default CategorySelect;
 
-
-

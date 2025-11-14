@@ -56,7 +56,6 @@ export const Header: React.FC = () => {
     setShowUserMenu(false);
   };
 
-
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-white/20 dark:border-gray-700/50 px-4 py-3 shadow-sm transition-colors duration-300">
       <div className="flex items-center justify-between">

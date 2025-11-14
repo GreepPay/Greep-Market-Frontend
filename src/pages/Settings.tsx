@@ -132,19 +132,16 @@ export const Settings: React.FC = () => {
   const loadStoreSettings = useCallback(async () => {
     // Check if user is authenticated
     if (!currentUser) {
-      console.log('No user found, skipping store settings load');
       return;
     }
 
     // Use fallback store_id if user doesn't have one
     const storeId = currentUser?.store_id || 'default-store';
-    console.log('Loading store settings for storeId:', storeId, 'user:', currentUser.email);
     
     try {
       setStoreSettingsLoading(true);
       const settings = await apiService.getStoreSettings(storeId);
       setStoreSettings(settings);
-      console.log('Store settings loaded successfully:', settings);
     } catch (error) {
       console.error('Failed to load store settings:', error);
       setStoreSettings(null);
@@ -172,7 +169,6 @@ export const Settings: React.FC = () => {
 
     // Use fallback store_id if user doesn't have one
     const storeId = currentUser?.store_id || 'default-store';
-    console.log('Saving store settings for storeId:', storeId, 'user:', currentUser.email);
 
     try {
       setStoreSettingsLoading(true);
@@ -231,7 +227,6 @@ export const Settings: React.FC = () => {
   const handleProfileUpdated = (updatedUser: User) => {
     // Update the current user in the auth context
     // This will be handled by the AuthContext when we implement it
-    console.log('Profile updated:', updatedUser);
   };
 
   const renderMyProfile = () => (
@@ -703,10 +698,6 @@ export const Settings: React.FC = () => {
     </div>
   );
 
-
-
-
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
@@ -774,7 +765,7 @@ export const Settings: React.FC = () => {
 
       {/* Add User Modal */}
       {showAddUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Add New User</h3>
             <form onSubmit={handleAddUser} className="space-y-4">
@@ -880,7 +871,7 @@ export const Settings: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Delete User</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this user? This action cannot be undone.</p>

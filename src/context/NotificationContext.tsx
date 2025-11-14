@@ -43,7 +43,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, []);
 
-
   const clearAll = useCallback(() => {
     setNotifications([]);
   }, []);
@@ -93,9 +92,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (!isAuthenticated || !user) return;
     
     try {
-      console.log('Refreshing notifications...');
       const response = await apiService.getNotifications({ limit: 50 });
-      console.log('Notifications refresh response:', response);
       
       const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
         id: notif._id,
@@ -108,7 +105,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         data: notif.data,
       }));
       
-      console.log('Processed notifications:', backendNotifications);
       setNotifications(backendNotifications);
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
@@ -129,7 +125,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Sync with backend
     try {
       const response = await apiService.markNotificationAsRead(id);
-      console.log('Mark as read response:', response);
       
       // Refresh notifications to ensure UI is in sync with backend
       await refreshNotifications();
@@ -156,7 +151,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Sync with backend
     try {
       const response = await apiService.markAllNotificationsAsRead();
-      console.log('Mark all as read response:', response);
       
       // Refresh notifications to ensure UI is in sync with backend
       await refreshNotifications();

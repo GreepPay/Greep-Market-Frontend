@@ -37,7 +37,6 @@ export class NotificationManager {
 
   public async requestPermission(): Promise<boolean> {
     if (!('Notification' in window)) {
-      console.warn('This browser does not support notifications');
       return false;
     }
 
@@ -47,7 +46,6 @@ export class NotificationManager {
     }
 
     if (Notification.permission === 'denied') {
-      console.warn('Notification permission denied');
       return false;
     }
 
@@ -60,13 +58,11 @@ export class NotificationManager {
     if (!this.permissionGranted) {
       const granted = await this.requestPermission();
       if (!granted) {
-        console.warn('Cannot show notification: permission not granted');
         return;
       }
     }
 
     if (!('Notification' in window)) {
-      console.warn('This browser does not support notifications');
       return;
     }
 
@@ -131,7 +127,6 @@ export class NotificationManager {
         osc.stop(audioContext.currentTime + index * duration + duration);
       });
     } catch (error) {
-      console.warn('Could not play notification sound:', error);
       // Fallback: try to play a simple beep
       this.playFallbackSound();
     }
@@ -157,7 +152,6 @@ export class NotificationManager {
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.3);
     } catch (error) {
-      console.warn('Could not play fallback sound:', error);
     }
   }
 
@@ -175,5 +169,4 @@ export class NotificationManager {
 
 // Export singleton instance
 export const notificationManager = NotificationManager.getInstance();
-
 

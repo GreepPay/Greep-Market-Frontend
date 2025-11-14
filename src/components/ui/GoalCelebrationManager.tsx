@@ -21,4 +21,3 @@ export const GoalCelebrationManager: React.FC = () => {
   );
 };
 
-

@@ -85,9 +85,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   // ✅ FIXED: Ensure we store an array, not an object
   const loadStores = async () => {
     try {
-      console.log('🔄 Loading stores for assignment...');
       const response: any = await apiService.getStoresForAssignment();
-      console.log('✅ Stores API raw response:', response);
 
       // Handle both formats safely
       const storeArray: Store[] = Array.isArray(response)
@@ -98,9 +96,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         ? response.data.data
         : [];
 
-      console.log('📊 Stores loaded:', storeArray.length);
       setStores(storeArray);
-      console.log('🎯 Stores state set:', storeArray);
     } catch (error) {
       console.error('❌ Failed to load stores:', error);
       toast.error('Failed to load stores for assignment');

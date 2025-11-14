@@ -110,30 +110,24 @@ export const AdminCustomerOrders: React.FC = () => {
   // Load orders and stats
   const loadOrders = async () => {
     try {
-      console.log('🔍 Loading customer orders from API...');
       const response = await apiService.request('/admin/customer-orders', {
         method: 'GET',
       });
-      
-      console.log('🔍 API Response:', response);
-      
+
       if (!response.success) throw new Error('Failed to load orders');
       
       const data = response.data as { orders: CustomerOrder[]; stats: OrderStats };
-      console.log('🔍 Parsed Data:', data);
       
       setOrders(data.orders || []);
       setStats(data.stats || null);
     } catch (error) {
       console.error('Error loading orders:', error);
-      console.log('🔍 Setting empty orders array due to error');
       
       // Set empty data instead of leaving undefined
       setOrders([]);
       setStats(null);
       
       // Add some sample data for testing the UI
-      console.log('🔍 Adding sample data for testing...');
       const sampleOrders: CustomerOrder[] = [
         {
           _id: 'sample1',
@@ -611,7 +605,7 @@ Thank you! 🙏`;
 
       {/* Order Detail Modal */}
       {isDetailModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center pt-0 px-4 pb-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

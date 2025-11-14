@@ -32,7 +32,6 @@ class ErrorBoundary extends Component<Props, State> {
 
     // Check if this is an authentication-related error
     if (this.isAuthenticationError(error)) {
-      console.log('Authentication error detected, clearing tokens and redirecting to login');
       
       // Clear any stored tokens
       localStorage.removeItem('access_token');

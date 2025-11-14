@@ -29,7 +29,6 @@ export function usePageRefresh(options: UsePageRefreshOptions = {}) {
   const throttledRefresh = async () => {
     const now = Date.now();
     if (now - lastRefreshRef.current < refreshCooldown) {
-      console.log('Refresh throttled: Too soon since last refresh');
       return;
     }
     lastRefreshRef.current = now;

@@ -67,7 +67,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setStores([realStore]);
           setCurrentStore(realStore);
         } catch (apiError) {
-          console.warn('Failed to load store settings from API, using fallback:', apiError);
           // Fallback to default store if API fails
           const fallbackStore: Store = {
             _id: user.store_id,
@@ -104,7 +103,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('current_store_id', storeId);
     }
   };
-
 
   const refreshStores = async () => {
     await loadStores();

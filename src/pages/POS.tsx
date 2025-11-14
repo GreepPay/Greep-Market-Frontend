@@ -18,6 +18,7 @@ import { useGoals } from '../context/GoalContext';
 import { useNotifications } from '../context/NotificationContext';
 import { TransactionItem } from '../types';
 import { usePageRefresh } from '../hooks/usePageRefresh';
+import Receipt from '../components/ui/Receipt';
 
 export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts, updateProduct } = useApp();
@@ -25,8 +26,7 @@ export const POS: React.FC = () => {
   const { riders, loadRiders } = useRiders();
   const { updateGoalProgress } = useGoals();
   const { refreshNotifications } = useNotifications();
-  
-  
+
   // Enable automatic refresh for POS (conservative settings)
   usePageRefresh({
     refreshOnMount: true,
@@ -49,7 +49,15 @@ export const POS: React.FC = () => {
     if (isAuthenticated && user && searchInputRef.current) {
       // Small delay to ensure the component is fully rendered
       const timer = setTimeout(() => {
-        searchInputRef.current?.focus();
+        try {
+          // Safely focus the input, ignoring browser extension errors
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+          }
+        } catch (error) {
+          // Silently ignore focus errors from browser extensions
+          // These are typically harmless and don't affect functionality
+        }
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -90,6 +98,9 @@ export const POS: React.FC = () => {
   const [restockQuantity, setRestockQuantity] = useState('');
   const [restockContext, setRestockContext] = useState<'addToCart' | 'updateQty' | 'checkout' | null>(null);
   const cartLoadedRef = useRef(false);
+  const [receiptTransaction, setReceiptTransaction] = useState<any | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   // Cart persistence functions
   const CART_STORAGE_KEY = 'pos_cart_items';
@@ -144,12 +155,9 @@ export const POS: React.FC = () => {
 
   const filteredProducts = useMemo(() => {
     if (!products || !Array.isArray(products)) {
-      console.log('POS - No products or products not array:', products);
       return [];
     }
-    console.log('POS - Total products available:', products.length);
     if (!searchQuery.trim()) {
-      console.log('POS - Returning all products:', products.length);
       return products;
     }
     
@@ -158,7 +166,6 @@ export const POS: React.FC = () => {
       product.name.toLowerCase().includes(searchLower) ||
       product.barcode?.toLowerCase().includes(searchLower)
     );
-    console.log('POS - Filtered products:', filtered.length);
     return filtered;
   }, [products, searchQuery]);
 
@@ -190,7 +197,6 @@ export const POS: React.FC = () => {
   };
 
   const addToCart = (product: any) => {
-    console.log('Adding product to cart:', product);
     
     if (product.stock_quantity <= 0) {
       toast.error(`${product.name} has insufficient stock (${product.stock_quantity}). Increase stock and try again.`);
@@ -206,7 +212,6 @@ export const POS: React.FC = () => {
         openRestockModal(product, 'addToCart');
         return;
       }
-      console.log('Updating existing item quantity');
       updateCartItemQuantity(product._id, existingItem.quantity + 1);
     } else {
       const newItem: TransactionItem = {
@@ -220,14 +225,12 @@ export const POS: React.FC = () => {
           ? (product.images.find((img: any) => img.is_primary)?.url || product.images[0].url)
           : undefined,
       };
-      console.log('Adding new item to cart:', newItem);
       setCartItems([...cartItems, newItem]);
       toast.success(`Added ${product.name} to cart`);
     }
   };
 
   const updateCartItemQuantity = (productId: string, quantity: number) => {
-    console.log('Updating cart item quantity:', productId, quantity);
     
     // Prevent quantity from going to 0 - set minimum to 0.01
     if (quantity <= 0) {
@@ -252,7 +255,6 @@ export const POS: React.FC = () => {
         : item
     );
     
-    console.log('Updated cart items:', updatedItems);
     setCartItems(updatedItems);
   };
 
@@ -386,11 +388,15 @@ export const POS: React.FC = () => {
       const transaction = {
         store_id: storeId,
         cashier_id: user.id,
-        items: cartItems.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
+        items: cartItems.map(item => {
+          const product = products?.find(p => p._id === item.product_id);
+          return {
+            product_id: item.product_id,
+            product_name: product?.name || item.product_id,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+          };
+        }),
         discount_amount: parseFloat(discount) || 0,
         payment_method: primaryPaymentMethod.type, // Keep for backward compatibility
         payment_methods: paymentData.payment_methods, // Save ALL payment methods
@@ -401,18 +407,10 @@ export const POS: React.FC = () => {
         notes: paymentData.notes,
       };
 
-      console.log('🔍 Creating enhanced transaction with payment methods:', {
-        transaction,
-        paymentMethods: paymentData.payment_methods,
-        totalPaymentMethods: paymentData.payment_methods.length,
-        primaryPaymentMethod: primaryPaymentMethod
-      });
-      
       // Process transaction and inventory updates
       await Promise.all([
         addTransaction(transaction),
         updateGoalProgress(),
-        // Update inventory for all sold items
         ...cartItems.map(async (item) => {
           if (products && Array.isArray(products)) {
             const product = products.find(p => p._id === item.product_id);
@@ -423,15 +421,23 @@ export const POS: React.FC = () => {
         })
       ]);
 
-      // Trigger notification refresh to get new milestone notifications
+      setReceiptTransaction({
+        ...transaction,
+        // Patch in subtotal, total_amount if available (may come from cart calculations)
+        subtotal: cartTotal,
+        total_amount: finalTotal,
+        created_at: new Date(), // for display
+      });
+      setIsReceiptModalOpen(true);
+
       setTimeout(() => {
         refreshNotifications();
-      }, 2000); // Wait 2 seconds for backend to process
+      }, 2000);
 
-      // Clear cart and close modal
-      clearCart();
+      // Clear cart and close modal (not before showing receipt)
+      clearCart();  // optionally consider deferring clear until receipt close
       setIsPaymentModalOpen(false);
-      setDiscount('');
+      setIsProcessingPayment(false);
 
       const paymentMethodsText = paymentData.payment_methods.map(pm => 
         `${pm.type.charAt(0).toUpperCase() + pm.type.slice(1)}: ₺${pm.amount.toFixed(2)}`
@@ -454,7 +460,6 @@ export const POS: React.FC = () => {
       setIsProcessingPayment(false);
     }
   };
-
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -707,6 +712,20 @@ export const POS: React.FC = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Receipt Modal */}
+      <Modal
+        isOpen={isReceiptModalOpen}
+        onClose={() => setIsReceiptModalOpen(false)}
+        title="Sales Receipt"
+        size="md"
+      >
+        <Receipt
+          ref={receiptRef}
+          transaction={receiptTransaction}
+          onClose={() => setIsReceiptModalOpen(false)}
+        />
       </Modal>
     </div>
   );

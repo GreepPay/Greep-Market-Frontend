@@ -139,7 +139,6 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
           const rawValue = row[columnIndex];
           
           // Debug: Log the raw value and field mapping
-          console.log(`Row ${i + 1}, Column ${columnIndex}: "${rawValue}" -> ${productField}`);
           
             // Process all values, including empty ones for required fields
             if (rawValue !== undefined && rawValue !== null) {
@@ -211,7 +210,6 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         );
         
         if (missingFields.length > 0) {
-          console.warn(`Product ${i + 1} missing required fields:`, missingFields);
           // Set defaults for any still missing fields
           missingFields.forEach(field => {
             switch (field) {
@@ -258,16 +256,6 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
             batch.map(async (product, batchIndex) => {
               try {
                 // Debug: Log the product data being sent
-                console.log(`Importing product ${batchStartIndex + batchIndex + 1}:`, {
-                  name: product.name,
-                  price: product.price,
-                  category: product.category,
-                  sku: product.sku,
-                  stock_quantity: product.stock_quantity,
-                  store_id: product.store_id,
-                  created_by: product.created_by,
-                  hasAllRequiredFields: !!(product.name && product.price !== undefined && product.category && product.sku && product.stock_quantity !== undefined && product.store_id && product.created_by)
-                });
                 await apiService.createProduct(product);
                 successCount++;
                 setImportedCount(successCount);
@@ -330,7 +318,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center pt-0 px-4 pb-4 z-50">
       <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">

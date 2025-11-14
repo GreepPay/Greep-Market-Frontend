@@ -45,7 +45,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     }).format(price);
   };
 
-
   const highlightSearchTerm = (text: string, term: string) => {
     if (!term || !text) return text;
     
