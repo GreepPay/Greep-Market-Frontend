@@ -16,7 +16,100 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, 
   if (!transaction) return null;
 
   return (
-    <div ref={ref} className={`receipt-popup bg-white dark:bg-gray-800 p-6 rounded shadow-md max-w-md mx-auto text-gray-900 dark:text-white`}>
+    <>
+      <style>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 0.8cm;
+          }
+          
+          html, body {
+            width: 100%;
+            height: auto;
+            margin: 0;
+            padding: 0;
+            overflow: visible;
+          }
+          
+          body * {
+            visibility: hidden;
+          }
+          
+          .receipt-print-content,
+          .receipt-print-content * {
+            visibility: visible !important;
+          }
+          
+          .receipt-print-content {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0.8cm !important;
+            background: white !important;
+            color: black !important;
+            box-shadow: none !important;
+            border: none !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            overflow: visible !important;
+            font-size: 11px !important;
+            line-height: 1.3 !important;
+          }
+          
+          .receipt-no-print {
+            display: none !important;
+          }
+          
+          .receipt-print-content h2 {
+            font-size: 16px !important;
+            margin-bottom: 0.3cm !important;
+            color: black !important;
+          }
+          
+          .receipt-print-content div,
+          .receipt-print-content span,
+          .receipt-print-content table,
+          .receipt-print-content th,
+          .receipt-print-content td,
+          .receipt-print-content tr {
+            color: black !important;
+            background: white !important;
+          }
+          
+          .receipt-print-content table {
+            page-break-inside: avoid !important;
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 10px !important;
+            margin-top: 0.2cm !important;
+            margin-bottom: 0.2cm !important;
+          }
+          
+          .receipt-print-content tbody tr {
+            page-break-inside: avoid !important;
+          }
+          
+          .receipt-print-content th,
+          .receipt-print-content td {
+            padding: 0.15cm 0.2cm !important;
+            font-size: 9px !important;
+          }
+          
+          /* Hide everything except receipt content */
+          header,
+          nav,
+          footer,
+          div[class*="fixed"]:not(.receipt-print-content),
+          div[class*="inset"]:not(.receipt-print-content) {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <div ref={ref} className={`receipt-print-content receipt-popup bg-white dark:bg-gray-800 p-6 rounded shadow-md max-w-md mx-auto text-gray-900 dark:text-white`}>
       <h2 className="text-lg font-bold mb-2 text-center text-gray-900 dark:text-white">Greep Market</h2>
       <div className="mb-2 text-xs text-center text-gray-600 dark:text-gray-400">Sales Receipt</div>
       <div className="mb-4 text-sm text-gray-700 dark:text-gray-300">
@@ -69,7 +162,7 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, 
         <span>Total:</span> <span>{formatPrice(transaction.total_amount || 0)}</span>
       </div>
       {transaction.notes && <div className="text-xs mt-2 text-gray-600 dark:text-gray-400 italic">Note: {transaction.notes}</div>}
-      <div className="mt-4 flex justify-center gap-3">
+      <div className="receipt-no-print mt-4 flex justify-center gap-3">
         <button
           className="bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white py-1 px-3 text-xs rounded transition-colors"
           onClick={() => {
@@ -82,7 +175,8 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ transaction, 
           <button className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 px-3 py-1 text-xs rounded transition-colors" onClick={onClose}>Close</button>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 });
 

@@ -765,8 +765,8 @@ export const Settings: React.FC = () => {
 
       {/* Add User Modal */}
       {showAddUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center py-8 px-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-700 transition-colors duration-300">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Add New User</h3>
             <form onSubmit={handleAddUser} className="space-y-4">
               <div>
@@ -871,8 +871,8 @@ export const Settings: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 transition-colors duration-300">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center py-8 px-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-700 transition-colors duration-300">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Delete User</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this user? This action cannot be undone.</p>
             <div className="flex justify-end space-x-3">

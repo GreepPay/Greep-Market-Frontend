@@ -8,7 +8,16 @@ import {
   Package,
   Trophy,
   Shield,
-  History
+  History,
+  AlertTriangle,
+  TrendingDown,
+  Clock,
+  RefreshCw,
+  Box,
+  Layers,
+  Activity,
+  Zap,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -75,6 +84,7 @@ export const Reports: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedReport, setSelectedReport] = useState<'sales' | 'inventory' | 'products' | 'performance'>('performance');
   const [isExporting, setIsExporting] = useState(false);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
 
   // Standardized date range calculation
   const getDateRange = (period: string, startDate?: Date, endDate?: Date) => {
@@ -154,12 +164,39 @@ export const Reports: React.FC = () => {
         };
 
         // Load all analytics data with standardized parameters
-        const [dashboardAnalytics, productPerformance, inventoryAnalytics] = await Promise.all([
-          apiService.getDashboardAnalytics(analyticsParams),
-          apiService.getProductPerformance(user.store_id, selectedPeriod, dateRange.startDateObj, dateRange.endDateObj),
-          apiService.getInventoryAnalytics(user.store_id)
+        const [dashboardAnalytics, productPerformance, inventoryAnalytics, transactionsResponse] = await Promise.all([
+          apiService.getDashboardAnalytics(analyticsParams).catch(err => {
+            console.error('Failed to load dashboard analytics:', err);
+            return null;
+          }),
+          apiService.getProductPerformance(user.store_id, selectedPeriod, dateRange.startDateObj, dateRange.endDateObj).catch(err => {
+            console.error('Failed to load product performance:', err);
+            return null;
+          }),
+          apiService.getInventoryAnalytics(user.store_id).catch(err => {
+            console.error('Failed to load inventory analytics:', err);
+            return null;
+          }),
+          apiService.getTransactions({
+            store_id: user.store_id,
+            start_date: dateRange.startDate.split('T')[0],
+            end_date: dateRange.endDate.split('T')[0],
+            limit: 10000, // Get all transactions for the period
+            status: 'all'
+          }).catch(err => {
+            console.error('Failed to load transactions:', err);
+            return { transactions: [] };
+          })
         ]);
 
+        console.log('Analytics Data Loaded:', {
+          dashboardAnalytics: dashboardAnalytics ? '✓' : '✗',
+          productPerformance: productPerformance ? '✓' : '✗',
+          inventoryAnalytics: inventoryAnalytics ? '✓' : '✗',
+          transactions: transactionsResponse?.transactions?.length || 0
+        });
+
+        setAllTransactions(transactionsResponse?.transactions || []);
         setAnalyticsData({ 
           dashboardAnalytics, 
           productPerformance, 
@@ -598,6 +635,627 @@ export const Reports: React.FC = () => {
     { name: 'Out of Stock', value: (products || []).filter(p => (p?.stock_quantity || 0) === 0).length, color: '#ef4444' },
   ];
 
+  // Comprehensive Inventory Calculations
+  const calculateInventoryMetrics = () => {
+    const allProducts = products || [];
+    
+    // Total inventory value
+    const totalInventoryValue = allProducts.reduce((sum, p) => {
+      return sum + ((p.price || 0) * (p.stock_quantity || 0));
+    }, 0);
+
+    // Average stock quantity
+    const avgStockQuantity = allProducts.length > 0
+      ? allProducts.reduce((sum, p) => sum + (p.stock_quantity || 0), 0) / allProducts.length
+      : 0;
+
+    // Total products count
+    const totalProducts = allProducts.length;
+
+    // Stock status breakdown
+    const inStockCount = allProducts.filter(p => (p.stock_quantity || 0) > (p.min_stock_level || 0)).length;
+    const lowStockCount = allProducts.filter(p => (p.stock_quantity || 0) <= (p.min_stock_level || 0) && (p.stock_quantity || 0) > 0).length;
+    const outOfStockCount = allProducts.filter(p => (p.stock_quantity || 0) === 0).length;
+
+    // Low stock products with urgency
+    const lowStockProducts = allProducts
+      .filter(p => {
+        const stock = p.stock_quantity || 0;
+        const min = p.min_stock_level || 0;
+        return stock <= min && stock > 0;
+      })
+      .map(p => {
+        const stock = p.stock_quantity || 0;
+        const min = p.min_stock_level || 0;
+        const percentage = min > 0 ? (stock / min) * 100 : 0;
+        const urgency = stock === 0 ? 'critical' : percentage < 25 ? 'high' : percentage < 50 ? 'medium' : 'low';
+        const reorderQty = Math.max(min * 2 - stock, min);
+        return {
+          ...p,
+          urgency,
+          percentage,
+          reorderQty,
+          stockValue: (p.price || 0) * stock,
+          reorderValue: (p.price || 0) * reorderQty
+        };
+      })
+      .sort((a, b) => {
+        const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+        return (urgencyOrder[a.urgency as keyof typeof urgencyOrder] || 99) - (urgencyOrder[b.urgency as keyof typeof urgencyOrder] || 99);
+      });
+
+    // Out of stock products
+    const outOfStockProducts = allProducts
+      .filter(p => (p.stock_quantity || 0) === 0)
+      .map(p => ({
+        ...p,
+        reorderQty: p.min_stock_level || 10,
+        reorderValue: (p.price || 0) * (p.min_stock_level || 10)
+      }))
+      .sort((a, b) => (b.price || 0) - (a.price || 0)); // Sort by price (most valuable first)
+
+    // Category breakdown with detailed metrics
+    const categoryBreakdown = allProducts.reduce((acc: any, product) => {
+      const category = product.category || 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = {
+          category,
+          productCount: 0,
+          totalValue: 0,
+          totalQuantity: 0,
+          avgPrice: 0,
+          lowStockCount: 0,
+          outOfStockCount: 0,
+          inStockCount: 0
+        };
+      }
+      acc[category].productCount += 1;
+      const stockValue = (product.price || 0) * (product.stock_quantity || 0);
+      acc[category].totalValue += stockValue;
+      acc[category].totalQuantity += (product.stock_quantity || 0);
+      
+      const stock = product.stock_quantity || 0;
+      const min = product.min_stock_level || 0;
+      if (stock === 0) {
+        acc[category].outOfStockCount += 1;
+      } else if (stock <= min) {
+        acc[category].lowStockCount += 1;
+      } else {
+        acc[category].inStockCount += 1;
+      }
+      return acc;
+    }, {});
+
+    Object.keys(categoryBreakdown).forEach(category => {
+      const cat = categoryBreakdown[category];
+      cat.avgPrice = cat.productCount > 0 ? cat.totalValue / cat.totalQuantity : 0;
+    });
+
+    // Calculate fast-moving vs slow-moving (based on recent sales if available)
+    const productSales = analyticsData?.dashboardAnalytics?.topProducts || [];
+    const productSalesMap = new Map<string | number, number>(productSales.map((p: any) => [
+      p.productId || p.product_name || '', 
+      Number(p.quantitySold) || 0
+    ]));
+    
+    const fastMovingProducts = allProducts
+      .filter(p => {
+        const sales = Number(productSalesMap.get(p._id as string)) || Number(productSalesMap.get(p.name as string)) || 0;
+        return sales > 0;
+      })
+      .map(p => {
+        const salesCount = Number(productSalesMap.get(p._id as string)) || Number(productSalesMap.get(p.name as string)) || 0;
+        const stockQty = Number(p.stock_quantity) || 0;
+        return {
+          ...p,
+          salesCount: salesCount,
+          stockValue: (Number(p.price) || 0) * stockQty,
+          turnoverRate: stockQty > 0 
+            ? (salesCount / stockQty) * 100
+            : 0
+        };
+      })
+      .sort((a, b) => Number(b.salesCount) - Number(a.salesCount))
+      .slice(0, 10);
+
+    const slowMovingProducts = allProducts
+      .filter(p => {
+        const sales = Number(productSalesMap.get(p._id as string)) || Number(productSalesMap.get(p.name as string)) || 0;
+        return sales === 0 && (p.stock_quantity || 0) > 0;
+      })
+      .map(p => ({
+        ...p,
+        stockValue: (p.price || 0) * (p.stock_quantity || 0),
+        daysSinceUpdate: p.updated_at 
+          ? Math.floor((new Date().getTime() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+          : 0
+      }))
+      .sort((a, b) => b.stockValue - a.stockValue)
+      .slice(0, 10);
+
+    // Reorder recommendations
+    const reorderRecommendations = [
+      ...lowStockProducts.map(p => ({
+        product: p,
+        type: 'low_stock' as const,
+        priority: p.urgency === 'critical' ? 1 : p.urgency === 'high' ? 2 : 3,
+        quantity: p.reorderQty,
+        estimatedValue: p.reorderValue
+      })),
+      ...outOfStockProducts.map(p => ({
+        product: p,
+        type: 'out_of_stock' as const,
+        priority: 0,
+        quantity: p.reorderQty,
+        estimatedValue: p.reorderValue
+      }))
+    ].sort((a, b) => a.priority - b.priority);
+
+    const totalReorderValue = reorderRecommendations.reduce((sum, r) => sum + r.estimatedValue, 0);
+
+    // Inventory aging (oldest stock first)
+    const agingInventory = allProducts
+      .filter(p => (p.stock_quantity || 0) > 0)
+      .map(p => {
+        const lastUpdate = p.updated_at ? new Date(p.updated_at) : new Date(p.created_at || Date.now());
+        const daysSinceUpdate = Math.floor((new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          ...p,
+          daysSinceUpdate,
+          stockValue: (p.price || 0) * (p.stock_quantity || 0),
+          ageCategory: daysSinceUpdate > 90 ? 'old' : daysSinceUpdate > 30 ? 'medium' : 'new'
+        };
+      })
+      .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate)
+      .slice(0, 20);
+
+    // Stock value distribution
+    const valueDistribution = allProducts.reduce((acc: any, p) => {
+      const value = (p.price || 0) * (p.stock_quantity || 0);
+      if (value === 0) acc.zero++;
+      else if (value < 100) acc.low++;
+      else if (value < 1000) acc.medium++;
+      else if (value < 5000) acc.high++;
+      else acc.veryHigh++;
+      return acc;
+    }, { zero: 0, low: 0, medium: 0, high: 0, veryHigh: 0 });
+
+    return {
+      totalInventoryValue,
+      avgStockQuantity,
+      totalProducts,
+      inStockCount,
+      lowStockCount,
+      outOfStockCount,
+      lowStockProducts,
+      outOfStockProducts,
+      categoryBreakdown: Object.values(categoryBreakdown),
+      fastMovingProducts,
+      slowMovingProducts,
+      reorderRecommendations,
+      totalReorderValue,
+      agingInventory,
+      valueDistribution
+    };
+  };
+
+  const inventoryMetrics = calculateInventoryMetrics();
+
+  // Comprehensive Sales Analytics Calculations
+  const calculateSalesMetrics = () => {
+    // Use transactions from API first, then fallback to context sales
+    const allSales = allTransactions.length > 0 ? allTransactions : (sales || []);
+    const dashboardData = analyticsData?.dashboardAnalytics;
+    const now = new Date();
+    
+    // Filter sales by selected period
+    const dateRange = getDateRange(selectedPeriod, periodStartDate, periodEndDate);
+    const filteredSales = allSales.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      return saleDate >= dateRange.startDateObj && saleDate <= dateRange.endDateObj;
+    });
+    
+    console.log('Calculating Sales Metrics:', {
+      transactionsFromAPI: allTransactions.length,
+      transactionsFromContext: sales?.length || 0,
+      totalUsed: allSales.length,
+      filteredByPeriod: filteredSales.length,
+      period: selectedPeriod,
+      dashboardDataAvailable: !!dashboardData
+    });
+
+    // Use filtered sales for all calculations
+    const salesToUse = filteredSales.length > 0 ? filteredSales : allSales;
+    
+    // Time-based breakdowns
+    const today = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      return saleDate.toDateString() === now.toDateString();
+    });
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdaySales = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      return saleDate.toDateString() === yesterday.toDateString();
+    });
+
+    const thisWeek = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      return saleDate >= weekStart;
+    });
+
+    const lastWeek = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      const lastWeekStart = new Date(now);
+      lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+      lastWeekStart.setHours(0, 0, 0, 0);
+      const lastWeekEnd = new Date(now);
+      lastWeekEnd.setDate(now.getDate() - now.getDay());
+      lastWeekEnd.setHours(0, 0, 0, 0);
+      return saleDate >= lastWeekStart && saleDate < lastWeekEnd;
+    });
+
+    const thisMonth = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+    });
+
+    const lastMonth = salesToUse.filter(sale => {
+      const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+      const lastMonthDate = new Date(now);
+      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      return saleDate.getMonth() === lastMonthDate.getMonth() && saleDate.getFullYear() === lastMonthDate.getFullYear();
+    });
+
+    // Sales amounts
+    const todayAmount = today.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+    const yesterdayAmount = yesterdaySales.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+    const thisWeekAmount = thisWeek.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+    const lastWeekAmount = lastWeek.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+    const thisMonthAmount = thisMonth.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+    const lastMonthAmount = lastMonth.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0);
+
+    // Growth rates
+    const todayGrowth = yesterdayAmount > 0 ? ((todayAmount - yesterdayAmount) / yesterdayAmount) * 100 : (todayAmount > 0 ? 100 : 0);
+    const weekGrowth = lastWeekAmount > 0 ? ((thisWeekAmount - lastWeekAmount) / lastWeekAmount) * 100 : (thisWeekAmount > 0 ? 100 : 0);
+    const monthGrowth = lastMonthAmount > 0 ? ((thisMonthAmount - lastMonthAmount) / lastMonthAmount) * 100 : (thisMonthAmount > 0 ? 100 : 0);
+
+    // Sales by day of week (using filtered sales)
+    const salesByDayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => {
+      const daySales = salesToUse.filter(sale => {
+        const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+        return saleDate.getDay() === index;
+      });
+      return {
+        day,
+        sales: daySales.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0),
+        transactions: daySales.length
+      };
+    });
+
+    // Sales by hour (using filtered sales)
+    const salesByHour = Array.from({ length: 24 }, (_, hour) => {
+      const hourSales = salesToUse.filter(sale => {
+        const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+        return saleDate.getHours() === hour;
+      });
+      return {
+        hour,
+        sales: hourSales.reduce((sum, sale) => sum + (sale.total_amount || sale.totalAmount || sale.amount || 0), 0),
+        transactions: hourSales.length
+      };
+    });
+
+    // Top selling products from sales (using filtered sales)
+    const productSalesMap = new Map<string, { revenue: number; quantity: number; transactions: number }>();
+    salesToUse.forEach(sale => {
+      if (sale.items && Array.isArray(sale.items)) {
+        sale.items.forEach((item: any) => {
+          const productId = item.product_id || item.product_name || 'Unknown';
+          const existing = productSalesMap.get(productId) || { revenue: 0, quantity: 0, transactions: 0 };
+          productSalesMap.set(productId, {
+            revenue: existing.revenue + (item.price || 0) * (item.quantity || 0),
+            quantity: existing.quantity + (item.quantity || 0),
+            transactions: existing.transactions + 1
+          });
+        });
+      }
+    });
+
+    const topSellingProducts = Array.from(productSalesMap.entries())
+      .map(([name, data]) => ({
+        name,
+        revenue: data.revenue,
+        quantity: data.quantity,
+        transactions: data.transactions,
+        avgPrice: data.quantity > 0 ? data.revenue / data.quantity : 0
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 20);
+
+    // Sales by category (using filtered sales)
+    const categorySalesMap = new Map<string, { revenue: number; quantity: number; transactions: number }>();
+    salesToUse.forEach(sale => {
+      if (sale.items && Array.isArray(sale.items)) {
+        sale.items.forEach((item: any) => {
+          const category = item.category || item.product_category || 'Uncategorized';
+          const existing = categorySalesMap.get(category) || { revenue: 0, quantity: 0, transactions: 0 };
+          categorySalesMap.set(category, {
+            revenue: existing.revenue + (item.price || 0) * (item.quantity || 0),
+            quantity: existing.quantity + (item.quantity || 0),
+            transactions: existing.transactions + 1
+          });
+        });
+      }
+    });
+
+    const salesByCategory = Array.from(categorySalesMap.entries())
+      .map(([category, data]) => ({
+        category,
+        revenue: data.revenue,
+        quantity: data.quantity,
+        transactions: data.transactions
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Average transaction value over time
+    const avgTransactionToday = today.length > 0 ? todayAmount / today.length : 0;
+    const avgTransactionThisWeek = thisWeek.length > 0 ? thisWeekAmount / thisWeek.length : 0;
+    const avgTransactionThisMonth = thisMonth.length > 0 ? thisMonthAmount / thisMonth.length : 0;
+
+    // Peak sales time
+    const peakHour = salesByHour.reduce((max, hour) => hour.sales > max.sales ? hour : max, salesByHour[0]);
+    const peakDay = salesByDayOfWeek.reduce((max, day) => day.sales > max.sales ? day : max, salesByDayOfWeek[0]);
+
+    // Use API data if available, otherwise use calculated values
+    const finalMetrics = {
+      today: {
+        amount: dashboardData?.todaySales || todayAmount,
+        transactions: dashboardData?.todayTransactions || today.length,
+        growth: todayGrowth,
+        avgTransaction: dashboardData?.todayAvgTransaction || avgTransactionToday
+      },
+      yesterday: {
+        amount: yesterdayAmount,
+        transactions: yesterdaySales.length
+      },
+      thisWeek: {
+        amount: thisWeekAmount,
+        transactions: thisWeek.length,
+        growth: weekGrowth,
+        avgTransaction: avgTransactionThisWeek
+      },
+      lastWeek: {
+        amount: lastWeekAmount,
+        transactions: lastWeek.length
+      },
+      thisMonth: {
+        amount: dashboardData?.monthlySales || thisMonthAmount,
+        transactions: dashboardData?.monthlyTransactions || thisMonth.length,
+        growth: monthGrowth,
+        avgTransaction: dashboardData?.monthlyAvgTransaction || avgTransactionThisMonth
+      },
+      lastMonth: {
+        amount: lastMonthAmount,
+        transactions: lastMonth.length
+      },
+      salesByDayOfWeek,
+      salesByHour,
+      topSellingProducts: dashboardData?.topProducts?.map((p: any) => ({
+        name: p.productName || p.product_name || 'Unknown',
+        revenue: p.revenue || 0,
+        quantity: p.quantitySold || p.quantity || 0,
+        transactions: p.transactions || 1,
+        avgPrice: p.avgPrice || (p.revenue && p.quantitySold ? p.revenue / p.quantitySold : 0)
+      })) || topSellingProducts,
+      salesByCategory: salesByCategory.length > 0 ? salesByCategory : (dashboardData?.salesByCategory || []),
+      peakHour,
+      peakDay
+    };
+
+    return finalMetrics;
+  };
+
+  const salesMetrics = calculateSalesMetrics();
+
+  // Comprehensive Product Performance Calculations
+  const calculateProductPerformanceMetrics = () => {
+    const allProducts = products || [];
+    // Use transactions from API first, then fallback to context sales
+    const allSales = allTransactions.length > 0 ? allTransactions : (sales || []);
+    const productPerfData = analyticsData?.productPerformance;
+    
+    console.log('Calculating Product Performance:', {
+      products: allProducts.length,
+      transactionsFromAPI: allTransactions.length,
+      transactionsFromContext: sales?.length || 0,
+      apiDataAvailable: !!productPerfData
+    });
+
+    // Product sales mapping
+    const productSalesMap = new Map<string, { 
+      revenue: number; 
+      quantity: number; 
+      transactions: number;
+      lastSaleDate?: Date;
+      firstSaleDate?: Date;
+    }>();
+
+    allSales.forEach(sale => {
+      if (sale.items && Array.isArray(sale.items)) {
+        const saleDate = new Date(sale.created_at || sale.createdAt || sale.date);
+        sale.items.forEach((item: any) => {
+          const productId = item.product_id || item.product_name || 'Unknown';
+          const existing = productSalesMap.get(productId) || { 
+            revenue: 0, 
+            quantity: 0, 
+            transactions: 0 
+          };
+          
+          productSalesMap.set(productId, {
+            revenue: existing.revenue + (item.price || 0) * (item.quantity || 0),
+            quantity: existing.quantity + (item.quantity || 0),
+            transactions: existing.transactions + 1,
+            lastSaleDate: existing.lastSaleDate && existing.lastSaleDate > saleDate 
+              ? existing.lastSaleDate 
+              : saleDate,
+            firstSaleDate: !existing.firstSaleDate || existing.firstSaleDate > saleDate 
+              ? saleDate 
+              : existing.firstSaleDate
+          });
+        });
+      }
+    });
+
+    // Combine product data with sales data
+    const productPerformance = allProducts.map(product => {
+      const salesData = productSalesMap.get(product._id) || productSalesMap.get(product.name) || {
+        revenue: 0,
+        quantity: 0,
+        transactions: 0
+      };
+
+      const stockValue = (product.price || 0) * (product.stock_quantity || 0);
+      const costValue = (product.cost_price || product.price || 0) * (product.stock_quantity || 0);
+      const profitMargin = salesData.revenue > 0 
+        ? ((salesData.revenue - (salesData.quantity * (product.cost_price || product.price || 0))) / salesData.revenue) * 100
+        : 0;
+
+      const daysSinceLastSale = salesData.lastSaleDate 
+        ? Math.floor((new Date().getTime() - salesData.lastSaleDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      const turnoverRate = (product.stock_quantity || 0) > 0 
+        ? (salesData.quantity / (product.stock_quantity || 0)) * 100
+        : 0;
+
+      return {
+        ...product,
+        salesData,
+        stockValue,
+        costValue,
+        profitMargin,
+        daysSinceLastSale,
+        turnoverRate,
+        avgPricePerSale: salesData.quantity > 0 ? salesData.revenue / salesData.quantity : (product.price || 0),
+        revenuePerUnitStock: (product.stock_quantity || 0) > 0 ? salesData.revenue / (product.stock_quantity || 0) : 0
+      };
+    });
+
+    // Best performers
+    const bestPerformers = [...productPerformance]
+      .filter(p => p.salesData.revenue > 0)
+      .sort((a, b) => b.salesData.revenue - a.salesData.revenue)
+      .slice(0, 20);
+
+    // Worst performers (have stock but no sales)
+    const worstPerformers = [...productPerformance]
+      .filter(p => p.salesData.revenue === 0 && (p.stock_quantity || 0) > 0)
+      .sort((a, b) => b.stockValue - a.stockValue)
+      .slice(0, 20);
+
+    // Most profitable (by margin)
+    const mostProfitable = [...productPerformance]
+      .filter(p => p.salesData.revenue > 0 && p.profitMargin > 0)
+      .sort((a, b) => b.profitMargin - a.profitMargin)
+      .slice(0, 20);
+
+    // Fastest moving (by turnover rate)
+    const fastestMoving = [...productPerformance]
+      .filter(p => p.turnoverRate > 0)
+      .sort((a, b) => b.turnoverRate - a.turnoverRate)
+      .slice(0, 20);
+
+    // Category performance
+    const categoryPerformance = allProducts.reduce((acc: any, product) => {
+      const category = product.category || 'Uncategorized';
+      const salesData = productSalesMap.get(product._id) || productSalesMap.get(product.name) || {
+        revenue: 0,
+        quantity: 0,
+        transactions: 0
+      };
+
+      if (!acc[category]) {
+        acc[category] = {
+          category,
+          productCount: 0,
+          totalRevenue: 0,
+          totalQuantity: 0,
+          totalTransactions: 0,
+          totalStockValue: 0,
+          products: []
+        };
+      }
+
+      acc[category].productCount += 1;
+      acc[category].totalRevenue += salesData.revenue;
+      acc[category].totalQuantity += salesData.quantity;
+      acc[category].totalTransactions += salesData.transactions;
+      acc[category].totalStockValue += (product.price || 0) * (product.stock_quantity || 0);
+      acc[category].products.push(product);
+
+      return acc;
+    }, {});
+
+    const categoryPerformanceArray = Object.values(categoryPerformance).map((cat: any) => ({
+      ...cat,
+      avgRevenuePerProduct: cat.productCount > 0 ? cat.totalRevenue / cat.productCount : 0,
+      avgQuantityPerProduct: cat.productCount > 0 ? cat.totalQuantity / cat.productCount : 0
+    })).sort((a: any, b: any) => b.totalRevenue - a.totalRevenue);
+
+    // Merge with API data if available
+    const apiBestPerformers = productPerfData?.topSellingProducts || productPerfData?.products || [];
+    const finalBestPerformers = apiBestPerformers.length > 0 
+      ? apiBestPerformers.map((p: any) => {
+          const product = allProducts.find((prod: any) => 
+            prod._id === p.productId || 
+            prod.name === p.productName || 
+            prod.name === p.product_name ||
+            prod._id === p._id
+          ) || { name: p.productName || p.product_name || p.name || 'Unknown', category: p.category || 'Uncategorized' };
+          
+          const revenue = p.revenue || 0;
+          const quantitySold = p.quantitySold || p.quantity || 0;
+          const stockQty = (product as any).stock_quantity || 0;
+          
+          return {
+            ...product,
+            salesData: {
+              revenue: revenue,
+              quantity: quantitySold,
+              transactions: p.transactions || 1,
+              lastSaleDate: p.lastSaleDate ? new Date(p.lastSaleDate) : undefined,
+              firstSaleDate: p.firstSaleDate ? new Date(p.firstSaleDate) : undefined
+            },
+            stockValue: ((product as any).price || 0) * stockQty,
+            turnoverRate: stockQty > 0 
+              ? (quantitySold / stockQty) * 100
+              : 0,
+            profitMargin: revenue > 0 && (product as any).cost_price
+              ? ((revenue - (quantitySold * ((product as any).cost_price || (product as any).price || 0))) / revenue) * 100
+              : 0,
+            avgPricePerSale: quantitySold > 0 ? revenue / quantitySold : ((product as any).price || 0),
+            revenuePerUnitStock: stockQty > 0 ? revenue / stockQty : 0
+          };
+        }).slice(0, 20)
+      : bestPerformers;
+
+    return {
+      productPerformance,
+      bestPerformers: finalBestPerformers,
+      worstPerformers,
+      mostProfitable,
+      fastestMoving,
+      categoryPerformance: productPerfData?.categoryBreakdown || categoryPerformanceArray
+    };
+  };
+
+  const productPerformanceMetrics = calculateProductPerformanceMetrics();
+
   // Calculate metrics from real data with fallback to sales data
   const calculateMetricsFromSales = () => {
     if (!sales || sales.length === 0) {
@@ -669,12 +1327,13 @@ export const Reports: React.FC = () => {
 
   // KPIs should be driven by the active filter on this page.
   // Prefer filtered analytics returned by this page's API call; only if absent, fall back to local calculation.
-  const totalSales = dashboardData?.totalSales ?? calculatedMetrics.totalSales;
-  const totalTransactions = dashboardData?.totalTransactions ?? calculatedMetrics.totalTransactions;
-  const averageTransactionValue = dashboardData?.averageTransactionValue ?? (
-    totalTransactions > 0 ? totalSales / totalTransactions : calculatedMetrics.averageTransactionValue
+  // Use salesMetrics first (which uses API transactions), then dashboard analytics, then calculated
+  const totalSales = salesMetrics?.thisMonth?.amount || dashboardData?.totalSales || dashboardData?.monthlySales || calculatedMetrics.totalSales || 0;
+  const totalTransactions = salesMetrics?.thisMonth?.transactions || dashboardData?.totalTransactions || dashboardData?.monthlyTransactions || calculatedMetrics.totalTransactions || 0;
+  const averageTransactionValue = dashboardData?.averageTransactionValue || salesMetrics?.thisMonth?.avgTransaction || (
+    totalTransactions > 0 ? totalSales / totalTransactions : calculatedMetrics.averageTransactionValue || 0
   );
-  const growthRate = dashboardData?.growthRate ?? calculatedMetrics.growthRate;
+  const growthRate = salesMetrics?.thisMonth?.growth || dashboardData?.growthRate || calculatedMetrics.growthRate || 0;
 
   const reportTabs = [
     { id: 'performance', label: 'Performance Dashboard', icon: Trophy },
@@ -812,38 +1471,87 @@ export const Reports: React.FC = () => {
       {/* Sales Report */}
       {selectedReport === 'sales' && (
         <>
-          {/* Key Metrics */}
+          {/* Key Metrics - Today, Week, Month */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
               <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
                 <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Total Sales</h3>
-              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(totalSales)}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Today Sales</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.today.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {salesMetrics.today.growth > 0 ? '+' : ''}{salesMetrics.today.growth.toFixed(1)}% vs yesterday
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.today.transactions} transactions</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Transactions</h3>
-              <p className="text-lg font-semibold text-gray-800 dark:text-white">{totalTransactions}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">This Week</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.thisWeek.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {salesMetrics.thisWeek.growth > 0 ? '+' : ''}{salesMetrics.thisWeek.growth.toFixed(1)}% vs last week
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.thisWeek.transactions} transactions</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
               <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Avg. Transaction</h3>
-              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(averageTransactionValue)}</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">This Month</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.thisMonth.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {salesMetrics.thisMonth.growth > 0 ? '+' : ''}{salesMetrics.thisMonth.growth.toFixed(1)}% vs last month
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.thisMonth.transactions} transactions</p>
             </Card>
 
             <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
               <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
-                <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                <ShoppingCart className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
-              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Growth Rate</h3>
-              <p className="text-lg font-semibold text-gray-800 dark:text-white">{growthRate > 0 ? '+' : ''}{growthRate.toFixed(1)}%</p>
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Avg Transaction</h3>
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">{formatPrice(averageTransactionValue)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Today: {formatPrice(salesMetrics.today.avgTransaction)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Total: {totalTransactions} transactions</p>
+            </Card>
+          </div>
+
+          {/* Additional Sales Metrics */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <Card className="text-center p-3 hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Yesterday</h3>
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.yesterday.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.yesterday.transactions} txns</p>
+            </Card>
+            <Card className="text-center p-3 hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Last Week</h3>
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.lastWeek.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.lastWeek.transactions} txns</p>
+            </Card>
+            <Card className="text-center p-3 hover:shadow-md transition-shadow duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Last Month</h3>
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">{formatPrice(salesMetrics.lastMonth.amount)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{salesMetrics.lastMonth.transactions} txns</p>
+            </Card>
+            <Card className="text-center p-3 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-center mb-1">
+                <Clock className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mr-1" />
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Peak Hour</h3>
+              </div>
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">{salesMetrics.peakHour?.hour || 0}:00</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{formatPrice(salesMetrics.peakHour?.sales || 0)}</p>
+            </Card>
+            <Card className="text-center p-3 hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-center mb-1">
+                <Activity className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mr-1" />
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Peak Day</h3>
+              </div>
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">{salesMetrics.peakDay?.day || 'N/A'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{formatPrice(salesMetrics.peakDay?.sales || 0)}</p>
             </Card>
           </div>
 
@@ -999,13 +1707,306 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
-          {/* Order Source Trends Over Time removed per request */}
+          {/* Sales by Day of Week */}
+          {/* <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sales by Day of Week</h3>
+            <div className="h-64">
+              {salesMetrics.salesByDayOfWeek && salesMetrics.salesByDayOfWeek.some((day: any) => day.sales > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={salesMetrics.salesByDayOfWeek}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#374151" : "#e5e7eb"} />
+                    <XAxis 
+                      dataKey="day" 
+                      stroke={isDark ? "#9CA3AF" : "#6b7280"}
+                      tick={{ fill: isDark ? "#9CA3AF" : "#6b7280", fontSize: 12 }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} 
+                      stroke={isDark ? "#9CA3AF" : "#6b7280"}
+                      tick={{ fill: isDark ? "#9CA3AF" : "#6b7280", fontSize: 12 }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number, name: string, props: any) => [
+                        formatPrice(value), 
+                        `${props.payload.day}: ${props.payload.transactions} transactions`
+                      ]}
+                      {...getTooltipStyles()}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="sales" 
+                      stroke="#3b82f6" 
+                      strokeWidth={2}
+                      dot={{ fill: "#3b82f6", r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                  <BarChart3 className="h-12 w-12 mb-2 opacity-50" />
+                  <p className="text-sm">No sales data available for this period</p>
+                  <p className="text-xs mt-1 text-gray-400 dark:text-gray-500">Try selecting a different time period</p>
+                </div>
+              )}
+            </div>
+          </div> */}
+
+          {/* Sales by Hour */}
+          {/* <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sales by Hour of Day</h3>
+            <div className="h-64">
+              {salesMetrics.salesByHour && salesMetrics.salesByHour.some((hour: any) => hour.sales > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={salesMetrics.salesByHour}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#374151" : "#e5e7eb"} />
+                    <XAxis 
+                      dataKey="hour" 
+                      stroke={isDark ? "#9CA3AF" : "#6b7280"}
+                      tick={{ fill: isDark ? "#9CA3AF" : "#6b7280", fontSize: 12 }}
+                      label={{ value: 'Hour', position: 'insideBottom', offset: -5, fill: isDark ? "#9CA3AF" : "#6b7280" }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} 
+                      stroke={isDark ? "#9CA3AF" : "#6b7280"}
+                      tick={{ fill: isDark ? "#9CA3AF" : "#6b7280", fontSize: 12 }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number, name: string, props: any) => [
+                        formatPrice(value), 
+                        `${props.payload.hour}:00 - ${props.payload.transactions} transactions`
+                      ]}
+                      {...getTooltipStyles()}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="sales" 
+                      stroke="#22c55e" 
+                      strokeWidth={2}
+                      dot={{ fill: "#22c55e", r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                  <Clock className="h-12 w-12 mb-2 opacity-50" />
+                  <p className="text-sm">No sales data available for this period</p>
+                  <p className="text-xs mt-1 text-gray-400 dark:text-gray-500">Try selecting a different time period</p>
+                </div>
+              )}
+            </div>
+          </div> */}
+
+          {/* Top Selling Products */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Selling Products</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Product</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Revenue</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantity Sold</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Transactions</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Avg Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesMetrics.topSellingProducts.slice(0, 20).map((product: any, index: number) => (
+                    <tr
+                      key={product.name || index}
+                      className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{product.name}</td>
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                        {formatPrice(product.revenue)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                        {product.quantity.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                        {product.transactions}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                        {formatPrice(product.avgPrice)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sales by Category */}
+          {/* <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sales by Category</h3>
+            {salesMetrics.salesByCategory && salesMetrics.salesByCategory.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Revenue</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantity</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Transactions</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">% of Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesMetrics.salesByCategory.map((cat: any, index: number) => {
+                      const percentage = totalSales > 0 ? (cat.revenue / totalSales) * 100 : 0;
+                      return (
+                        <tr
+                          key={cat.category || index}
+                          className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{cat.category}</td>
+                          <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                            {formatPrice(cat.revenue)}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            {cat.quantity.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            {cat.transactions}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            {percentage.toFixed(1)}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                <Package className="h-12 w-12 mb-2 opacity-50" />
+                <p className="text-sm">No category data available for this period</p>
+                <p className="text-xs mt-1 text-gray-400 dark:text-gray-500">Try selecting a different time period</p>
+              </div>
+            )}
+          </div> */}
         </>
       )}
 
         {/* Inventory Report */}
         {selectedReport === 'inventory' && (
           <>
+            {/* Key Inventory Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Total Inventory Value</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {formatPrice(inventoryMetrics.totalInventoryValue)}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {inventoryMetrics.totalProducts} products
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">In Stock</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.inStockCount}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {inventoryMetrics.totalProducts > 0 
+                    ? ((inventoryMetrics.inStockCount / inventoryMetrics.totalProducts) * 100).toFixed(1)
+                    : 0}% of total
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Low Stock</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.lowStockCount}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Needs attention
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Out of Stock</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.outOfStockCount}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Urgent restocking needed
+                </p>
+              </Card>
+            </div>
+
+            {/* Additional Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <Box className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Avg Stock Qty</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.avgStockQuantity.toFixed(1)}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Per product
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <RefreshCw className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Reorder Value</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {formatPrice(inventoryMetrics.totalReorderValue)}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {inventoryMetrics.reorderRecommendations.length} items
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <Zap className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fast Moving</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.fastMovingProducts.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  High turnover items
+                </p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <TrendingDown className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Slow Moving</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {inventoryMetrics.slowMovingProducts.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Low/no sales
+                </p>
+              </Card>
+            </div>
+
+            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Inventory Status</h3>
@@ -1028,7 +2029,10 @@ export const Reports: React.FC = () => {
                       <Tooltip 
                         formatter={(value: number, name: string, props: any) => {
                           const status = props.payload?.name || 'Unknown';
-                          return [`${value} products`, status];
+                          const percentage = inventoryMetrics.totalProducts > 0
+                            ? ((value / inventoryMetrics.totalProducts) * 100).toFixed(1)
+                            : '0';
+                          return [`${value} products (${percentage}%)`, status];
                         }}
                         {...getTooltipStyles()}
                       />
@@ -1041,56 +2045,303 @@ export const Reports: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Stock Value by Category</h3>
                 <div className="h-64">
-                  {(() => {
-                    // Calculate real category data from products
-                    const categoryData = (products || []).reduce((acc: any, product) => {
-                      const category = product.category || 'Other';
-                      if (!acc[category]) {
-                        acc[category] = { category, value: 0, count: 0 };
-                      }
-                      acc[category].value += product.price * product.stock_quantity;
-                      acc[category].count += 1;
-                      return acc;
-                    }, {});
-                    
-                    const categoryArray = Object.values(categoryData);
-
-                    return categoryArray.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={categoryArray}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="category" stroke="#9CA3AF" />
-                          <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
-                          <Tooltip 
-                            formatter={(value: number) => [formatPrice(value), 'Value']}
-                            contentStyle={{ 
-                              backgroundColor: '#1F2937', 
-                              border: '1px solid #4B5563', 
-                              borderRadius: '8px',
-                              color: '#FFFFFF',
-                              fontSize: '14px',
-                              fontWeight: '500',
-                              padding: '8px 12px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                            }}
-                            labelStyle={{ 
-                              color: '#FFFFFF',
-                              fontSize: '14px',
-                              fontWeight: '600',
-                              marginBottom: '4px'
-                            }}
-                            itemStyle={{ color: '#FFFFFF' }}
-                          />
-                          <Bar dataKey="value" fill="#3b82f6" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                        No category data available
-                      </div>
-                    );
-                  })()}
+                  {inventoryMetrics.categoryBreakdown.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={inventoryMetrics.categoryBreakdown}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis 
+                          dataKey="category" 
+                          stroke="#9CA3AF"
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
+                        <Tooltip 
+                          formatter={(value: number, name: string, props: any) => {
+                            const cat = props.payload;
+                            return [
+                              `${formatPrice(value)} (${cat.productCount} products)`,
+                              'Total Value'
+                            ];
+                          }}
+                          {...getTooltipStyles()}
+                        />
+                        <Bar dataKey="totalValue" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                      No category data available
+                    </div>
+                  )}
                 </div>
+              </div>
+            </div>
+
+            {/* Detailed Category Breakdown */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Category Breakdown</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Products</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Total Qty</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Value</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">In Stock</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Low Stock</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Out of Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryMetrics.categoryBreakdown
+                      .sort((a: any, b: any) => b.totalValue - a.totalValue)
+                      .map((cat: any, index: number) => (
+                        <tr 
+                          key={cat.category || index}
+                          className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        >
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{cat.category}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">{cat.productCount}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            {cat.totalQuantity.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                            {formatPrice(cat.totalValue)}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                              {cat.inStockCount}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                              {cat.lowStockCount}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+                              {cat.outOfStockCount}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Reorder Recommendations */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Reorder Recommendations</h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Total: {formatPrice(inventoryMetrics.totalReorderValue)}
+                </span>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {inventoryMetrics.reorderRecommendations.slice(0, 20).map((rec, index) => {
+                  const isUrgent = rec.type === 'out_of_stock' || rec.priority === 1;
+                  return (
+                    <div
+                      key={rec.product._id || index}
+                      className={`p-4 rounded-lg border transition-all ${
+                        isUrgent
+                          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                              {rec.product.name || 'Unknown Product'}
+                            </h4>
+                            {isUrgent && (
+                              <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-medium rounded-full">
+                                URGENT
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Current Stock:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                                {rec.product.stock_quantity || 0}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Min Level:</span>
+                              <span className="ml-2 font-medium text-gray-900 dark:text-white">
+                                {rec.product.min_stock_level || 0}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Reorder Qty:</span>
+                              <span className="ml-2 font-semibold text-blue-600 dark:text-blue-400">
+                                {rec.quantity}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 dark:text-gray-400">Reorder Value:</span>
+                              <span className="ml-2 font-semibold text-gray-900 dark:text-white">
+                                {formatPrice(rec.estimatedValue)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {inventoryMetrics.reorderRecommendations.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>No reorder recommendations. All products are well stocked!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Fast Moving vs Slow Moving */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Zap className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Fast Moving Products</h3>
+                </div>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {inventoryMetrics.fastMovingProducts.map((product: any, index: number) => (
+                    <div
+                      key={product._id || index}
+                      className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-900 dark:text-white">{product.name}</h4>
+                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+                          {Number(product.salesCount) || 0} sold
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Stock:</span>
+                          <span className="ml-1 font-medium">{product.stock_quantity || 0}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Value:</span>
+                          <span className="ml-1 font-medium">{formatPrice(Number(product.stockValue) || 0)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Turnover:</span>
+                          <span className="ml-1 font-medium">{(Number(product.turnoverRate) || 0).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {inventoryMetrics.fastMovingProducts.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                      No fast moving products data available
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Slow Moving Products</h3>
+                </div>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {inventoryMetrics.slowMovingProducts.map((product, index) => (
+                    <div
+                      key={product._id || index}
+                      className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-900 dark:text-white">{product.name}</h4>
+                        <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+                          No sales
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Stock Value:</span>
+                          <span className="ml-1 font-medium">{formatPrice(product.stockValue)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400">Days Since Update:</span>
+                          <span className="ml-1 font-medium">{product.daysSinceUpdate}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {inventoryMetrics.slowMovingProducts.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                      No slow moving products found. Great inventory management!
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory Aging */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Clock className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Inventory Aging (Oldest Stock)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Product</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Qty</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Value</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Days Since Update</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Age Category</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryMetrics.agingInventory.map((product, index) => (
+                      <tr
+                        key={product._id || index}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{product.name}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">{product.category || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">{product.stock_quantity || 0}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                          {formatPrice(product.stockValue)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`text-sm font-medium ${
+                            product.daysSinceUpdate > 90 
+                              ? 'text-red-600 dark:text-red-400' 
+                              : product.daysSinceUpdate > 30 
+                              ? 'text-yellow-600 dark:text-yellow-400'
+                              : 'text-green-600 dark:text-green-400'
+                          }`}>
+                            {product.daysSinceUpdate} days
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            product.ageCategory === 'old'
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                              : product.ageCategory === 'medium'
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                          }`}>
+                            {product.ageCategory === 'old' ? 'Old' : product.ageCategory === 'medium' ? 'Medium' : 'New'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>
@@ -1099,8 +2350,56 @@ export const Reports: React.FC = () => {
         {/* Product Performance Report */}
         {selectedReport === 'products' && (
           <>
+            {/* Key Product Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <Trophy className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Best Performers</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {productPerformanceMetrics.bestPerformers.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Top revenue products</p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <TrendingDown className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Worst Performers</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {productPerformanceMetrics.worstPerformers.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No sales, have stock</p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Most Profitable</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {productPerformanceMetrics.mostProfitable.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Highest margins</p>
+              </Card>
+
+              <Card className="text-center p-4 hover:shadow-md transition-shadow duration-200">
+                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fastest Moving</h3>
+                <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                  {productPerformanceMetrics.fastestMoving.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">High turnover rate</p>
+              </Card>
+            </div>
+
+            {/* Top Performing Products Chart */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Performing Products</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Performing Products (Revenue)</h3>
               <div className="h-64">
                 {topProductsData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -1123,67 +2422,189 @@ export const Reports: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Product Categories</h3>
-                <div className="space-y-3">
-                  {(() => {
-                    // Use API category breakdown data if available, otherwise fallback to local calculation
-                    const categoryData = analyticsData?.productPerformance?.categoryBreakdown || 
-                      (products || []).reduce((acc: any, product) => {
-                        const category = product.category || 'Other';
-                        if (!acc[category]) {
-                          acc[category] = { category, count: 0, totalValue: 0 };
-                        }
-                        acc[category].count += 1;
-                        acc[category].totalValue += product.price * product.stock_quantity;
-                        return acc;
-                      }, {});
-                    
-                    const categoryArray = Array.isArray(categoryData) ? categoryData : Object.values(categoryData);
-
-                    return categoryArray.length > 0 ? (
-                      categoryArray.map((cat: any) => (
-                        <div key={cat.category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <span className="font-medium text-gray-900 dark:text-white">{cat.category}</span>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                              {cat.count} products
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatPrice(cat.totalValue || cat.value)} value
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                        No category data available
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Low Stock Products</h3>
-                <div className="space-y-3">
-                  {(products || []).filter(p => (p?.stock_quantity || 0) <= (p?.min_stock_level || 0)).slice(0, 5).map(product => (
-                    <div key={product._id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{product?.name || 'Unknown Product'}</p>
-                        <p className="text-sm text-red-600 dark:text-red-400">
-                          {formatStockQuantity(product?.stock_quantity || 0)} remaining (min: {product?.min_stock_level || 0})
-                        </p>
-                      </div>
-                      <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-medium rounded-full">
-                        {(product?.stock_quantity || 0) === 0 ? 'Out of Stock' : 'Low Stock'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {/* Best Performers Table */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Best Performing Products</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Product</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Revenue</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantity Sold</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Turnover Rate</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Profit Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productPerformanceMetrics.bestPerformers.slice(0, 20).map((product: any, index: number) => (
+                      <tr
+                        key={product._id || index}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{product.name}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{product.category || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                          {formatPrice(product.salesData.revenue)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {product.salesData.quantity.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {product.stock_quantity || 0}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`text-sm font-medium ${
+                            product.turnoverRate > 50 ? 'text-green-600 dark:text-green-400' :
+                            product.turnoverRate > 20 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {product.turnoverRate.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`text-sm font-medium ${
+                            product.profitMargin > 30 ? 'text-green-600 dark:text-green-400' :
+                            product.profitMargin > 15 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {product.profitMargin.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+
+            {/* Most Profitable Products */}
+            {/* <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Most Profitable Products (By Margin)</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Product</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Revenue</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Profit Margin</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Avg Price/Sale</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Transactions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productPerformanceMetrics.mostProfitable.slice(0, 15).map((product: any, index: number) => (
+                      <tr
+                        key={product._id || index}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{product.name}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                          {formatPrice(product.salesData.revenue)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className={`text-sm font-semibold ${
+                            product.profitMargin > 30 ? 'text-green-600 dark:text-green-400' :
+                            product.profitMargin > 15 ? 'text-yellow-600 dark:text-yellow-400' :
+                            'text-red-600 dark:text-red-400'
+                          }`}>
+                            {product.profitMargin.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {formatPrice(product.avgPricePerSale)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {product.salesData.transactions}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div> */}
+
+            {/* Worst Performers */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Worst Performers (No Sales, Has Stock)</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Product</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Value</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Qty</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productPerformanceMetrics.worstPerformers.slice(0, 15).map((product: any, index: number) => (
+                      <tr
+                        key={product._id || index}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{product.name}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{product.category || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-red-600 dark:text-red-400 text-right">
+                          {formatPrice(product.stockValue)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {product.stock_quantity || 0}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {formatPrice(product.price || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Category Performance */}
+            {/* <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Category Performance</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Products</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Total Revenue</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Quantity Sold</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Avg Revenue/Product</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Stock Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productPerformanceMetrics.categoryPerformance.map((cat: any, index: number) => (
+                      <tr
+                        key={cat.category || index}
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{cat.category}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">{cat.productCount}</td>
+                        <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                          {formatPrice(cat.totalRevenue)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {cat.totalQuantity.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {formatPrice(cat.avgRevenuePerProduct)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400 text-right">
+                          {formatPrice(cat.totalStockValue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div> */}
           </>
         )}
 

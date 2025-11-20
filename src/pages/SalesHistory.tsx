@@ -83,6 +83,7 @@ export const SalesHistory: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalSales, setTotalSales] = useState(0);
   const [itemsPerPage] = useState(20); // Display pagination
+  const [totalTransactions, setTotalTransactions] = useState(0); // Total count from server
   const [exportLoading, setExportLoading] = useState(false);
   const [showTransactionIds, setShowTransactionIds] = useState(false);
   const [sortField, setSortField] = useState<keyof SoldProduct>('saleDate');
@@ -93,15 +94,9 @@ export const SalesHistory: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
 
-  // Update paginated sales for display
-  const updatePaginatedSales = useCallback((transactions: Transaction[]) => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedTransactions = transactions.slice(startIndex, endIndex);
-    setSales(paginatedTransactions);
-  }, [currentPage, itemsPerPage]);
+  // Note: Pagination is now handled server-side, so we don't need updatePaginatedSales
 
-  // Load all sales data from server (without filters)
+  // Load all sales data from server for calculations (loads all transactions)
   const loadAllSales = useCallback(async () => {
     
     // For cashiers without store_id, show a warning but still attempt to load data
@@ -115,12 +110,11 @@ export const SalesHistory: React.FC = () => {
       toast.error('Store ID not found. Please contact support.');
     }
     
-    setIsLoadingSales(true);
     try {
-      // Load ALL transactions without any filters
+      // Load ALL transactions for calculations - fetch in batches if needed
       const apiParams: any = {
         page: 1,
-        limit: 1000 // Large limit to get all transactions
+        limit: 10000 // Large limit to get all transactions for calculations
       };
       
       // Only add store_id if it exists and is not null
@@ -132,28 +126,80 @@ export const SalesHistory: React.FC = () => {
 
       // Store all transactions for calculations
       setAllSales(response.transactions || []);
-      setTotalPages(response.total || 1);
-      setTotalSales(response.total || 0);
-      
-      // Debug: Log all loaded transactions with payment method data
+      setTotalSales(response.transactions?.length || 0);
       
     } catch (error) {
-      console.error('❌ Failed to load sales:', error);
+      console.error('❌ Failed to load all sales:', error);
+      // Don't show error toast for background calculation load
+    }
+  }, [user?.store_id]);
+
+  // Load paginated sales for display
+  const loadPaginatedSales = useCallback(async () => {
+    if (!user?.store_id && user?.role !== 'cashier') {
+      return;
+    }
+    
+    setIsLoadingSales(true);
+    try {
+      const apiParams: any = {
+        page: currentPage,
+        limit: itemsPerPage
+      };
+      
+      // Only add store_id if it exists and is not null
+      if (user.store_id && user.store_id !== 'null') {
+        apiParams.store_id = user.store_id;
+      }
+
+      const response = await apiService.getTransactions(apiParams);
+
+      // Store paginated transactions for display
+      setSales(response.transactions || []);
+      
+      // Calculate total pages based on response
+      // If the API returns the actual total, use it; otherwise estimate based on current page
+      const transactionsCount = response.transactions?.length || 0;
+      const estimatedTotal = response.total || 0;
+      
+      // If we got a full page of results, there might be more pages
+      // If total is 0 or less than itemsPerPage, use a heuristic
+      let calculatedTotal = estimatedTotal;
+      if (estimatedTotal === 0 || estimatedTotal < itemsPerPage) {
+        // If we have a full page, assume there's at least one more page
+        if (transactionsCount === itemsPerPage) {
+          calculatedTotal = (currentPage * itemsPerPage) + 1; // At least one more
+        } else {
+          calculatedTotal = (currentPage - 1) * itemsPerPage + transactionsCount;
+        }
+      }
+      
+      const calculatedTotalPages = Math.max(1, Math.ceil(calculatedTotal / itemsPerPage));
+      setTotalPages(calculatedTotalPages);
+      setTotalTransactions(calculatedTotal);
+      
+    } catch (error) {
+      console.error('❌ Failed to load paginated sales:', error);
       toast.error('Failed to load sales data');
     } finally {
       setIsLoadingSales(false);
     }
-  }, [user?.store_id]);
+  }, [user?.store_id, currentPage, itemsPerPage]);
 
-  // Refresh sales from server and re-apply client-side filtering
+  // Refresh sales from server
   const loadSales = useCallback(async () => {
-    await loadAllSales();
-  }, [loadAllSales]);
+    await Promise.all([loadAllSales(), loadPaginatedSales()]);
+  }, [loadAllSales, loadPaginatedSales]);
 
   // Load all sales data on initial mount
   useEffect(() => {
     loadAllSales();
   }, [loadAllSales]);
+
+  // Load paginated sales when page changes
+  useEffect(() => {
+    loadPaginatedSales();
+  }, [loadPaginatedSales]);
 
   // Check if user is admin
   const isAdmin = user?.role === 'admin';
@@ -392,24 +438,8 @@ export const SalesHistory: React.FC = () => {
     });
   }, [soldProducts, searchQuery, selectedCategory, selectedTags, selectedMonth, selectedYear, sortField, sortDirection]);
 
-  // Update paginated sales when page changes or filtered products change
-  useEffect(() => {
-    if (filteredProducts.length > 0) {
-      // Convert filtered products back to transactions for pagination
-      const filteredTransactions = allSales.filter(transaction => 
-        filteredProducts.some(product => product.transactionId === transaction._id)
-      );
-      updatePaginatedSales(filteredTransactions);
-      
-      // Update totals based on filtered results
-      setTotalSales(filteredProducts.length);
-      setTotalPages(Math.ceil(filteredProducts.length / itemsPerPage));
-    } else {
-      setSales([]);
-      setTotalSales(0);
-      setTotalPages(1);
-    }
-  }, [filteredProducts, allSales, updatePaginatedSales, itemsPerPage]);
+  // Note: Server-side pagination means we don't need to update sales based on filteredProducts
+  // The sales state is managed by loadPaginatedSales which fetches from the server
 
   // Calculate summary statistics using filtered data
   const summaryStats = useMemo(() => {
@@ -512,6 +542,8 @@ export const SalesHistory: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRefresh = () => {
@@ -609,8 +641,8 @@ export const SalesHistory: React.FC = () => {
   function ReceiptModalInline({ open, onClose, transaction }: { open: boolean, onClose: () => void, transaction: Transaction | null }) {
     if (!open || !transaction) return null;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 pt-0 px-4 pb-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 relative">
+      <div className="fixed inset-0 z-50 flex items-center justify-center py-8 px-4 bg-black/60 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
           <button
             onClick={onClose}
             className="absolute top-3 right-3 text-gray-400 hover:text-red-500"
@@ -1040,21 +1072,47 @@ export const SalesHistory: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                 <p className="text-gray-700 dark:text-gray-300 font-medium">
-                  Showing <span className="text-blue-600 dark:text-blue-400 font-bold">{filteredProducts.length}</span> of <span className="text-gray-900 dark:text-white font-bold">{soldProducts.length}</span> sold items
+                  {viewMode === 'list' ? (
+                    <>
+                      Showing <span className="text-blue-600 dark:text-blue-400 font-bold">{sales.length}</span> transactions on page <span className="text-blue-600 dark:text-blue-400 font-bold">{currentPage}</span> of <span className="text-gray-900 dark:text-white font-bold">{totalPages}</span>
+                      {totalTransactions > 0 && (
+                        <> (<span className="text-gray-900 dark:text-white font-bold">{totalTransactions}</span> total)</>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      Showing <span className="text-blue-600 dark:text-blue-400 font-bold">{filteredProducts.length}</span> of <span className="text-gray-900 dark:text-white font-bold">{soldProducts.length}</span> sold items
+                    </>
+                  )}
                 </p>
               </div>
             </div>
-            {filteredProducts.length > 0 && (
+            {((viewMode === 'list' && sales.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) && (
               <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Filtered Revenue</p>
-                  <p className="text-lg font-bold text-green-600 dark:text-green-400">₺{summaryStats.totalRevenue.toLocaleString()}</p>
-                </div>
-                {soldProducts.length !== filteredProducts.length && (
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
-                    <p className="text-lg font-bold text-gray-600 dark:text-gray-400">₺{sales.reduce((sum, transaction) => sum + transaction.total_amount, 0).toLocaleString()}</p>
-                  </div>
+                {viewMode === 'list' ? (
+                  <>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Page Revenue</p>
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">₺{sales.reduce((sum, transaction) => sum + transaction.total_amount, 0).toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
+                      <p className="text-lg font-bold text-gray-600 dark:text-gray-400">₺{summaryStats.totalRevenue.toLocaleString()}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Filtered Revenue</p>
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">₺{summaryStats.totalRevenue.toLocaleString()}</p>
+                    </div>
+                    {soldProducts.length !== filteredProducts.length && (
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Total Revenue</p>
+                        <p className="text-lg font-bold text-gray-600 dark:text-gray-400">₺{sales.reduce((sum, transaction) => sum + transaction.total_amount, 0).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1062,7 +1120,7 @@ export const SalesHistory: React.FC = () => {
         </div>
 
         {/* Enhanced Products Display */}
-        {filteredProducts.length > 0 ? (
+        {((viewMode === 'list' && sales.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
             {viewMode === 'list' ? (
               <div>
@@ -1165,6 +1223,76 @@ export const SalesHistory: React.FC = () => {
                   );
                 })}
                 <ReceiptModalInline open={receiptModal.open} onClose={() => setReceiptModal({ open: false, transaction: null })} transaction={receiptModal.transaction} />
+                
+                {/* Pagination Controls - Always show if we have transactions */}
+                {sales.length > 0 && (
+                  <div className="mt-6 px-4 py-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        Showing page <span className="font-medium">{currentPage}</span>
+                        {totalPages > 1 && (
+                          <> of <span className="font-medium">{totalPages}</span></>
+                        )}
+                        {totalTransactions > 0 && (
+                          <> ({totalTransactions} total transactions)</>
+                        )}
+                        {totalPages === 1 && sales.length === itemsPerPage && (
+                          <> - More pages may be available</>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1 || isLoadingSales}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                              let pageNum: number;
+                              if (totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (currentPage <= 3) {
+                                pageNum = i + 1;
+                              } else if (currentPage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = currentPage - 2 + i;
+                              }
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  onClick={() => handlePageChange(pageNum)}
+                                  disabled={isLoadingSales}
+                                  variant={currentPage === pageNum ? 'primary' : 'outline'}
+                                  size="sm"
+                                  className="min-w-[40px]"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <Button
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={isLoadingSales}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          Next
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               /* Grid View */

@@ -407,6 +407,13 @@ export const POS: React.FC = () => {
         notes: paymentData.notes,
       };
 
+      // Small delay to ensure loader is visible
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Track start time for minimum loader display
+      const startTime = Date.now();
+      const minLoaderTime = 1500; // Minimum 1.5 seconds to show progress
+
       // Process transaction and inventory updates
       await Promise.all([
         addTransaction(transaction),
@@ -420,7 +427,7 @@ export const POS: React.FC = () => {
           }
         })
       ]);
-
+      
       setReceiptTransaction({
         ...transaction,
         // Patch in subtotal, total_amount if available (may come from cart calculations)
@@ -428,7 +435,16 @@ export const POS: React.FC = () => {
         total_amount: finalTotal,
         created_at: new Date(), // for display
       });
+      
+      // Ensure minimum loader display time
+      const elapsed = Date.now() - startTime;
+      const remainingTime = Math.max(0, minLoaderTime - elapsed);
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+      }
+
       setIsReceiptModalOpen(true);
+      setIsProcessingPayment(false);
 
       setTimeout(() => {
         refreshNotifications();
@@ -437,7 +453,6 @@ export const POS: React.FC = () => {
       // Clear cart and close modal (not before showing receipt)
       clearCart();  // optionally consider deferring clear until receipt close
       setIsPaymentModalOpen(false);
-      setIsProcessingPayment(false);
 
       const paymentMethodsText = paymentData.payment_methods.map(pm => 
         `${pm.type.charAt(0).toUpperCase() + pm.type.slice(1)}: ₺${pm.amount.toFixed(2)}`

@@ -29,6 +29,7 @@ import { SalesHistory } from './pages/SalesHistory';
 import { CustomerCatalog } from './pages/CustomerCatalog';
 import { OrderTracking } from './pages/OrderTracking';
 import { AdminCustomerOrders } from './pages/AdminCustomerOrders';
+import { Wholesalers } from './pages/Wholesalers';
 import { ScrollToTopWrapper } from './components/ScrollToTopWrapper';
 import { GoalCelebrationManager } from './components/ui/GoalCelebrationManager';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -167,6 +168,15 @@ function App() {
                   <Header />
                   <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
                     <AdminCustomerOrders />
+                  </main>
+                  <MobileNavigation />
+                </ProtectedRoute>
+              } />
+              <Route path="/wholesalers" element={
+                <ProtectedRoute requiredRole={['admin', 'owner', 'manager']}>
+                  <Header />
+                  <main className="pt-0 pb-24 bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                    <Wholesalers />
                   </main>
                   <MobileNavigation />
                 </ProtectedRoute>
