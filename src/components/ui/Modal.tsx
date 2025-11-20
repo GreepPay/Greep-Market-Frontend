@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 
@@ -57,8 +58,6 @@ export const Modal: React.FC<ModalProps> = ({
     e.stopPropagation();
   };
 
-  if (!isOpen) return null;
-
   const sizeClasses = {
     sm: 'max-w-md',
     md: 'max-w-lg',
@@ -75,21 +74,24 @@ export const Modal: React.FC<ModalProps> = ({
     info: 'bg-gradient-to-r from-blue-500 to-blue-600',
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const modalContent = (
     <div 
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
+      className="fixed top-0 left-0 right-0 bottom-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
       onClick={handleOverlayClick}
+      style={{ margin: 0, padding: 0 }}
     >
-      {/* Modal container */}
-      <div className="flex min-h-screen items-center justify-center pt-0 px-4 pb-4">
+      {/* Modal container - centered both horizontally and vertically */}
+      <div className="flex min-h-screen items-center justify-center py-8 px-4">
         <div 
           ref={modalRef}
-          className={`relative w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-2xl transition-all duration-300 scale-100`}
+          className={`relative w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 shadow-2xl transition-all duration-300 scale-100 my-auto max-h-[90vh] flex flex-col`}
           onClick={handleModalClick}
         >
           {/* Header */}
           {showHeader && title && (
-            <div className={`${headerColorClasses[headerColor]} px-6 py-4`}>
+            <div className={`${headerColorClasses[headerColor]} px-6 py-4 flex-shrink-0`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   {headerIcon && (
@@ -97,7 +99,7 @@ export const Modal: React.FC<ModalProps> = ({
                       {headerIcon}
                     </div>
                   )}
-                  <h3 className="text-lg font-semibold text-white">{title}</h3>
+                  <h3 className="text-xl font-semibold text-white">{title}</h3>
                 </div>
                 {showCloseButton && (
                   <button
@@ -113,12 +115,14 @@ export const Modal: React.FC<ModalProps> = ({
             </div>
           )}
           
-          {/* Content */}
-          <div className="p-6">
+          {/* Content - scrollable if needed */}
+          <div className="p-6 overflow-y-auto flex-1">
             {children}
           </div>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

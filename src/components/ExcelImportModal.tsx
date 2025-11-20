@@ -318,8 +318,8 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center pt-0 px-4 pb-4 z-50">
-      <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center py-8 px-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
@@ -375,7 +375,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto flex-1">
           {step === 'upload' && (
             <div className="text-center">
               <div className="w-24 h-24 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
@@ -636,7 +636,7 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({ isOpen, onClose, on
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
           <div className="flex items-center space-x-4">
             {step === 'mapping' && (
               <button

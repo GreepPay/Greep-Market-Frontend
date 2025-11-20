@@ -5,7 +5,8 @@ import {
   Package, 
   ShoppingCart, 
   BarChart3, 
-  Receipt
+  Receipt,
+  Building2
 } from 'lucide-react';
 
 const navigationItems = [
@@ -31,6 +32,14 @@ const navigationItems = [
     label: 'Sales',
     activeColor: 'text-green-500 dark:text-green-400',
     activeBg: 'bg-green-100 dark:bg-green-900/30',
+    inactiveColor: 'text-gray-500 dark:text-gray-400'
+  },
+  { 
+    path: '/wholesalers', 
+    icon: Building2, 
+    label: 'Wholesalers',
+    activeColor: 'text-indigo-500 dark:text-indigo-400',
+    activeBg: 'bg-indigo-100 dark:bg-indigo-900/30',
     inactiveColor: 'text-gray-500 dark:text-gray-400'
   },
   { 
@@ -119,6 +128,7 @@ export const MobileNavigation: React.FC = () => {
                   ${item.path === '/dashboard' ? 'bg-orange-500 dark:bg-orange-400' :
                     item.path === '/products' ? 'bg-blue-500 dark:bg-blue-400' :
                     item.path === '/pos' ? 'bg-green-500 dark:bg-green-400' :
+                    item.path === '/wholesalers' ? 'bg-indigo-500 dark:bg-indigo-400' :
                     item.path === '/expenses' ? 'bg-pink-500 dark:bg-pink-400' :
                     'bg-purple-500 dark:bg-purple-400'}
                   animate-pulse

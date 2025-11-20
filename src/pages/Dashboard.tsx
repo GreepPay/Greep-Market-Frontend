@@ -660,8 +660,145 @@ export const Dashboard: React.FC = () => {
 
   // State for expense data
   const [expenseData, setExpenseData] = useState<any[]>([]);
+  const [salesByDayOfWeek, setSalesByDayOfWeek] = useState<Array<{ day: string; revenue: number; transactions: number }>>([]);
+  const [salesByHourOfDay, setSalesByHourOfDay] = useState<Array<{ hour: number; revenue: number; transactions: number }>>([]);
+  const [salesByCategory, setSalesByCategory] = useState<Array<{ category: string; revenue: number; quantity: number; transactions: number; percentage: number }>>([]);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   // Ref to store series expense data for merging (avoids React closure issues)
   const seriesExpenseDataRef = useRef<any[]>([]);
+
+  // Fetch new analytics data (sales by day of week, hour, category)
+  const fetchAnalyticsData = useCallback(async () => {
+    if (!user?.store_id) {
+      console.log('⚠️ No store_id, skipping analytics fetch');
+      return;
+    }
+    
+    setIsLoadingAnalytics(true);
+    try {
+      const filterParams: any = {
+        store_id: user.store_id,
+      };
+
+      // For analytics, use a wider date range to ensure we get data
+      // Default to last 30 days if no specific range is set
+      if (dateRange === 'today') {
+        // For "today" view, still fetch last 30 days for analytics context
+        filterParams.period = '30d';
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        filterParams.start_date = normalizeDateToYYYYMMDD(thirtyDaysAgo);
+        filterParams.end_date = normalizeDateToYYYYMMDD(new Date());
+      } else if (dateRange === 'this_month') {
+        // For this month, calculate the period based on days in month
+        const { start, end } = getThisMonthRange();
+        const daysInMonth = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysInMonth <= 7) {
+          filterParams.period = '7d';
+        } else if (daysInMonth <= 30) {
+          filterParams.period = '30d';
+        } else if (daysInMonth <= 90) {
+          filterParams.period = '90d';
+        } else {
+          filterParams.period = '1y';
+        }
+        filterParams.start_date = normalizeDateToYYYYMMDD(start);
+        filterParams.end_date = normalizeDateToYYYYMMDD(end);
+      } else if (dateRange === 'custom' && customStartDate && customEndDate) {
+        // For custom dates, use start_date and end_date (period will be ignored)
+        filterParams.start_date = normalizeDateToYYYYMMDD(parseAndNormalizeDate(customStartDate));
+        filterParams.end_date = normalizeDateToYYYYMMDD(parseAndNormalizeDate(customEndDate));
+      } else {
+        // Default to last 30 days
+        filterParams.period = '30d';
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        filterParams.start_date = normalizeDateToYYYYMMDD(thirtyDaysAgo);
+        filterParams.end_date = normalizeDateToYYYYMMDD(new Date());
+      }
+
+      console.log('📊 Fetching analytics with params:', filterParams);
+
+      // Fetch all three analytics endpoints in parallel
+      const [dayOfWeekData, hourOfDayData, categoryData] = await Promise.all([
+        apiService.getSalesByDayOfWeek(filterParams).catch(err => {
+          console.error('❌ Error fetching day of week data:', err);
+          return [];
+        }),
+        apiService.getSalesByHourOfDay(filterParams).catch(err => {
+          console.error('❌ Error fetching hour of day data:', err);
+          return [];
+        }),
+        apiService.getSalesByCategory(filterParams).catch(err => {
+          console.error('❌ Error fetching category data:', err);
+          return [];
+        }),
+      ]);
+
+      console.log('📊 Analytics data received:', {
+        dayOfWeek: dayOfWeekData?.length || 0,
+        hourOfDay: hourOfDayData?.length || 0,
+        category: categoryData?.length || 0,
+        dayOfWeekSample: dayOfWeekData?.[0],
+        hourOfDaySample: hourOfDayData?.[0],
+        categorySample: categoryData?.[0],
+      });
+
+      // Ensure we have arrays and clean the data
+      const cleanedDayOfWeek = Array.isArray(dayOfWeekData) ? dayOfWeekData.filter(item => item && item.day) : [];
+      const cleanedHourOfDay = Array.isArray(hourOfDayData) ? hourOfDayData.filter(item => item && typeof item.hour === 'number') : [];
+      
+      // Clean category data - filter out items with empty/null categories or zero revenue
+      // Note: "Uncategorized" is allowed if it comes from the API (means products without categories)
+      const cleanedCategory = Array.isArray(categoryData) 
+        ? categoryData
+            .filter(item => {
+              // Only include items with a valid category name (not empty, not null, not undefined)
+              // Allow "Uncategorized" if it's actually returned by the API
+              const hasValidCategory = item && 
+                                      item.category && 
+                                      typeof item.category === 'string' && 
+                                      item.category.trim().length > 0 &&
+                                      item.category.toLowerCase() !== 'null' &&
+                                      item.category.toLowerCase() !== 'undefined';
+              const hasRevenue = Number(item.revenue) > 0;
+              return hasValidCategory && hasRevenue;
+            })
+            .map(item => ({
+              ...item,
+              category: (item.category || 'Uncategorized').trim(),
+              revenue: Number(item.revenue) || 0,
+              quantity: Number(item.quantity) || 0,
+              transactions: Number(item.transactions) || 0,
+              percentage: Number(item.percentage) || 0,
+            }))
+            .sort((a, b) => b.revenue - a.revenue) // Sort by revenue descending
+        : [];
+      
+      console.log('📊 Cleaned category data:', {
+        originalCount: categoryData?.length || 0,
+        cleanedCount: cleanedCategory.length,
+        categories: cleanedCategory.map(c => ({ name: c.category, revenue: c.revenue, percentage: c.percentage }))
+      });
+      
+      setSalesByDayOfWeek(cleanedDayOfWeek);
+      setSalesByHourOfDay(cleanedHourOfDay);
+      setSalesByCategory(cleanedCategory);
+    } catch (error) {
+      console.error('❌ Failed to load analytics data:', error);
+      // Set empty arrays on error
+      setSalesByDayOfWeek([]);
+      setSalesByHourOfDay([]);
+      setSalesByCategory([]);
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, [user?.store_id, dateRange, customStartDate, customEndDate]);
+
+  // Fetch analytics data when filters change
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [fetchAnalyticsData]);
 
   // Fetch expense data when filters change
   useEffect(() => {
@@ -2360,100 +2497,423 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Third Row: Sales Analytics Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Sales by Day of Week */}
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-pink-600/5 dark:from-purple-400/5 dark:to-pink-400/5"></div>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Sales by Day</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Weekly pattern</p>
+                  </div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Calendar className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <div className="h-64">
+                  {isLoadingAnalytics ? (
+                    <div className="flex items-center justify-center h-full">
+                      <LoadingSpinner size="sm" />
+                    </div>
+                  ) : salesByDayOfWeek.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={salesByDayOfWeek}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                        <XAxis 
+                          dataKey="day" 
+                          stroke="#6b7280" 
+                          fontSize={10}
+                          tickLine={false}
+                          axisLine={false}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis 
+                          stroke="#6b7280" 
+                          fontSize={10}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => formatPrice(value)}
+                          labelFormatter={(label) => label}
+                          {...getTooltipStyles()}
+                        />
+                        <Bar 
+                          dataKey="revenue" 
+                          fill="url(#dayGradient)" 
+                          radius={[4, 4, 0, 0]}
+                        />
+                        <defs>
+                          <linearGradient id="dayGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#a855f7" />
+                            <stop offset="100%" stopColor="#ec4899" />
+                          </linearGradient>
+                        </defs>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">No data available</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-xs">Check browser console for details</p>
+                      <Button
+                        onClick={() => fetchAnalyticsData()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sales by Hour of Day */}
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-cyan-600/5 dark:from-blue-400/5 dark:to-cyan-400/5"></div>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Sales by Hour</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Daily pattern</p>
+                  </div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Activity className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <div className="h-64">
+                  {isLoadingAnalytics ? (
+                    <div className="flex items-center justify-center h-full">
+                      <LoadingSpinner size="sm" />
+                    </div>
+                  ) : salesByHourOfDay.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={salesByHourOfDay}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                        <XAxis 
+                          dataKey="hour" 
+                          stroke="#6b7280" 
+                          fontSize={10}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `${value}:00`}
+                        />
+                        <YAxis 
+                          stroke="#6b7280" 
+                          fontSize={10}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => formatPrice(value)}
+                          labelFormatter={(label) => `${label}:00`}
+                          {...getTooltipStyles()}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="revenue" 
+                          stroke="url(#hourGradient)" 
+                          strokeWidth={2}
+                          dot={{ fill: '#3b82f6', r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                        <defs>
+                          <linearGradient id="hourGradient" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#06b6d4" />
+                          </linearGradient>
+                        </defs>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">No data available</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-xs">Check browser console for details</p>
+                      <Button
+                        onClick={() => fetchAnalyticsData()}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Order Source Analytics - Replacing Sales by Category */}
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-green-600/5 dark:from-blue-400/5 dark:to-green-400/5"></div>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Order Source</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Online vs In-Store</p>
+                  </div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <ShoppingCart className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <div className="h-64">
+                  {orderSourceData.length > 0 ? (
+                    <div className="flex flex-col h-full">
+                      <div className="flex-1 flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={orderSourceData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={30}
+                              outerRadius={55}
+                              paddingAngle={2}
+                              dataKey="value"
+                              stroke="none"
+                            >
+                              {orderSourceData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(value: number, name: string, props: any) => [
+                                formatPrice(value), 
+                                `${props.payload.name} (${props.payload.percentage}%)`
+                              ]}
+                              {...getTooltipStyles()}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
+                          <div className="flex items-center space-x-1 mb-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Online</span>
+                          </div>
+                          <div className="text-xs font-bold text-blue-900 dark:text-blue-100">
+                            {formatPrice(orderSourceData.find(item => item.name === 'Online')?.value || 0)}
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-400">
+                            {orderSourceData.find(item => item.name === 'Online')?.percentage || '0.0'}%
+                          </div>
+                        </div>
+                        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+                          <div className="flex items-center space-x-1 mb-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-xs font-medium text-green-700 dark:text-green-300">In-Store</span>
+                          </div>
+                          <div className="text-xs font-bold text-green-900 dark:text-green-100">
+                            {formatPrice(orderSourceData.find(item => item.name === 'In-Store')?.value || 0)}
+                          </div>
+                          <div className="text-xs text-green-600 dark:text-green-400">
+                            {orderSourceData.find(item => item.name === 'In-Store')?.percentage || '0.0'}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <ShoppingCart className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">No data</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Payment Methods Chart removed per request */}
 
-          {/* Order Source Analytics */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-green-600/5 dark:from-blue-400/5 dark:to-green-400/5"></div>
+          {/* Sales by Category - Improved Layout */}
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 lg:p-8 transition-all duration-300 hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-600/5 to-red-600/5 dark:from-orange-400/5 dark:to-red-400/5"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-600 rounded-lg flex items-center justify-center">
-                      <ShoppingCart className="h-4 w-4 text-white" />
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Package className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Order Source Analytics</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Online vs In-Store breakdown</p>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sales by Category</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Product breakdown by category</p>
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="h-[28rem]">
-                {orderSourceData.length > 0 ? (
-                  <div className="flex flex-col h-full">
-                    {/* Chart Section */}
-                    <div className="flex-1 flex items-center justify-center p-6">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={orderSourceData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={45}
-                            outerRadius={70}
-                            paddingAngle={2}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {orderSourceData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value: number, name: string, props: any) => [
-                              formatPrice(value), 
-                              `${props.payload.name} (${props.payload.percentage}%)`
-                            ]}
-                            {...getTooltipStyles()}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Online</span>
-                        </div>
-                        <div className="text-sm font-bold text-blue-900 dark:text-blue-100">
-                          {formatPrice(orderSourceData.find(item => item.name === 'Online')?.value || 0)}
-                        </div>
-                        <div className="text-xs text-blue-600 dark:text-blue-400">
-                          {orderSourceData.find(item => item.name === 'Online')?.percentage || '0.0'}%
+              {isLoadingAnalytics ? (
+                <div className="flex items-center justify-center h-96">
+                  <LoadingSpinner size="sm" />
+                </div>
+              ) : salesByCategory.length > 0 ? (
+                (() => {
+                  const validCategories = salesByCategory.filter(item => item && item.category && item.revenue > 0);
+                  const colors = ['#f97316', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#ec4899', '#f59e0b', '#06b6d4', '#84cc16', '#f43f5e'];
+                  
+                  // Group small categories (< 2%) into "Others"
+                  const threshold = 2;
+                  const mainCategories = validCategories.filter(item => item.percentage >= threshold);
+                  const otherCategories = validCategories.filter(item => item.percentage < threshold);
+                  
+                  let chartData = [...mainCategories];
+                  if (otherCategories.length > 0) {
+                    const othersTotal = otherCategories.reduce((sum, item) => ({
+                      category: 'Others',
+                      revenue: sum.revenue + item.revenue,
+                      quantity: sum.quantity + item.quantity,
+                      transactions: sum.transactions + item.transactions,
+                      percentage: sum.percentage + item.percentage
+                    }), { category: 'Others', revenue: 0, quantity: 0, transactions: 0, percentage: 0 });
+                    chartData.push(othersTotal);
+                  }
+                  
+                  // Sort by percentage descending
+                  chartData.sort((a, b) => b.percentage - a.percentage);
+                  
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                      {/* Chart Section */}
+                      <div className="flex justify-center lg:justify-start">
+                        <div className="w-full max-w-md">
+                          <ResponsiveContainer width="100%" height={320}>
+                            <PieChart>
+                              <Pie
+                                data={chartData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={false}
+                                outerRadius={120}
+                                innerRadius={50}
+                                paddingAngle={3}
+                                fill="#8884d8"
+                                dataKey="revenue"
+                              >
+                                {chartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip 
+                                formatter={(value: number, name: string, props: any) => {
+                                  const data = props.payload;
+                                  const categoryName = data.category || 'Uncategorized';
+                                  return [
+                                    formatPrice(value),
+                                    `Category: ${categoryName}\nRevenue: ${formatPrice(data.revenue)}\nQuantity: ${data.quantity}\nTransactions: ${data.transactions}\nPercentage: ${data.percentage.toFixed(1)}%`
+                                  ];
+                                }}
+                                labelFormatter={(label) => `Category: ${label || 'Uncategorized'}`}
+                                {...getTooltipStyles()}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
                         </div>
                       </div>
                       
-                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-800">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-xs font-medium text-green-700 dark:text-green-300">In-Store</span>
+                      {/* Category List Section */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Category Breakdown</h4>
+                        <div className="space-y-2.5 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                          {chartData.map((entry, index) => {
+                            const isOthers = entry.category === 'Others';
+                            return (
+                              <div 
+                                key={`category-${index}`}
+                                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              >
+                                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                  <div 
+                                    className="w-4 h-4 rounded-full flex-shrink-0" 
+                                    style={{ backgroundColor: colors[index % colors.length] }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                        {entry.category}
+                                      </span>
+                                      {isOthers && otherCategories.length > 0 && (
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                          ({otherCategories.length} {otherCategories.length === 1 ? 'category' : 'categories'})
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center space-x-2 mt-1">
+                                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        {formatPrice(entry.revenue)}
+                                      </span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-500">•</span>
+                                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                                        {entry.quantity.toLocaleString()} {entry.quantity === 1 ? 'item' : 'items'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end ml-4 flex-shrink-0">
+                                  <span className="text-base font-bold text-gray-900 dark:text-white">
+                                    {entry.percentage.toFixed(1)}%
+                                  </span>
+                                  <div className="w-20 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full mt-1">
+                                    <div 
+                                      className="h-full rounded-full transition-all"
+                                      style={{ 
+                                        width: `${entry.percentage}%`,
+                                        backgroundColor: colors[index % colors.length]
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="text-sm font-bold text-green-900 dark:text-green-100">
-                          {formatPrice(orderSourceData.find(item => item.name === 'In-Store')?.value || 0)}
-                        </div>
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          {orderSourceData.find(item => item.name === 'In-Store')?.percentage || '0.0'}%
-                        </div>
+                        {otherCategories.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <details className="group">
+                              <summary className="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-900 dark:hover:text-gray-200 transition-colors">
+                                View {otherCategories.length} {otherCategories.length === 1 ? 'other category' : 'other categories'} ({otherCategories.reduce((sum, item) => sum + item.percentage, 0).toFixed(1)}%)
+                              </summary>
+                              <div className="mt-3 space-y-2">
+                                {otherCategories.map((item, idx) => (
+                                  <div key={`other-${idx}`} className="flex items-center justify-between text-xs p-2 rounded bg-gray-50 dark:bg-gray-800/50">
+                                    <span className="text-gray-700 dark:text-gray-300">{item.category}</span>
+                                    <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                      {item.percentage.toFixed(1)}% • {formatPrice(item.revenue)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-green-100 dark:from-blue-900/30 dark:to-green-900/30 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                        <ShoppingCart className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Order Source Data</h4>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs mx-auto leading-relaxed">
-                        Order source analytics will appear here once you have sales with order source tracking
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  );
+                })()
+              ) : (
+                <div className="flex flex-col items-center justify-center h-96 text-center">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">No data available</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-xs">Check browser console for details</p>
+                  <Button
+                    onClick={() => fetchAnalyticsData()}
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           </div>

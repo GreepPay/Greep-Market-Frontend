@@ -37,6 +37,7 @@ export interface Product {
   is_featured: boolean;
   created_by: string;
   store_id: string;
+  wholesaler_id?: string; // Link to wholesaler
   created_at: Date;
   updated_at: Date;
   price_history?: PriceHistory[];
@@ -226,6 +227,31 @@ export interface SalesReport {
     quantitySold: number;
     revenue: number;
   }>;
+}
+
+export interface Wholesaler {
+  _id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  store_id: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  products?: Product[]; // Products linked to this wholesaler
+  low_stock_count?: number; // Count of low stock products
+}
+
+export interface LowStockProduct {
+  _id: string;
+  product_id: string;
+  product_name: string;
+  current_quantity: number;
+  min_stock_level: number;
+  alert_type: 'low_stock' | 'out_of_stock';
+  product_image?: string;
 }
 
 export interface AppState {

@@ -133,8 +133,8 @@ const BulkImportPreview: React.FC<BulkImportPreviewProps> = ({ products, onSave,
   const totalProducts = editableProducts.length;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pt-0 px-4 pb-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center py-8 px-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-6 border-b">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Review & Edit Products</h2>
@@ -152,7 +152,7 @@ const BulkImportPreview: React.FC<BulkImportPreviewProps> = ({ products, onSave,
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
             {editableProducts.map((product, index) => (
               <div key={product.id} className="border border-gray-200 rounded-lg p-4">

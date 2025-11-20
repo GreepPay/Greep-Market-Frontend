@@ -6,7 +6,9 @@ import {
   ApiResponse,
   InventoryAlert,
   DashboardMetrics,
-  PriceHistory 
+  PriceHistory,
+  Wholesaler,
+  LowStockProduct
 } from '../types';
 import { api } from '../config/environment';
 
@@ -585,10 +587,39 @@ class ApiService {
     // Add cache-busting parameter to ensure fresh data when filters change
     queryParams.append('_t', Date.now().toString());
 
-    const response = await this.privateRequest<Transaction[]>(`/transactions?${queryParams}`);
+    const response = await this.privateRequest<any>(`/transactions?${queryParams}`);
+    
+    // Handle different response structures
+    let transactions: Transaction[] = [];
+    let total = 0;
+    
+    // Cast response to any to access potential pagination property
+    const responseAny = response as any;
+    
+    // Check if response.data is an array (simple array response)
+    if (Array.isArray(response.data)) {
+      transactions = response.data;
+      total = response.data.length;
+    } 
+    // Check if response.data has a transactions property (nested structure)
+    else if (response.data && typeof response.data === 'object' && Array.isArray(response.data.transactions)) {
+      transactions = response.data.transactions;
+      total = response.data.pagination?.total || responseAny.pagination?.total || transactions.length;
+    }
+    // Check if response has pagination at root level
+    else if (responseAny.pagination) {
+      transactions = Array.isArray(response.data) ? response.data : [];
+      total = responseAny.pagination.total || transactions.length;
+    }
+    // Fallback: try to use response.data as array
+    else {
+      transactions = Array.isArray(response.data) ? response.data : [];
+      total = transactions.length;
+    }
+    
     return {
-      transactions: response.data,
-      total: response.data.length,
+      transactions,
+      total,
       page: params?.page || 1,
       limit: params?.limit || 20,
     };
@@ -713,9 +744,99 @@ class ApiService {
     if (params?.store_id) queryParams.append('store_id', params.store_id);
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
-
+    
     const response = await this.privateRequest(`/analytics/sales?${queryParams}`);
     return response.data;
+  }
+
+  async getSalesByDayOfWeek(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+    period?: string;
+  }): Promise<Array<{ day: string; revenue: number; transactions: number }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.period) queryParams.append('period', params.period);
+    
+    try {
+      const response = await this.privateRequest<any>(`/analytics/sales/by-day-of-week?${queryParams}`);
+      // Handle different response structures
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (Array.isArray(response)) {
+        return response;
+      } else if ((response as any).success && (response as any).data) {
+        return (response as any).data;
+      }
+      console.warn('Unexpected response structure for getSalesByDayOfWeek:', response);
+      return [];
+    } catch (error) {
+      console.error('Error fetching sales by day of week:', error);
+      return [];
+    }
+  }
+
+  async getSalesByHourOfDay(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+    period?: string;
+  }): Promise<Array<{ hour: number; revenue: number; transactions: number }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.period) queryParams.append('period', params.period);
+    
+    try {
+      const response = await this.privateRequest<any>(`/analytics/sales/by-hour-of-day?${queryParams}`);
+      // Handle different response structures
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (Array.isArray(response)) {
+        return response;
+      } else if ((response as any).success && (response as any).data) {
+        return (response as any).data;
+      }
+      console.warn('Unexpected response structure for getSalesByHourOfDay:', response);
+      return [];
+    } catch (error) {
+      console.error('Error fetching sales by hour of day:', error);
+      return [];
+    }
+  }
+
+  async getSalesByCategory(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+    period?: string;
+  }): Promise<Array<{ category: string; revenue: number; quantity: number; transactions: number; percentage: number }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.period) queryParams.append('period', params.period);
+    
+    try {
+      const response = await this.privateRequest<any>(`/analytics/sales/by-category?${queryParams}`);
+      // Handle different response structures
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (Array.isArray(response)) {
+        return response;
+      } else if ((response as any).success && (response as any).data) {
+        return (response as any).data;
+      }
+      console.warn('Unexpected response structure for getSalesByCategory:', response);
+      return [];
+    } catch (error) {
+      console.error('Error fetching sales by category:', error);
+      return [];
+    }
   }
 
   async getProductPerformance(store_id?: string, period?: string, startDate?: Date, endDate?: Date): Promise<any> {
@@ -730,6 +851,112 @@ class ApiService {
     const response = await this.privateRequest(url);
 
     return response.data;
+  }
+
+  async getMostProfitableProducts(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<{
+    productId: string;
+    productName: string;
+    revenue: number;
+    profitMargin: number;
+    avgPricePerSale: number;
+    transactions: number;
+    quantitySold: number;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const response = await this.privateRequest<{ success: boolean; data: Array<any> }>(`/analytics/products/most-profitable?${queryParams}`);
+    return (response as any).data || [];
+  }
+
+  async getWorstPerformers(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<{
+    productId: string;
+    productName: string;
+    category: string;
+    stockQuantity: number;
+    price: number;
+    stockValue: number;
+    lastSaleDate: Date | null;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const response = await this.privateRequest<{ success: boolean; data: Array<any> }>(`/analytics/products/worst-performers?${queryParams}`);
+    return (response as any).data || [];
+  }
+
+  async getBestPerformers(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<{
+    productId: string;
+    productName: string;
+    revenue: number;
+    quantitySold: number;
+    transactions: number;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const response = await this.privateRequest<{ success: boolean; data: Array<any> }>(`/analytics/products/best-performers?${queryParams}`);
+    return (response as any).data || [];
+  }
+
+  async getFastestMovingProducts(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<{
+    productId: string;
+    productName: string;
+    quantitySold: number;
+    revenue: number;
+    turnoverRate: number;
+    avgDailySales: number;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const response = await this.privateRequest<{ success: boolean; data: Array<any> }>(`/analytics/products/fastest-moving?${queryParams}`);
+    return (response as any).data || [];
+  }
+
+  async getCategoryPerformance(params?: {
+    store_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<Array<{
+    category: string;
+    products: number;
+    totalRevenue: number;
+    quantitySold: number;
+    avgRevenuePerProduct: number;
+    stockValue: number;
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    
+    const response = await this.privateRequest<{ success: boolean; data: Array<any> }>(`/analytics/categories/performance?${queryParams}`);
+    return (response as any).data || [];
   }
 
   async getInventoryAnalytics(store_id?: string): Promise<any> {
@@ -1260,6 +1487,112 @@ class ApiService {
       body: JSON.stringify(settings),
     });
     return (response as any).data;
+  }
+
+  // Wholesaler Management Methods
+  async getWholesalers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    store_id?: string;
+    is_active?: boolean;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+  }): Promise<{ wholesalers: Wholesaler[]; total: number; page: number; pages: number }> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+    if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+
+    const response = await this.privateRequest<{ success: boolean; data: { wholesalers: Wholesaler[]; total: number; page: number; pages: number } }>(`/wholesalers?${queryParams}`);
+    return (response as any).data;
+  }
+
+  async getWholesalerById(wholesalerId: string, includeProducts?: boolean): Promise<Wholesaler> {
+    const queryParams = new URLSearchParams();
+    if (includeProducts) queryParams.append('include_products', 'true');
+
+    const response = await this.privateRequest<{ success: boolean; data: Wholesaler }>(`/wholesalers/${wholesalerId}${queryParams.toString() ? `?${queryParams}` : ''}`);
+    return (response as any).data;
+  }
+
+  async createWholesaler(wholesalerData: {
+    name: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    store_id: string;
+    notes?: string;
+    is_active?: boolean;
+  }): Promise<Wholesaler> {
+    const response = await this.privateRequest<{ success: boolean; data: Wholesaler }>('/wholesalers', {
+      method: 'POST',
+      body: JSON.stringify(wholesalerData),
+    });
+    return (response as any).data;
+  }
+
+  async updateWholesaler(wholesalerId: string, wholesalerData: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    notes?: string;
+    is_active?: boolean;
+  }): Promise<Wholesaler> {
+    const response = await this.privateRequest<{ success: boolean; data: Wholesaler }>(`/wholesalers/${wholesalerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(wholesalerData),
+    });
+    return (response as any).data;
+  }
+
+  async deleteWholesaler(wholesalerId: string): Promise<void> {
+    await this.privateRequest(`/wholesalers/${wholesalerId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getWholesalerLowStock(wholesalerId: string): Promise<LowStockProduct[]> {
+    const response = await this.privateRequest<{ success: boolean; data: LowStockProduct[] }>(`/wholesalers/${wholesalerId}/low-stock`);
+    return (response as any).data;
+  }
+
+  async sendWholesalerEmailAlert(wholesalerId: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.privateRequest<{ success: boolean; message: string }>(`/wholesalers/${wholesalerId}/send-email-alert`, {
+      method: 'POST',
+    });
+    return response as any;
+  }
+
+  async getWholesalerWhatsAppLink(wholesalerId: string): Promise<{ link: string }> {
+    const response = await this.privateRequest<{ success: boolean; data: { link: string } }>(`/wholesalers/${wholesalerId}/whatsapp-link`);
+    return (response as any).data;
+  }
+
+  async exportWholesalers(params?: {
+    format?: 'pdf' | 'excel';
+    include_products?: boolean;
+    store_id?: string;
+  }): Promise<Blob> {
+    const queryParams = new URLSearchParams();
+    if (params?.format) queryParams.append('format', params.format);
+    if (params?.include_products) queryParams.append('include_products', 'true');
+    if (params?.store_id) queryParams.append('store_id', params.store_id);
+
+    const response = await this.rawRequest(`/wholesalers/export?${queryParams}`, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+
+    return await response.blob();
   }
 }
 
