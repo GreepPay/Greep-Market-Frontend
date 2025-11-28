@@ -3,6 +3,8 @@ import { Package, AlertTriangle, CheckSquare, Square, DollarSign, History, Edit3
 import { Product } from '../../types';
 import { formatTagsForDisplay } from '../../utils/tagUtils';
 import { formatStockQuantity } from '../../utils/formatUtils';
+import { ProductImageGallery } from './ProductImageGallery';
+import { Badge } from './badge';
 
 interface ProductCardProps {
   product: Product;
@@ -98,26 +100,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
       )}
       
-      {/* Product Image with Overlay */}
-      <div className="relative h-48 bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-500 overflow-hidden">
-        {product.images && product.images.length > 0 ? (
-          <>
-            <img
-              src={product.images.find(img => img.is_primary)?.url || product.images[0].url}
-              alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-600 dark:to-gray-500">
-            <Package className="h-16 w-16 text-gray-400 dark:text-gray-500" />
-          </div>
-        )}
+      {/* Product Image Gallery */}
+      <div className="relative">
+        <ProductImageGallery
+          product={product}
+          showIndicators={true}
+          showNavigation={true}
+        />
         
         {/* Quick Actions Overlay */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
-          <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center pointer-events-none">
+          <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0 pointer-events-auto">
             {onAddToCart && !isOutOfStock && (
               <button
                 onClick={() => onAddToCart(product)}
@@ -139,9 +132,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {highlightSearchTerm(product.name, searchTerm)}
           </h3>
           <div className="flex items-center justify-between">
-            <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-xs font-semibold shadow-sm">
+            <Badge variant="secondary" className="text-xs">
               {product.category}
-            </span>
+            </Badge>
             <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{product.unit}</span>
           </div>
         </div>

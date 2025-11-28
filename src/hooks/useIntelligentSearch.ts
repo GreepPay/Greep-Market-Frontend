@@ -108,34 +108,47 @@ export const useIntelligentSearch = ({
     return Array.from(suggestionMap.values());
   }, [products]);
 
-  // Enhanced search function with fuzzy matching
+  // Enhanced search function with strict matching
   const searchProducts = useCallback((query: string, products: Product[]): Product[] => {
     if (!query.trim()) return products;
 
-    const queryLower = query.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
     const scoredProducts: (Product & { score: number })[] = [];
 
     products.forEach(product => {
       let maxScore = 0;
 
-      // Check product name
+      // Check product name - must contain the query as substring
       if (product.name) {
-        const nameScore = calculateMatchScore(queryLower, product.name.toLowerCase());
-        maxScore = Math.max(maxScore, nameScore);
+        const nameLower = product.name.toLowerCase();
+        if (nameLower.includes(queryLower)) {
+          const index = nameLower.indexOf(queryLower);
+          // Higher score if match is at the beginning
+          const nameScore = 100 - (index / nameLower.length) * 20;
+          maxScore = Math.max(maxScore, nameScore);
+        }
       }
 
-      // Check category
+      // Check category - must contain the query as substring
       if (product.category) {
-        const categoryScore = calculateMatchScore(queryLower, product.category.toLowerCase());
-        maxScore = Math.max(maxScore, categoryScore * 0.8); // Category matches get slightly lower weight
+        const categoryLower = product.category.toLowerCase();
+        if (categoryLower.includes(queryLower)) {
+          const index = categoryLower.indexOf(queryLower);
+          const categoryScore = (100 - (index / categoryLower.length) * 20) * 0.8; // Category matches get slightly lower weight
+          maxScore = Math.max(maxScore, categoryScore);
+        }
       }
 
-      // Check tags
+      // Check tags - must contain the query as substring
       if (product.tags && Array.isArray(product.tags)) {
         product.tags.forEach(tag => {
           if (tag) {
-            const tagScore = calculateMatchScore(queryLower, tag.toLowerCase());
-            maxScore = Math.max(maxScore, tagScore * 0.6); // Tag matches get lower weight
+            const tagLower = tag.toLowerCase();
+            if (tagLower.includes(queryLower)) {
+              const index = tagLower.indexOf(queryLower);
+              const tagScore = (100 - (index / tagLower.length) * 20) * 0.6; // Tag matches get lower weight
+              maxScore = Math.max(maxScore, tagScore);
+            }
           }
         });
       }
@@ -163,10 +176,15 @@ export const useIntelligentSearch = ({
   const calculateMatchScore = (query: string, text: string): number => {
     if (!query || !text) return 0;
 
-    // Exact match gets highest score
+    // Case-insensitive contains match - works for single characters and longer queries
+    // This ensures that typing "y" or "Y" will match products containing "y" or "Y"
     if (text.includes(query)) {
       const index = text.indexOf(query);
-      return 100 - (index / text.length) * 20; // Earlier matches get higher scores
+      // For single character matches, give a good score
+      // For longer matches, give higher score if match is earlier in the text
+      return query.length === 1 
+        ? 90 - (index / text.length) * 10 // Single char: 80-90 score range
+        : 100 - (index / text.length) * 20; // Longer matches: higher scores
     }
 
     // Word boundary matches

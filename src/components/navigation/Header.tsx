@@ -7,12 +7,13 @@ import { useNotifications } from '../../context/NotificationContext';
 import { app } from '../../config/environment';
 import { GlassmorphismIcon } from '../ui/GlassmorphismIcon';
 import { NotificationDropdown } from '../ui/NotificationDropdown';
+import { EnhancedNotificationDropdown } from '../ui/EnhancedNotificationDropdown';
 // import { Button } from '../ui/Button';
 
 export const Header: React.FC = () => {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const { currentStore } = useStore();
-  const { notifications, markAsRead, markAllAsRead, clearAll, toggleExpand, unreadCount } = useNotifications();
+  const { notifications, markAsRead, markAllAsRead, clearAll, toggleExpand, unreadCount, refreshNotifications, isLoading } = useNotifications();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -57,7 +58,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-white/20 dark:border-gray-700/50 px-4 py-3 shadow-sm transition-colors duration-300">
+    <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-white/20 dark:border-gray-700/50 px-4 py-3 shadow-sm transition-colors duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <img src="/icons/GreepMarket-Green_BG-White.svg" alt="Greep Market" className="h-12 w-12 text-white" />
@@ -86,14 +87,16 @@ export const Header: React.FC = () => {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
-            <NotificationDropdown
+            <EnhancedNotificationDropdown
               notifications={notifications}
               onMarkAsRead={markAsRead}
               onMarkAllAsRead={markAllAsRead}
               onClearAll={clearAll}
               onToggleExpand={toggleExpand}
+              onRefresh={refreshNotifications}
               isOpen={showNotifications}
               onClose={() => setShowNotifications(false)}
+              isLoading={isLoading}
             />
           </div>
 
@@ -107,7 +110,7 @@ export const Header: React.FC = () => {
                 <User className="h-4 w-4 text-primary-600" />
               </div>
               <div className="text-left hidden sm:block">
-                {isLoading ? (
+                {authLoading ? (
                   <>
                     <p className="text-sm font-medium text-gray-900 dark:text-white animate-pulse">
                       Loading...
@@ -128,9 +131,9 @@ export const Header: React.FC = () => {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-xl border border-white/20 dark:border-gray-700/50 py-1 z-50 transition-all duration-200">
+              <div className="absolute right-0 mt-2 w-48 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-xl shadow-xl border border-white/20 dark:border-gray-700/50 py-1 z-[60] transition-all duration-200">
                 <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                  {isLoading ? (
+                  {authLoading ? (
                     <>
                       <p className="text-sm font-medium text-gray-900 dark:text-white animate-pulse">
                         Loading...

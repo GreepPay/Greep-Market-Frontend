@@ -238,6 +238,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const alerts = await apiService.getLowStockItems(user?.store_id);
       dispatch({ type: 'SET_INVENTORY_ALERTS', payload: alerts });
+      
+      // Notify about inventory alerts (only for new alerts to avoid spam)
+      if (alerts && alerts.length > 0) {
+        const { notificationService } = await import('../services/notificationService');
+        alerts.forEach((alert: any) => {
+          if (alert.stock_quantity === 0) {
+            notificationService.notifyInventoryAlert(
+              alert.name,
+              'out_of_stock',
+              alert.stock_quantity,
+              alert.min_stock_level || 0
+            );
+          } else if (alert.stock_quantity <= (alert.min_stock_level || 0)) {
+            notificationService.notifyInventoryAlert(
+              alert.name,
+              'low_stock',
+              alert.stock_quantity,
+              alert.min_stock_level || 0
+            );
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to load inventory alerts:', error);
       // Silent error handling - no user notification
@@ -253,6 +275,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         created_by: user?.id || '',
       }, images);
       dispatch({ type: 'ADD_PRODUCT', payload: { ...newProduct, tags: cleanTagsInput(newProduct.tags) } });
+      
+      // Notify about product creation
+      const { notificationService } = await import('../services/notificationService');
+      notificationService.notifyProductCreated(
+        newProduct.name,
+        newProduct.price,
+        newProduct.stock_quantity || 0
+      );
+      
       toast.success('Product added');
     } catch (error) {
       console.error('Failed to add product:', error);
@@ -269,6 +300,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       const updatedProduct = await apiService.updateProduct(id, cleanedUpdates, images, replaceImages);
       dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates: { ...updatedProduct, tags: cleanTagsInput(updatedProduct.tags) } } });
+      
+      // Notify about product update
+      const { notificationService } = await import('../services/notificationService');
+      const changes: string[] = [];
+      if (updates.name) changes.push(`name: ${updates.name}`);
+      if (updates.price !== undefined) changes.push(`price: ₺${updates.price}`);
+      if (updates.stock_quantity !== undefined) changes.push(`stock: ${updates.stock_quantity}`);
+      if (changes.length > 0) {
+        notificationService.notifyProductUpdated(updatedProduct.name, changes);
+      }
+      
       toast.success('Product updated');
     } catch (error) {
       console.error('Failed to update product:', error);
@@ -283,6 +325,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Get the old price before updating
+      const oldProduct = state.products.find(p => p._id === productId);
+      const oldPrice = oldProduct?.price || 0;
+      
       const result = await apiService.updateProductPrice(productId, {
         new_price: newPrice,
         change_reason: reason,
@@ -291,6 +337,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       // Update the product in the state
       dispatch({ type: 'UPDATE_PRODUCT', payload: { id: productId, updates: result.product } });
+      
+      // Notify about price change
+      const { notificationService } = await import('../services/notificationService');
+      notificationService.notifyPriceChanged(
+        result.product.name,
+        oldPrice,
+        newPrice
+      );
       
       toast.success('Price updated');
     } catch (error) {
@@ -312,8 +366,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteProduct = async (id: string) => {
     try {
+      // Get product name before deletion for notification
+      const product = state.products.find(p => p._id === id);
+      const productName = product?.name || 'Product';
+      
       await apiService.deleteProduct(id);
       dispatch({ type: 'DELETE_PRODUCT', payload: id });
+      
+      // Notify about product deletion
+      const { notificationService } = await import('../services/notificationService');
+      notificationService.notifyProductDeleted(productName);
+      
       // Don't show success toast here as it will be shown in the component
     } catch (error: any) {
       console.error('Failed to delete product:', error);

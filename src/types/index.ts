@@ -20,6 +20,7 @@ export interface Product {
   stock_quantity: number;
   min_stock_level: number;
   unit: string;
+  vat_percentage?: number; // VAT percentage (e.g., 16 for 16%)
   weight?: number;
   dimensions?: {
     length?: number;
@@ -108,6 +109,7 @@ export interface TransactionItem {
   total_price: number;
   discount_amount?: number;
   product_image?: string; // Primary product image URL
+  vat_percentage?: number; // VAT percentage for this product (e.g., 16 for 16%)
 }
 
 export interface InventoryAlert {

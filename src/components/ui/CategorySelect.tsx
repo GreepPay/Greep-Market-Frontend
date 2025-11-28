@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, Tag } from 'lucide-react';
-import { normalizeCategoryName, addSavedCategory, getAllAvailableCategories } from '../../utils/categoryUtils';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ChevronDown, Tag } from 'lucide-react';
+import { normalizeCategoryName, getAllAvailableCategories, mergeSimilarCategories } from '../../utils/categoryUtils';
 
 interface CategorySelectProps {
   value: string;
@@ -49,15 +49,44 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Get all available categories (saved + normalized from products)
-  const allAvailableCategories = getAllAvailableCategories(products);
+  const rawCategories = getAllAvailableCategories(products || []);
+  
+  // Merge similar categories (e.g., "Drink" and "Drinks" become one)
+  // Also include existingCategories as a fallback
+  const allAvailableCategories = useMemo(() => {
+    // Combine raw categories with existing categories
+    const allCategories = new Set<string>();
+    
+    // Add categories from products
+    rawCategories.forEach(cat => {
+      if (cat && cat.trim()) {
+        allCategories.add(cat);
+      }
+    });
+    
+    // Add existing categories as fallback
+    existingCategories.forEach(cat => {
+      if (cat && cat !== 'all' && cat.trim()) {
+        allCategories.add(cat);
+      }
+    });
+    
+    const combined = Array.from(allCategories);
+    
+    if (combined.length === 0) {
+      return [];
+    }
+    
+    // Merge similar categories
+    const merged = mergeSimilarCategories(combined, 0.7); // 70% similarity threshold
+    // If merging resulted in empty array, use original combined list
+    return merged.length > 0 ? merged : combined;
+  }, [rawCategories, existingCategories]);
   
   // Filter categories based on search term
   const filteredCategories = allAvailableCategories.filter(category =>
     category.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Check if search term matches a new category
-  const isNewCategory = searchTerm && !allAvailableCategories.includes(normalizeCategoryName(searchTerm));
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -86,20 +115,13 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
     setSearchTerm('');
   };
 
-  const handleAddNewCategory = () => {
-    if (searchTerm.trim()) {
-      const normalizedCategory = normalizeCategoryName(searchTerm.trim());
-      addSavedCategory(normalizedCategory);
-      handleSelectCategory(normalizedCategory);
-    }
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (isNewCategory) {
-        handleAddNewCategory();
-      } else if (filteredCategories.length === 1) {
+      if (filteredCategories.length === 1) {
+        handleSelectCategory(filteredCategories[0]);
+      } else if (filteredCategories.length > 0 && searchTerm) {
+        // If there's a search term and matches, select the first match
         handleSelectCategory(filteredCategories[0]);
       }
     } else if (e.key === 'Escape') {
@@ -153,30 +175,28 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search or type new category..."
+              placeholder="Search categories..."
               className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             />
           </div>
 
-          {/* Categories List */}
-          <div className="max-h-48 overflow-y-auto">
+          {/* Categories List - Row-based display */}
+          <div className="max-h-48 overflow-y-auto p-2">
             {filteredCategories.length > 0 ? (
-              <div className="py-1">
+              <div className="flex flex-wrap gap-2">
                 {filteredCategories.map((category, index) => (
                   <button
                     key={category}
                     type="button"
                     onClick={() => handleSelectCategory(category)}
-                    className={`w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700 transition-colors duration-150 ${
-                      value === category ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-300'
+                    className={`inline-flex items-center px-3 py-2 rounded-full text-xs font-medium border transition-all duration-150 ${
+                      value === category 
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-primary-300 dark:border-primary-700 shadow-sm' 
+                        : `${getCategoryColor(category, index)} hover:opacity-80 hover:scale-105`
                     }`}
                   >
-                    <div className="flex items-center space-x-2">
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(category, index)}`}>
-                        <Tag className="h-3 w-3 inline mr-1" />
-                        {category}
-                      </div>
-                    </div>
+                    <Tag className="h-3 w-3 mr-1.5" />
+                    {category}
                   </button>
                 ))}
               </div>
@@ -185,45 +205,7 @@ const CategorySelect: React.FC<CategorySelectProps> = ({
                 No categories found
               </div>
             )}
-
-            {/* Add New Category Option */}
-            {isNewCategory && (
-              <div className="border-t border-gray-100 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={handleAddNewCategory}
-                  className="w-full px-3 py-2 text-left hover:bg-green-50 dark:hover:bg-green-900/20 focus:outline-none focus:bg-green-50 dark:focus:bg-green-900/20 transition-colors duration-150 text-green-700 dark:text-green-400"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Plus className="h-4 w-4" />
-                    <span className="font-medium">Add "{searchTerm}"</span>
-                  </div>
-                </button>
-              </div>
-            )}
           </div>
-
-          {/* Quick Add Categories */}
-          {!searchTerm && (
-            <div className="border-t border-gray-100 dark:border-gray-700 p-2">
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quick add popular categories:</div>
-              <div className="flex flex-wrap gap-1">
-                {['Food & Beverages', 'Electronics', 'Clothing', 'Home & Garden', 'Health & Beauty', 'Sports & Outdoors'].map((quickCategory) => {
-                  if (allAvailableCategories.includes(quickCategory)) return null;
-                  return (
-                    <button
-                      key={quickCategory}
-                      type="button"
-                      onClick={() => handleSelectCategory(quickCategory)}
-                      className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full transition-colors duration-150"
-                    >
-                      + {quickCategory}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

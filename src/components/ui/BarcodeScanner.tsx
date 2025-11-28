@@ -25,24 +25,87 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [lastErrorTime, setLastErrorTime] = useState(0);
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
+  const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
+  const errorReportedRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Check HTTPS requirement and enumerate cameras
+  // Function to play beep sound on successful scan
+  const playBeepSound = () => {
+    try {
+      // Resume AudioContext if it's suspended (required after user interaction)
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      
+      // Create AudioContext if it doesn't exist
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      const audioContext = audioContextRef.current;
+      
+      // Create oscillator for beep sound
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      // Connect nodes
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configure beep sound (loud, attention-grabbing beep at 1000Hz)
+      oscillator.frequency.value = 1000;
+      oscillator.type = 'sine';
+      
+      // Set volume envelope (quick attack, quick release) - maximum volume
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(1.0, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      
+      // Play the beep (slightly longer for better audibility)
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    } catch (error) {
+      // Silently fail if audio is not supported or user hasn't interacted
+      console.warn('Could not play beep sound:', error);
+    }
+  };
+
+  // Check HTTPS requirement and request camera permission
   useEffect(() => {
     const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
     setIsHttps(isSecure);
     
     // Check camera permission
-    if (navigator.permissions) {
-      navigator.permissions.query({ name: 'camera' as PermissionName }).then((result) => {
-        setCameraPermission(result.state);
-      }).catch(() => {
-        setCameraPermission('unknown');
-      });
-    }
+    const checkPermission = async () => {
+      if (navigator.permissions) {
+        try {
+          const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          setCameraPermission(result.state);
+        } catch {
+          setCameraPermission('unknown');
+        }
+      }
+    };
 
-    // Enumerate available cameras
-    const enumerateCameras = async () => {
+    checkPermission();
+  }, []);
+
+  // Request camera permission and enumerate cameras when modal opens
+  useEffect(() => {
+    if (!isOpen || !isHttps) return;
+
+    const requestCameraAccess = async () => {
       try {
+        // Request camera permission by trying to access the camera
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        // Stop the stream immediately - we just needed permission
+        stream.getTracks().forEach(track => track.stop());
+        
+        setCameraPermission('granted');
+        setHasRequestedPermission(true);
+        
+        // Now enumerate cameras (will have labels after permission is granted)
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cameras = devices.filter(device => device.kind === 'videoinput');
         setAvailableCameras(cameras);
@@ -59,12 +122,120 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         } else if (cameras.length > 0) {
           setSelectedCamera(cameras[0].deviceId);
         }
-      } catch (error) {
+      } catch (err: any) {
+        console.error('Camera access error:', err);
+        setHasRequestedPermission(true);
+        
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setCameraPermission('denied');
+          setError('Camera permission denied. Please allow camera access in your browser settings.');
+        } else if (err.name === 'NotFoundError') {
+          setCameraPermission('denied');
+          setError('No camera found. Please ensure your device has a camera.');
+        } else if (err.name === 'NotReadableError') {
+          setError('Camera is already in use by another application.');
+        } else {
+          setError('Failed to access camera. Please check your device settings.');
+        }
       }
     };
 
-    enumerateCameras();
-  }, []);
+    if (!hasRequestedPermission) {
+      requestCameraAccess();
+    }
+  }, [isOpen, isHttps, hasRequestedPermission]);
+
+  // Clean up scanner when modal closes
+  useEffect(() => {
+    if (!isOpen && scannerRef.current) {
+      setIsScanning(false);
+      
+      const cleanupScanner = async () => {
+        try {
+          const scanner = scannerRef.current;
+          if (!scanner) return;
+
+          const scannerAny = scanner as any;
+          
+          // Try multiple ways to access and stop the internal Html5Qrcode instance
+          let html5Qrcode = null;
+          
+          // Method 1: Direct property access
+          if (scannerAny._html5Qrcode) {
+            html5Qrcode = scannerAny._html5Qrcode;
+          }
+          // Method 2: Alternative property name
+          else if (scannerAny.html5Qrcode) {
+            html5Qrcode = scannerAny.html5Qrcode;
+          }
+          // Method 3: Check all properties for Html5Qrcode instance
+          else {
+            for (const key in scannerAny) {
+              if (scannerAny[key] && typeof scannerAny[key] === 'object' && typeof scannerAny[key].stop === 'function') {
+                html5Qrcode = scannerAny[key];
+                break;
+              }
+            }
+          }
+          
+          // Stop the internal scanner if we found it
+          if (html5Qrcode && typeof html5Qrcode.stop === 'function') {
+            try {
+              await html5Qrcode.stop();
+              // Give it a moment to fully stop
+              await new Promise(resolve => setTimeout(resolve, 150));
+            } catch (stopErr) {
+              // Ignore stop errors - scanner might already be stopped
+            }
+          }
+
+          // Now try to clear the scanner with retry logic
+          let retries = 3;
+          let cleared = false;
+          
+          while (retries > 0 && scannerRef.current && !cleared) {
+            try {
+              scannerRef.current.clear();
+              cleared = true;
+            } catch (clearErr: any) {
+              retries--;
+              
+              // If it's the "scan is ongoing" error and we have retries left
+              if (clearErr.message && clearErr.message.includes('scan is ongoing') && retries > 0) {
+                // Wait longer and try to stop again
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Try to stop again if we have html5Qrcode
+                if (html5Qrcode && typeof html5Qrcode.stop === 'function') {
+                  try {
+                    await html5Qrcode.stop();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                  } catch (retryStopErr) {
+                    // Ignore
+                  }
+                }
+                continue; // Retry clearing
+              }
+              
+              // If it's not the "scan is ongoing" error or we're out of retries
+              if (!clearErr.message?.includes('scan is ongoing') && !clearErr.message?.includes('already')) {
+                console.warn('Scanner cleanup warning:', clearErr);
+              }
+              // Even if clear fails, we should null the ref to prevent memory leaks
+              break;
+            }
+          }
+          
+          scannerRef.current = null;
+        } catch (err) {
+          // If anything fails, just null the ref
+          scannerRef.current = null;
+        }
+      };
+
+      cleanupScanner();
+    }
+  }, [isOpen]);
 
   // Reset error state when modal opens
   useEffect(() => {
@@ -72,11 +243,29 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       setError(null);
       setErrorCount(0);
       setLastErrorTime(0);
+      errorReportedRef.current = false;
+    } else {
+      // Reset permission request state when modal closes
+      setHasRequestedPermission(false);
     }
   }, [isOpen]);
 
+  // Cleanup AudioContext on unmount
   useEffect(() => {
-    if (isOpen && !scannerRef.current && isHttps) {
+    return () => {
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch (error) {
+          // Ignore errors during cleanup
+        }
+        audioContextRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && !scannerRef.current && isHttps && cameraPermission === 'granted' && hasRequestedPermission) {
       // Wait for the DOM element to be available
       const initScanner = () => {
         const scannerElement = document.getElementById('barcode-scanner');
@@ -117,6 +306,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
           scannerRef.current.render(
             (decodedText) => {
+              // Play beep sound on successful scan
+              playBeepSound();
               onScan(decodedText);
               setIsScanning(false);
               onClose();
@@ -125,51 +316,65 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               const now = Date.now();
               const timeSinceLastError = now - lastErrorTime;
               
-              // Throttle error handling to prevent spam
-              if (timeSinceLastError < 1000) { // Only process errors once per second
+              // Ignore common scanning errors that don't indicate a real problem
+              // These are just "no barcode found" errors during scanning
+              if (error.includes('NotFoundException') || 
+                  error.includes('QR code parse error') ||
+                  error.includes('No MultiFormat Readers')) {
+                // These are normal scanning errors, don't report them
+                return;
+              }
+              
+              // Throttle error handling to prevent spam - only process critical errors
+              if (timeSinceLastError < 2000) { // Only process errors once per 2 seconds
                 return;
               }
               
               setLastErrorTime(now);
               setErrorCount(prev => prev + 1);
               
-              // Stop processing errors after 5 attempts to prevent spam
-              if (errorCount >= 5) {
-                setError('Camera not supported. Please use a device with a camera.');
-                onError?.('Camera not supported');
+              // Only report critical errors once
+              if (errorReportedRef.current) {
                 return;
               }
               
-              // Handle different types of errors
-              if (error.includes('No MultiFormat Readers') || 
-                  error.includes('Camera not supported') ||
-                  error.includes('QR code parse error')) {
-                setError('Camera not supported. Please use a device with a camera.');
-                onError?.('Camera not supported');
-              } else if (error.includes('Permission denied')) {
+              // Handle critical errors that indicate a real problem
+              if (error.includes('Permission denied') || error.includes('NotAllowedError')) {
                 setError('Camera permission denied. Please allow camera access in your browser settings.');
-                onError?.('Camera permission denied');
-              } else if (error.includes('NotAllowedError')) {
-                setError('Camera access denied. Please check your browser permissions.');
-                onError?.('Camera access denied');
+                if (!errorReportedRef.current) {
+                  errorReportedRef.current = true;
+                  onError?.('Camera permission denied');
+                }
               } else if (error.includes('NotFoundError')) {
                 setError('No camera found. Please ensure your device has a camera.');
-                onError?.('No camera found');
+                if (!errorReportedRef.current) {
+                  errorReportedRef.current = true;
+                  onError?.('No camera found');
+                }
               } else if (error.includes('NotReadableError')) {
                 setError('Camera is already in use by another application.');
-                onError?.('Camera in use');
-              } else if (!error.includes('NotFoundException') && !error.includes('QR code parse error')) {
-                setError('Scanning error. Please try again.');
-                onError?.(error);
+                if (!errorReportedRef.current) {
+                  errorReportedRef.current = true;
+                  onError?.('Camera in use');
+                }
+              } else if (error.includes('Camera not supported')) {
+                setError('Camera not supported. Please use a device with a camera.');
+                if (!errorReportedRef.current) {
+                  errorReportedRef.current = true;
+                  onError?.('Camera not supported');
+                }
               }
             }
           );
 
           setIsScanning(true);
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to initialize barcode scanner:', err);
           setError('Failed to initialize camera. Please try again.');
-          onError?.('Scanner initialization failed');
+          if (!errorReportedRef.current) {
+            errorReportedRef.current = true;
+            onError?.('Scanner initialization failed');
+          }
         }
       };
 
@@ -178,15 +383,59 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
 
     return () => {
-      if (scannerRef.current) {
-        try {
-          scannerRef.current.clear();
-        } catch (err) {
-        }
-        scannerRef.current = null;
+      // Cleanup is primarily handled when isOpen becomes false
+      // This cleanup handles dependency changes (like camera selection change)
+      if (scannerRef.current && !isOpen) {
+        setIsScanning(false);
+        const cleanup = async () => {
+          try {
+            const scannerAny = scannerRef.current as any;
+            if (!scannerAny) return;
+            
+            // Try to find and stop the internal scanner
+            let html5Qrcode = scannerAny._html5Qrcode || scannerAny.html5Qrcode;
+            if (!html5Qrcode) {
+              for (const key in scannerAny) {
+                if (scannerAny[key] && typeof scannerAny[key] === 'object' && typeof scannerAny[key].stop === 'function') {
+                  html5Qrcode = scannerAny[key];
+                  break;
+                }
+              }
+            }
+            
+            if (html5Qrcode && typeof html5Qrcode.stop === 'function') {
+              try {
+                await html5Qrcode.stop();
+                await new Promise(resolve => setTimeout(resolve, 150));
+              } catch (stopErr) {
+                // Ignore
+              }
+            }
+            
+            // Try to clear with retry
+            let retries = 2;
+            while (retries > 0 && scannerRef.current) {
+              try {
+                scannerRef.current.clear();
+                break;
+              } catch (clearErr: any) {
+                retries--;
+                if (clearErr.message?.includes('scan is ongoing') && retries > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  continue;
+                }
+                break;
+              }
+            }
+            scannerRef.current = null;
+          } catch (err) {
+            scannerRef.current = null;
+          }
+        };
+        cleanup();
       }
     };
-  }, [isOpen, onScan, onClose, onError, isHttps, errorCount, lastErrorTime, selectedCamera]);
+  }, [isOpen, onScan, onClose, onError, isHttps, cameraPermission, hasRequestedPermission, selectedCamera, lastErrorTime, errorCount]);
 
   if (!isOpen) return null;
 
@@ -252,7 +501,17 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           </div>
 
           <div className="p-4">
-            {error ? (
+            {!hasRequestedPermission ? (
+              <div className="text-center py-8">
+                <Camera className="h-12 w-12 text-primary-600 mx-auto mb-4 animate-pulse" />
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Requesting camera access...
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  Please allow camera access when prompted
+                </p>
+              </div>
+            ) : error ? (
               <div className="text-center py-8">
                 <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                 <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>

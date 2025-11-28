@@ -254,9 +254,16 @@ export const ShoppingCartComponent: React.FC<ShoppingCartProps> = ({
                     >
                       {item.product_name}
                     </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                      {formatPrice(item.unit_price)} per unit
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {formatPrice(item.unit_price)} per unit
+                      </p>
+                      {item.vat_percentage && item.vat_percentage > 0 && (
+                        <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded">
+                          VAT {item.vat_percentage}%
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -333,12 +340,24 @@ export const ShoppingCartComponent: React.FC<ShoppingCartProps> = ({
                 </div>
               </div>
 
-              {/* Bottom Row: Total Price */}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Item Total:</span>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  {formatPrice(item.total_price)}
-                </span>
+              {/* Bottom Row: Total Price and VAT */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-600 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Item Total:</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">
+                    {formatPrice(item.total_price)}
+                  </span>
+                </div>
+                {item.vat_percentage && item.vat_percentage > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+                      VAT ({item.vat_percentage}%):
+                    </span>
+                    <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                      {formatPrice((item.total_price * item.vat_percentage) / 100)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, Plus, X, Tag } from 'lucide-react';
-import { cleanTagsInput } from '../../utils/tagUtils';
+import { cleanTagsInput, getAllTagsFromProducts, mergeSimilarTags } from '../../utils/tagUtils';
 
 interface TagsDropdownProps {
   value: string[];
   onChange: (tags: string[]) => void;
   existingTags: string[];
+  products?: any[]; // Add products prop to extract tags
   placeholder?: string;
   label?: string;
   maxTags?: number;
@@ -39,6 +40,7 @@ const TagsDropdown: React.FC<TagsDropdownProps> = ({
   value = [],
   onChange,
   existingTags = [],
+  products = [],
   placeholder = "Add tags...",
   label = "Tags",
   maxTags = 10,
@@ -53,14 +55,48 @@ const TagsDropdown: React.FC<TagsDropdownProps> = ({
   // Clean and normalize the value prop to ensure it's always an array of strings
   const cleanValue = cleanTagsInput(value);
 
+  // Get all tags from products
+  const productTags = getAllTagsFromProducts(products || []);
+  
+  // Combine tags from products with existing tags and merge similar ones
+  const allAvailableTags = useMemo(() => {
+    // Combine tags from products with existing tags
+    const allTags = new Set<string>();
+    
+    // Add tags from products
+    productTags.forEach(tag => {
+      if (tag && tag.trim()) {
+        allTags.add(tag);
+      }
+    });
+    
+    // Add existing tags as fallback
+    existingTags.forEach(tag => {
+      if (tag && tag.trim()) {
+        allTags.add(tag);
+      }
+    });
+    
+    const combined = Array.from(allTags);
+    
+    if (combined.length === 0) {
+      return [];
+    }
+    
+    // Merge similar tags
+    const merged = mergeSimilarTags(combined, 0.7); // 70% similarity threshold
+    // If merging resulted in empty array, use original combined list
+    return merged.length > 0 ? merged : combined;
+  }, [productTags, existingTags]);
+
   // Filter tags based on search term
-  const filteredTags = existingTags.filter(tag =>
+  const filteredTags = allAvailableTags.filter(tag =>
     tag.toLowerCase().includes(searchTerm.toLowerCase()) &&
     !cleanValue.includes(tag)
   );
 
   // Check if search term matches a new tag
-  const isNewTag = searchTerm && !existingTags.includes(searchTerm) && !cleanValue.includes(searchTerm);
+  const isNewTag = searchTerm && !allAvailableTags.includes(searchTerm) && !cleanValue.includes(searchTerm);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -146,29 +182,31 @@ const TagsDropdown: React.FC<TagsDropdownProps> = ({
           }`}
           onClick={() => inputRef.current?.focus()}
         >
-          {/* Selected Tags */}
-          <div className="flex flex-wrap gap-1 mb-1">
-            {cleanValue.map((tag, index) => (
-              <span
-                key={tag}
-                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getTagColor(tag, index)}`}
-              >
-                <Tag className="h-3 w-3 mr-1" />
-                {tag}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveTag(tag);
-                  }}
-                  className="ml-1 hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-20 rounded-full p-0.5 transition-colors duration-150"
-                  aria-label={`Remove ${tag} tag`}
+          {/* Selected Tags - Row-based display */}
+          {cleanValue.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {cleanValue.map((tag, index) => (
+                <span
+                  key={tag}
+                  className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium border ${getTagColor(tag, index)}`}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
+                  <Tag className="h-3 w-3 mr-1.5" />
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveTag(tag);
+                    }}
+                    className="ml-1.5 hover:bg-black hover:bg-opacity-10 dark:hover:bg-white dark:hover:bg-opacity-20 rounded-full p-0.5 transition-colors duration-150"
+                    aria-label={`Remove ${tag} tag`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Input Field */}
           <input
@@ -192,29 +230,25 @@ const TagsDropdown: React.FC<TagsDropdownProps> = ({
         {/* Dropdown Menu */}
         {isOpen && (
           <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-hidden">
-            {/* Tags List */}
-            <div className="max-h-48 overflow-y-auto">
+            {/* Tags List - Row-based display */}
+            <div className="max-h-48 overflow-y-auto p-2">
               {filteredTags.length > 0 ? (
-                <div className="py-1">
+                <div className="flex flex-wrap gap-2">
                   {filteredTags.map((tag, index) => (
                     <button
                       key={tag}
                       type="button"
                       onClick={() => handleTagClick(tag)}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700 transition-colors duration-150 text-gray-700 dark:text-gray-300"
+                      className={`inline-flex items-center px-3 py-2 rounded-full text-xs font-medium border transition-all duration-150 ${getTagColor(tag, index)} hover:opacity-80 hover:scale-105`}
                     >
-                      <div className="flex items-center space-x-2">
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium border ${getTagColor(tag, index)}`}>
-                          <Tag className="h-3 w-3 inline mr-1" />
-                          {tag}
-                        </div>
-                      </div>
+                      <Tag className="h-3 w-3 mr-1.5" />
+                      {tag}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                  {existingTags.length === 0 ? 'No existing tags' : 'No matching tags'}
+                  {allAvailableTags.length === 0 ? 'No existing tags' : 'No matching tags'}
                 </div>
               )}
 

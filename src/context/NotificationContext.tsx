@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { Notification } from '../components/ui/NotificationDropdown';
 import { apiService } from '../services/api';
 import { useAuth } from './AuthContext';
+import { notificationService } from '../services/notificationService';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -61,53 +62,103 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     );
   }, []);
 
-  // Load notifications from backend
+  // Load notifications from backend with better error handling and data validation
   const loadNotifications = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     
     setIsLoading(true);
     try {
       const response = await apiService.getNotifications({ limit: 50 });
-      const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
-        id: notif._id,
-        type: notif.type,
-        priority: notif.priority,
-        title: notif.title,
-        message: notif.message,
-        timestamp: new Date(notif.created_at),
-        read: notif.read || notif.is_read || false, // Handle both 'read' and 'is_read' fields
-        data: notif.data,
-      }));
+      
+      // Validate response structure
+      if (!response || !response.notifications || !Array.isArray(response.notifications)) {
+        console.warn('Invalid notifications response structure:', response);
+        setNotifications([]);
+        return;
+      }
+      
+      // Map and validate each notification
+      const backendNotifications: Notification[] = response.notifications
+        .filter((notif: any) => notif && notif._id) // Filter out invalid notifications
+        .map((notif: any) => {
+          // Ensure timestamp is valid
+          let timestamp: Date;
+          try {
+            timestamp = notif.created_at ? new Date(notif.created_at) : new Date();
+            if (isNaN(timestamp.getTime())) {
+              timestamp = new Date();
+            }
+          } catch {
+            timestamp = new Date();
+          }
+          
+          return {
+            id: notif._id || Date.now().toString(),
+            type: notif.type || 'info',
+            priority: notif.priority || 'MEDIUM',
+            title: notif.title || 'Notification',
+            message: notif.message || '',
+            timestamp,
+            read: notif.read === true || notif.is_read === true || false,
+            data: notif.data || {},
+          };
+        })
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()); // Sort by newest first
       
       setNotifications(backendNotifications);
     } catch (error) {
       console.error('Failed to load notifications:', error);
+      // Don't clear existing notifications on error, just log it
     } finally {
       setIsLoading(false);
     }
   }, [isAuthenticated, user]);
 
-  // Refresh notifications (for real-time updates)
+  // Refresh notifications (for real-time updates) with better data validation
   const refreshNotifications = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     
     try {
       const response = await apiService.getNotifications({ limit: 50 });
       
-      const backendNotifications: Notification[] = response.notifications.map((notif: any) => ({
-        id: notif._id,
-        type: notif.type,
-        priority: notif.priority,
-        title: notif.title,
-        message: notif.message,
-        timestamp: new Date(notif.created_at),
-        read: notif.read || notif.is_read || false, // Handle both 'read' and 'is_read' fields
-        data: notif.data,
-      }));
+      // Validate response structure
+      if (!response || !response.notifications || !Array.isArray(response.notifications)) {
+        console.warn('Invalid notifications response during refresh:', response);
+        return; // Don't update if response is invalid
+      }
+      
+      // Map and validate each notification
+      const backendNotifications: Notification[] = response.notifications
+        .filter((notif: any) => notif && notif._id) // Filter out invalid notifications
+        .map((notif: any) => {
+          // Ensure timestamp is valid
+          let timestamp: Date;
+          try {
+            timestamp = notif.created_at ? new Date(notif.created_at) : new Date();
+            if (isNaN(timestamp.getTime())) {
+              timestamp = new Date();
+            }
+          } catch {
+            timestamp = new Date();
+          }
+          
+          return {
+            id: notif._id || Date.now().toString(),
+            type: notif.type || 'info',
+            priority: notif.priority || 'MEDIUM',
+            title: notif.title || 'Notification',
+            message: notif.message || '',
+            timestamp,
+            read: notif.read === true || notif.is_read === true || false,
+            data: notif.data || {},
+          };
+        })
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()); // Sort by newest first
       
       setNotifications(backendNotifications);
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
+      // Don't clear notifications on error - keep existing ones
     }
   }, [isAuthenticated, user]);
 
@@ -171,7 +222,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     
     pollingIntervalRef.current = setInterval(() => {
       refreshNotifications();
-    }, 30000); // Poll every 30 seconds
+    }, 15000); // Poll every 15 seconds for better real-time updates
   }, [refreshNotifications]);
 
   // Stop polling
@@ -198,6 +249,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [isAuthenticated, user, loadNotifications, startPolling, stopPolling]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Register notification service on mount
+  useEffect(() => {
+    notificationService.registerAddNotification(addNotification);
+  }, [addNotification]);
 
   const value: NotificationContextType = {
     notifications,

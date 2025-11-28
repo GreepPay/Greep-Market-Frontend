@@ -72,27 +72,26 @@ export const ScrollToTopButton: React.FC<ScrollToTopButtonProps> = ({ className 
   if (!isVisible) return null;
 
   return (
-    <div className={`fixed right-4 bottom-20 z-[9999] transition-all duration-300 ${className}`}>
+    <div className={`fixed right-6 bottom-16 z-[48] transition-all duration-300 ${className}`}>
       <button
         onClick={handleClick}
         className={`
           group relative
-          w-12 h-12 rounded-full
-          bg-gradient-to-br from-green-500 to-green-700
-          hover:from-green-600 hover:to-green-800
-          dark:from-green-600 dark:to-green-800
-          dark:hover:from-green-700 dark:hover:to-green-900
-          shadow-lg hover:shadow-xl
+          w-14 h-14 rounded-full
+          bg-gradient-to-br from-primary-500 to-primary-600
+          hover:from-primary-600 hover:to-primary-700
+          dark:from-primary-600 dark:to-primary-700
+          dark:hover:from-primary-700 dark:hover:to-primary-800
+          shadow-lg hover:shadow-xl dark:shadow-xl dark:hover:shadow-2xl
           transition-all duration-300 ease-in-out
           transform hover:scale-105 active:scale-95
-          border-2 border-white/20 dark:border-gray-700/30
-          backdrop-blur-sm
+          border border-white/10 dark:border-white/5
           ${isVisible ? 'animate-in slide-in-from-right-2 fade-in' : 'animate-out slide-out-to-right-2 fade-out'}
         `}
         aria-label={scrollDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'}
       >
         {/* Subtle animated background pulse */}
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-500 to-green-700 opacity-20 animate-pulse" />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 opacity-20 animate-pulse" />
         
         {/* Icon container */}
         <div className="relative flex items-center justify-center w-full h-full">

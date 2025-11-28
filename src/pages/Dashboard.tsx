@@ -19,6 +19,7 @@ import {
 import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Button } from '../components/ui/Button';
+import { Skeleton } from '../components/ui/skeleton';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useGoals } from '../context/GoalContext';
@@ -112,6 +113,7 @@ export const Dashboard: React.FC = () => {
   // totalExpenses now comes from dashboard metrics - no separate state needed
   const [filteredSales, setFilteredSales] = useState<any[]>([]);
   const [fullTransactions, setFullTransactions] = useState<any[]>([]); // Full transaction data for payment methods
+  const [rawExpenses, setRawExpenses] = useState<any[]>([]); // Raw expenses for custom date range calculations
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [localDashboardMetrics, setLocalDashboardMetrics] = useState<any>(null);
   const [isGoalSettingModalOpen, setIsGoalSettingModalOpen] = useState(false);
@@ -446,26 +448,35 @@ export const Dashboard: React.FC = () => {
         });
 
         // Check if expenses are missing and fetch them separately if needed
+        // Always fetch raw expenses for custom date range calculations
         let finalMetrics = { ...metrics };
+        
+        // Fetch raw expenses in parallel with metrics for faster loading
+        const expensesPromise = apiService.getExpenses({
+          store_id: user?.store_id,
+          start_date: startDate,
+          end_date: endDate,
+          limit: 1000 // Get all expenses for the period
+        }).catch((expenseError) => {
+          console.error('❌ Failed to fetch expenses separately:', expenseError);
+          return { expenses: [] };
+        });
+
+        // Wait for expenses to complete
+        const expensesResponse = await expensesPromise;
+        
+        // Store raw expenses for custom date range calculations
+        setRawExpenses(expensesResponse.expenses || []);
+        
+        // If metrics doesn't have expenses, calculate from raw expenses
         if (metrics && (metrics.totalExpenses === undefined || metrics.totalExpenses === null)) {
-          try {
-            const expensesResponse = await apiService.getExpenses({
-              store_id: user?.store_id,
-              start_date: startDate,
-              end_date: endDate,
-              limit: 1000 // Get all expenses for the period
-            });
-            
-            const totalExpenses = expensesResponse.expenses.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0);
-            finalMetrics = {
-              ...metrics,
-              totalExpenses: totalExpenses,
-              monthlyExpenses: totalExpenses
-            };
-            
-          } catch (expenseError) {
-            console.error('❌ Failed to fetch expenses separately:', expenseError);
-          }
+          const expensesArray = Array.isArray(expensesResponse.expenses) ? expensesResponse.expenses : [];
+          const totalExpenses = expensesArray.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0);
+          finalMetrics = {
+            ...metrics,
+            totalExpenses: totalExpenses,
+            monthlyExpenses: totalExpenses
+          };
         }
 
         // When the user views "today", fetch a wider window for charts so sales trends keep historical context
@@ -519,16 +530,23 @@ export const Dashboard: React.FC = () => {
           }
         }
 
+        // Update metrics immediately for fast initial render
         setLocalDashboardMetrics(finalMetrics);
+        setIsInitialLoad(false);
 
-        // Update goal progress with the loaded metrics
+        // Update goal progress with the loaded metrics (non-blocking)
         if (finalMetrics) {
           updateGoalProgress(finalMetrics, finalMetrics);
         }
 
-        // Fetch full transaction data for payment methods chart and sales chart
-        // Include historical context based on the filter
-        const fetchedTransactions = await fetchFullTransactionsForPaymentMethods(filterParams, dateRange);
+        // Fetch full transaction data in parallel (non-blocking for initial render)
+        // This can load after metrics are shown
+        fetchFullTransactionsForPaymentMethods(filterParams, dateRange).catch(err => {
+          console.warn('⚠️ Failed to fetch full transactions (non-critical):', err);
+        });
+        
+        // Use recentTransactions from metrics for immediate display
+        const fetchedTransactions: any[] = [];
 
         // Log what was fetched
 
@@ -610,9 +628,13 @@ export const Dashboard: React.FC = () => {
 
   // Filter changes are now handled by unified refresh
 
-  // Initial load on mount
+  // Initial load on mount - show skeleton immediately
   useEffect(() => {
-    unifiedRefresh();
+    // Set initial load to false after a brief delay to show skeleton
+    const timer = setTimeout(() => {
+      unifiedRefresh();
+    }, 50);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
@@ -795,9 +817,13 @@ export const Dashboard: React.FC = () => {
     }
   }, [user?.store_id, dateRange, customStartDate, customEndDate]);
 
-  // Fetch analytics data when filters change
+  // Fetch analytics data when filters change - load in parallel with main data
   useEffect(() => {
-    fetchAnalyticsData();
+    // Delay analytics fetch slightly to prioritize main metrics
+    const timeoutId = setTimeout(() => {
+      fetchAnalyticsData();
+    }, 100);
+    return () => clearTimeout(timeoutId);
   }, [fetchAnalyticsData]);
 
   // Fetch expense data when filters change
@@ -1743,10 +1769,81 @@ export const Dashboard: React.FC = () => {
     };
   };
 
-  // Use unified API data directly - no need for smart metrics calculation
-  const totalSales = currentDashboardMetrics?.totalSales ?? 0;
-  const totalTransactions = currentDashboardMetrics?.totalTransactions ?? 0;
-  const averageTransactionValue = currentDashboardMetrics?.averageTransactionValue ?? 0;
+  // Calculate metrics from filtered data for custom date ranges
+  const calculatedMetricsForCustomRange = useMemo(() => {
+    // Only calculate for custom date ranges
+    if (dateRange !== 'custom' || !customStartDate || !customEndDate) {
+      return null;
+    }
+
+    // Filter transactions by custom date range to ensure accuracy
+    const startDate = new Date(customStartDate);
+    const endDate = new Date(customEndDate);
+    endDate.setHours(23, 59, 59, 999); // End of day
+    
+    const filteredTransactionsInRange = filteredSales.filter((transaction: any) => {
+      if (!transaction.created_at) return false;
+      
+      const transactionDate = new Date(transaction.created_at);
+      
+      // Normalize dates to compare only the date part (ignore time)
+      const transactionDateOnly = new Date(transactionDate.getFullYear(), transactionDate.getMonth(), transactionDate.getDate());
+      const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      return transactionDateOnly >= startDateOnly && transactionDateOnly <= endDateOnly;
+    });
+
+    // Calculate Total Sales from filtered transactions
+    const calculatedTotalSales = filteredTransactionsInRange.reduce((sum: number, transaction: any) => {
+      return sum + (transaction.total_amount || 0);
+    }, 0);
+
+    // Calculate Total Transactions count
+    const calculatedTotalTransactions = filteredTransactionsInRange.length;
+
+    // Calculate Average Transaction Value
+    const calculatedAverageTransactionValue = calculatedTotalTransactions > 0
+      ? calculatedTotalSales / calculatedTotalTransactions
+      : 0;
+
+    // Calculate Total Expenses from rawExpenses
+    const calculatedTotalExpenses = rawExpenses.reduce((sum: number, expense: any) => {
+      // Check if expense is within the custom date range
+      if (!expense.date) return sum;
+      
+      const expenseDate = new Date(expense.date);
+      const startDate = new Date(customStartDate);
+      const endDate = new Date(customEndDate);
+      endDate.setHours(23, 59, 59, 999); // End of day
+      
+      // Normalize dates to compare only the date part (ignore time)
+      const expenseDateOnly = new Date(expenseDate.getFullYear(), expenseDate.getMonth(), expenseDate.getDate());
+      const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      if (expenseDateOnly >= startDateOnly && expenseDateOnly <= endDateOnly) {
+        return sum + (expense.amount || 0);
+      }
+      return sum;
+    }, 0);
+
+    // Calculate Net Profit
+    const calculatedNetProfit = calculatedTotalSales - calculatedTotalExpenses;
+
+    return {
+      totalSales: calculatedTotalSales,
+      totalTransactions: calculatedTotalTransactions,
+      averageTransactionValue: calculatedAverageTransactionValue,
+      totalExpenses: calculatedTotalExpenses,
+      netProfit: calculatedNetProfit,
+    };
+  }, [dateRange, customStartDate, customEndDate, filteredSales, rawExpenses]);
+
+  // Use calculated metrics for custom ranges, otherwise use API data
+  const totalSales = calculatedMetricsForCustomRange?.totalSales ?? currentDashboardMetrics?.totalSales ?? 0;
+  const totalTransactions = calculatedMetricsForCustomRange?.totalTransactions ?? currentDashboardMetrics?.totalTransactions ?? 0;
+  const averageTransactionValue = calculatedMetricsForCustomRange?.averageTransactionValue ?? currentDashboardMetrics?.averageTransactionValue ?? 0;
   const growthRate = currentDashboardMetrics?.growthRate ?? 0;
 
   // Animated numbers for key metrics
@@ -1798,12 +1895,12 @@ export const Dashboard: React.FC = () => {
         periodLabel = 'This Month';
   }
 
-  // Use expense data from dashboard metrics (single source of truth)
-  const totalExpensesFromMetrics = currentDashboardMetrics?.totalExpenses || 0;
+  // Use calculated metrics for custom ranges, otherwise use API data
+  const totalExpensesFromMetrics = calculatedMetricsForCustomRange?.totalExpenses ?? currentDashboardMetrics?.totalExpenses ?? 0;
   const monthlyExpensesFromMetrics = currentDashboardMetrics?.monthlyExpenses || 0;
-  const netProfitFromMetrics = currentDashboardMetrics?.netProfit || 0;
+  const netProfitFromMetrics = calculatedMetricsForCustomRange?.netProfit ?? currentDashboardMetrics?.netProfit ?? 0;
 
-  // Use net profit from metrics (calculated by backend)
+  // Use net profit from calculated metrics or API (calculated by backend)
   const netProfit = netProfitFromMetrics;
   
   // Debug logging
@@ -1865,7 +1962,8 @@ export const Dashboard: React.FC = () => {
     },
   ];
 
-  if (loading || isInitialLoad) {
+  // Show loading state only if truly loading and no metrics available
+  if ((loading && !currentDashboardMetrics) || (isInitialLoad && !currentDashboardMetrics)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-green-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 pb-24">
         <div className="max-w-7xl mx-auto space-y-8">
@@ -1885,27 +1983,23 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Loading State */}
+          {/* Loading State with ShadCN Skeleton */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300">
-                <div className="animate-pulse">
-                  <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-2xl mb-4"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                  <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
-                </div>
-              </div>
+              <Card key={i} className="animate-stagger-1">
+                <Skeleton className="w-14 h-14 rounded-2xl mb-4" />
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-8 w-32 mb-2" />
+                <Skeleton className="h-3 w-20" />
+              </Card>
             ))}
           </div>
 
           {/* Loading Chart */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300">
-            <div className="animate-pulse">
-              <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
-              <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            </div>
-          </div>
+          <Card className="p-8 animate-stagger-2">
+            <Skeleton className="h-6 w-1/3 mb-4" />
+            <Skeleton className="h-80 w-full rounded-lg" />
+          </Card>
         </div>
       </div>
     );
@@ -1978,7 +2072,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Filters Section */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 animate-fade-in-up">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-700 rounded-xl flex items-center justify-center">
@@ -2111,12 +2205,20 @@ export const Dashboard: React.FC = () => {
 
         {/* Metrics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {metricCards.map((metric) => {
+          {metricCards.map((metric, index) => {
             const Icon = metric.icon;
+            // Ensure proper stagger animation classes
+            const staggerClasses = [
+              'animate-stagger-1',
+              'animate-stagger-2', 
+              'animate-stagger-3',
+              'animate-stagger-4'
+            ];
+            const staggerClass = staggerClasses[index] || 'animate-stagger-4';
             return (
               <div
                 key={metric.id}
-                className="group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800"
+                className={`group relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800 ${staggerClass}`}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent dark:from-gray-700/50"></div>
                 <div className="relative">
@@ -2147,7 +2249,7 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Daily Goal Progress */}
             {dailyProgress && (
-              <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800">
+              <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800 animate-fade-in-up">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5"></div>
           <div className="relative">
                   <div className="flex items-center justify-between mb-3">
@@ -2216,7 +2318,7 @@ export const Dashboard: React.FC = () => {
 
             {/* Monthly Goal Progress */}
             {monthlyProgress && (
-              <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800">
+              <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl hover:scale-105 hover:bg-white dark:hover:bg-gray-800 animate-fade-in-up">
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-pink-500/5"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3">
@@ -2288,7 +2390,7 @@ export const Dashboard: React.FC = () => {
         {/* Charts Section */}
         <div className="space-y-8">
           {/* Sales Overview Chart - Full Width */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl animate-fade-in-up">
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/5 to-teal-600/5 dark:from-emerald-400/5 dark:to-teal-400/5"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
@@ -2407,7 +2509,7 @@ export const Dashboard: React.FC = () => {
           {/* Second Row: Top Products */}
           <div className="grid grid-cols-1 gap-8">
             {/* Top Products Chart */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl">
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-8 transition-all duration-300 hover:shadow-2xl animate-fade-in-up">
             <div className="absolute inset-0 bg-gradient-to-r from-green-600/5 to-green-700/5 dark:from-green-400/5 dark:to-green-500/5"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
@@ -2500,7 +2602,7 @@ export const Dashboard: React.FC = () => {
           {/* Third Row: Sales Analytics Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Sales by Day of Week */}
-            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl animate-fade-in-up">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-pink-600/5 dark:from-purple-400/5 dark:to-pink-400/5"></div>
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
@@ -2575,7 +2677,7 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Sales by Hour of Day */}
-            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl animate-stagger-5">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-cyan-600/5 dark:from-blue-400/5 dark:to-cyan-400/5"></div>
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
@@ -2651,7 +2753,7 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Order Source Analytics - Replacing Sales by Category */}
-            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl">
+            <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-2xl animate-stagger-6">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-green-600/5 dark:from-blue-400/5 dark:to-green-400/5"></div>
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
@@ -2736,7 +2838,7 @@ export const Dashboard: React.FC = () => {
           {/* Payment Methods Chart removed per request */}
 
           {/* Sales by Category - Improved Layout */}
-          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 lg:p-8 transition-all duration-300 hover:shadow-2xl">
+          <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50 p-6 lg:p-8 transition-all duration-300 hover:shadow-2xl animate-fade-in-up">
             <div className="absolute inset-0 bg-gradient-to-r from-orange-600/5 to-red-600/5 dark:from-orange-400/5 dark:to-red-400/5"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
@@ -2922,7 +3024,7 @@ export const Dashboard: React.FC = () => {
         {/* Recent Activity & Alerts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Recent Sales */}
-          <Card className="p-4">
+          <Card className="p-4 animate-fade-in-up">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-medium text-gray-800 dark:text-white">Recent Sales</h3>
               <div className="flex items-center space-x-2">
@@ -3011,7 +3113,7 @@ export const Dashboard: React.FC = () => {
           </Card>
 
           {/* Inventory Alerts */}
-          <Card className="p-4">
+          <Card className="p-4 animate-fade-in-up">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-medium text-gray-800 dark:text-white">Inventory Alerts</h3>
               <div className="flex items-center space-x-2">
@@ -3063,7 +3165,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Quick Actions - Compact Version */}
-        <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/50 p-4 transition-all duration-300">
+        <div className="relative overflow-hidden bg-white/80 dark:bg-gray-800/80 backdrop-sm rounded-xl shadow-lg border border-white/20 dark:border-gray-700/50 p-4 transition-all duration-300 animate-fade-in-up">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center">

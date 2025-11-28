@@ -51,6 +51,7 @@ export const Products: React.FC = () => {
     description: '',
     sku: '',
     tags: [] as string[],
+    vat_percentage: '',
   });
   const [editingImages, setEditingImages] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,6 +77,7 @@ export const Products: React.FC = () => {
       description: '',
       sku: '',
       tags: [],
+      vat_percentage: '',
     });
   };
 
@@ -106,24 +108,35 @@ export const Products: React.FC = () => {
     }
   }, [location.state, navigate, location.pathname]);
 
-  // Load products when search query or category changes
+  // Load all products on initial mount and when categories change (but not on search query change)
   useEffect(() => {
     const categoryParam = selectedCategories.includes('all') ? 'all' : selectedCategories.join(',');
-    loadProducts(searchQuery, categoryParam);
-  }, [searchQuery, selectedCategories, loadProducts]);
+    // Only load from server for category changes, not for search queries
+    // Search will be done client-side for immediate keystroke response
+    // Load without search parameter to get all products for client-side filtering
+    loadProducts('', categoryParam);
+  }, [selectedCategories, loadProducts]);
 
-  // No need for client-side filtering since we're using API filtering
-  // Only use intelligent search if there's a search query and no server-side search
+  // Client-side filtering for search - works on all loaded products
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     
-    // If there's a search query, use intelligent search as backup
+    let result = products;
+    
+    // Apply search filter client-side (works on every keystroke)
     if (searchQuery.trim()) {
-      return searchProducts(searchQuery, products);
+      result = searchProducts(searchQuery, result);
     }
     
-    return products;
-  }, [products, searchQuery, searchProducts]);
+    // Apply category filter client-side if specific categories are selected
+    if (!selectedCategories.includes('all') && selectedCategories.length > 0) {
+      result = result.filter(product => 
+        product.category && selectedCategories.includes(product.category)
+      );
+    }
+    
+    return result;
+  }, [products, searchQuery, selectedCategories, searchProducts]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -133,10 +146,8 @@ export const Products: React.FC = () => {
       addToRecentSearches(query);
     }
     
-    // For server-side search, we can still call the API
-    // But now we also have client-side intelligent search as backup
-    const categoryParam = selectedCategories.includes('all') ? 'all' : selectedCategories.join(',');
-    loadProducts(query, categoryParam);
+    // No server-side search call - we do client-side filtering for immediate response
+    // This allows searching on every keystroke including single characters
   };
 
   const handlePageChange = (newPage: number) => {
@@ -298,6 +309,7 @@ export const Products: React.FC = () => {
         stock_quantity: formData.stock_quantity ? parseInt(formData.stock_quantity) : 0,
         min_stock_level: formData.min_stock_level ? parseInt(formData.min_stock_level) : 5,
         unit: formData.unit,
+        vat_percentage: formData.vat_percentage ? parseFloat(formData.vat_percentage) : undefined,
         weight: undefined,
         dimensions: undefined,
         images: [], // Will be populated by the API after image upload
@@ -368,6 +380,7 @@ export const Products: React.FC = () => {
       description: product.description || '',
       sku: product.sku,
       tags: product.tags,
+      vat_percentage: product.vat_percentage ? product.vat_percentage.toString() : '',
     });
     setEditingImages([]); // Reset editing images
     setIsEditModalOpen(true);
@@ -391,6 +404,7 @@ export const Products: React.FC = () => {
         stock_quantity: newProduct.stock_quantity ? parseInt(newProduct.stock_quantity) : 0,
         min_stock_level: newProduct.min_stock_level ? parseInt(newProduct.min_stock_level) : 5,
         unit: newProduct.unit,
+        vat_percentage: newProduct.vat_percentage ? parseFloat(newProduct.vat_percentage) : undefined,
         tags: newProduct.tags,
       }, editingImages.length > 0 ? editingImages : undefined);
 
@@ -593,7 +607,7 @@ export const Products: React.FC = () => {
               placeholder="Search products by name, barcode, or SKU..."
               onSearch={handleSearch}
               enableRealTime={true}
-              debounceMs={300}
+              debounceMs={50}
               showBarcodeButton={false}
               suggestions={suggestions}
               recentSearches={recentSearches}
@@ -957,6 +971,16 @@ export const Products: React.FC = () => {
                 placeholder="5"
                 min={0}
               />
+              <NumberInput
+                label="VAT (%)"
+                value={newProduct.vat_percentage || ''}
+                onChange={(value) => setNewProduct({ ...newProduct, vat_percentage: String(value) })}
+                placeholder="0"
+                min={0}
+                max={100}
+                precision={2}
+                step={0.01}
+              />
             </div>
           </div>
 
@@ -970,6 +994,7 @@ export const Products: React.FC = () => {
               value={newProduct.tags}
               onChange={(tags) => setNewProduct({ ...newProduct, tags })}
               existingTags={existingTags}
+              products={products}
               placeholder="Add tags..."
               maxTags={10}
             />
@@ -1223,7 +1248,7 @@ export const Products: React.FC = () => {
           onClick={() => setIsAddModalOpen(true)}
           icon={Plus}
           label="Add Product"
-          color="blue"
+          color="green"
           size="lg"
           position="bottom-right"
         />
