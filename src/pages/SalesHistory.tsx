@@ -438,6 +438,66 @@ export const SalesHistory: React.FC = () => {
     });
   }, [soldProducts, searchQuery, selectedCategory, selectedTags, selectedMonth, selectedYear, sortField, sortDirection]);
 
+  // Filter transactions for list view based on selected filters
+  const filteredTransactions = useMemo(() => {
+    if (!sales || sales.length === 0) return [];
+    
+    // If no filters are active, return all transactions
+    if (selectedCategory === 'all' && selectedTags.length === 0 && selectedMonth === 'all' && 
+        selectedYear === new Date().getFullYear().toString() && !searchQuery.trim()) {
+      return sales;
+    }
+    
+    return sales.filter(transaction => {
+      const items = transaction.items || [];
+      
+      // Check if any item in the transaction matches the filters
+      return items.some(item => {
+        // Find the product for this item
+        const product = products?.find(p => p._id === item.product_id);
+        if (!product) return false;
+        
+        // Check category filter
+        if (selectedCategory !== 'all' && product.category !== selectedCategory) {
+          return false;
+        }
+        
+        // Check tags filter
+        if (selectedTags.length > 0) {
+          const productTags = Array.isArray(product.tags) ? product.tags : [];
+          const hasMatchingTag = selectedTags.some(tag => 
+            productTags.some(pt => pt.toLowerCase() === tag.toLowerCase())
+          );
+          if (!hasMatchingTag) return false;
+        }
+        
+        // Check search query
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          const productTags = Array.isArray(product.tags) ? product.tags : [];
+          const matchesName = product.name.toLowerCase().includes(query);
+          const matchesCategory = product.category?.toLowerCase().includes(query);
+          const matchesTags = productTags.some((tag: string) => tag.toLowerCase().includes(query));
+          if (!matchesName && !matchesCategory && !matchesTags) return false;
+        }
+        
+        // Check month filter
+        if (selectedMonth !== 'all') {
+          const transactionMonth = new Date(transaction.created_at).getMonth();
+          if (transactionMonth !== parseInt(selectedMonth)) return false;
+        }
+        
+        // Check year filter
+        if (selectedYear !== 'all') {
+          const transactionYear = new Date(transaction.created_at).getFullYear();
+          if (transactionYear !== parseInt(selectedYear)) return false;
+        }
+        
+        return true;
+      });
+    });
+  }, [sales, products, selectedCategory, selectedTags, selectedMonth, selectedYear, searchQuery]);
+
   // Note: Server-side pagination means we don't need to update sales based on filteredProducts
   // The sales state is managed by loadPaginatedSales which fetches from the server
 
@@ -641,39 +701,91 @@ export const SalesHistory: React.FC = () => {
   function ReceiptModalInline({ open, onClose, transaction }: { open: boolean, onClose: () => void, transaction: Transaction | null }) {
     if (!open || !transaction) return null;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center py-8 px-4 bg-black/60 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+      <div className="fixed inset-0 z-50 flex items-center justify-center py-8 px-4 bg-black/60 dark:bg-black/80 overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 relative border border-gray-200 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 text-gray-400 hover:text-red-500"
+            className="absolute top-3 right-3 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
             title="Close receipt modal"
           >
             <X className="h-6 w-6" />
           </button>
-          <h2 className="flex items-center gap-2 mb-2 font-bold text-xl">
-            <Receipt className="text-blue-500" /> Transaction Receipt
+          <h2 className="flex items-center gap-2 mb-2 font-bold text-xl text-gray-900 dark:text-white">
+            <Receipt className="text-blue-500 dark:text-blue-400" /> Transaction Receipt
           </h2>
-          <div className="text-xs text-gray-400 mb-1">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
             {new Date(transaction.created_at).toLocaleString()}
           </div>
-          <div className="text-xs text-gray-400 mb-3">
-            Transaction ID: <span className="font-mono">{transaction._id?.slice(-8) || 'N/A'}</span>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Transaction ID: <span className="font-mono text-gray-700 dark:text-gray-300">{transaction._id?.slice(-8) || 'N/A'}</span>
           </div>
-          <div className="divide-y">
-            {transaction.items.map((item, idx) => (
-              <div className="flex justify-between py-2" key={item._id || idx}>
-                <span className="font-medium">{item.product_name}</span>
-                <span>{item.quantity} × ₺{item.unit_price.toLocaleString()}</span>
-                <span className="font-bold text-green-700">₺{(item.unit_price * item.quantity).toLocaleString()}</span>
-              </div>
-            ))}
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {transaction.items.map((item, idx) => {
+              const itemTotal = item.unit_price * item.quantity;
+              // Try to get VAT from transaction item, or fallback to product
+              let vatPercentage = item.vat_percentage || 0;
+              if (!vatPercentage && products) {
+                const product = products.find(p => p._id === item.product_id);
+                vatPercentage = product?.vat_percentage || 0;
+              }
+              const vatAmount = vatPercentage > 0 ? (itemTotal * vatPercentage) / 100 : 0;
+              
+              return (
+                <div key={item._id || idx} className="py-2">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <span className="font-medium text-gray-900 dark:text-white">{item.product_name}</span>
+                      {vatPercentage > 0 && (
+                        <div className="text-xs font-semibold text-primary-600 dark:text-primary-400 mt-0.5">
+                          VAT {vatPercentage}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right ml-2">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {item.quantity} × ₺{item.unit_price.toLocaleString()}
+                      </div>
+                      <div className="font-bold text-green-700 dark:text-green-400">
+                        ₺{itemTotal.toLocaleString()}
+                      </div>
+                      {vatPercentage > 0 && (
+                        <div className="text-xs font-semibold text-primary-600 dark:text-primary-400 mt-0.5">
+                          VAT: ₺{vatAmount.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="font-bold mt-4 flex justify-between">
-            <span className="text-gray-700">Total:</span>
-            <span className="text-green-800 text-lg">₺{transaction.total_amount.toLocaleString()}</span>
+          {(() => {
+            // Calculate total VAT from all items (for display only)
+            const totalVAT = transaction.items?.reduce((sum: number, item: any) => {
+              const itemTotal = item.unit_price * item.quantity;
+              const vatPercentage = item.vat_percentage || 0;
+              return sum + (vatPercentage > 0 ? (itemTotal * vatPercentage) / 100 : 0);
+            }, 0) || 0;
+
+            return (
+              <>
+                {totalVAT > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 italic">
+                      <span>Total VAT (for reference):</span>
+                      <span>₺{totalVAT.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+          <div className="font-bold mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+            <span className="text-gray-700 dark:text-gray-300">Total:</span>
+            <span className="text-green-800 dark:text-green-400 text-lg">₺{transaction.total_amount.toLocaleString()}</span>
           </div>
           {transaction.payment_methods && transaction.payment_methods.length > 0 && (
-            <div className="mt-2 text-xs">
+            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
               Payment: {transaction.payment_methods.map((pm) => `${pm.type}: ₺${pm.amount.toLocaleString()}`).join(', ')}
             </div>
           )}
@@ -1087,7 +1199,7 @@ export const SalesHistory: React.FC = () => {
                 </p>
               </div>
             </div>
-            {((viewMode === 'list' && sales.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) && (
+            {((viewMode === 'list' && filteredTransactions.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) && (
               <div className="flex items-center space-x-4">
                 {viewMode === 'list' ? (
                   <>
@@ -1120,11 +1232,11 @@ export const SalesHistory: React.FC = () => {
         </div>
 
         {/* Enhanced Products Display */}
-        {((viewMode === 'list' && sales.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) ? (
+        {((viewMode === 'list' && filteredTransactions.length > 0) || (viewMode === 'grid' && filteredProducts.length > 0)) ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
             {viewMode === 'list' ? (
               <div>
-                {sales.map((transaction) => {
+                {filteredTransactions.map((transaction) => {
                   const items = transaction.items || [];
                   const isMulti = items.length > 1;
                   const itemSpacing = 72;
@@ -1208,17 +1320,42 @@ export const SalesHistory: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      {items.map((item, idx) => (
-                        <div className={`flex items-center mb-3 ${isMulti ? 'pl-12' : 'pl-4'}`} key={item._id || idx}>
-                          <div className="flex-1 bg-white dark:bg-gray-700 rounded-xl shadow-md px-4 py-3 flex items-center justify-between border border-green-100 dark:border-green-800/50 group-hover:border-green-400 dark:group-hover:border-green-600 transition-all duration-300">
-                            <div>
-                              <div className="font-semibold text-gray-800 dark:text-white mb-1">{item.product_name}</div>
-                              <div className="text-xs text-gray-400 dark:text-gray-400">{item.quantity} × ₺{item.unit_price.toLocaleString()}</div>
+                      {items.map((item, idx) => {
+                        const itemTotal = item.unit_price * item.quantity;
+                        // Try to get VAT from transaction item, or fallback to product
+                        let vatPercentage = item.vat_percentage || 0;
+                        if (!vatPercentage && products) {
+                          const product = products.find(p => p._id === item.product_id);
+                          vatPercentage = product?.vat_percentage || 0;
+                        }
+                        const vatAmount = vatPercentage > 0 ? (itemTotal * vatPercentage) / 100 : 0;
+                        
+                        return (
+                          <div className={`flex items-center mb-3 ${isMulti ? 'pl-12' : 'pl-4'}`} key={item._id || idx}>
+                            <div className="flex-1 bg-white dark:bg-gray-700 rounded-xl shadow-md px-4 py-3 flex items-center justify-between border border-green-100 dark:border-green-800/50 group-hover:border-green-400 dark:group-hover:border-green-600 transition-all duration-300">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-800 dark:text-white mb-1">{item.product_name}</div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="text-xs text-gray-400 dark:text-gray-400">{item.quantity} × ₺{item.unit_price.toLocaleString()}</div>
+                                  {vatPercentage > 0 && (
+                                    <span className="text-xs font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 rounded">
+                                      VAT {vatPercentage}%
+                                    </span>
+                                  )}
+                                </div>
+                                {vatPercentage > 0 && (
+                                  <div className="text-xs font-semibold text-primary-600 dark:text-primary-400 mt-1">
+                                    VAT: ₺{vatAmount.toLocaleString()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-green-700 dark:text-green-400 font-bold text-lg">₺{itemTotal.toLocaleString()}</div>
+                              </div>
                             </div>
-                            <div className="text-green-700 dark:text-green-400 font-bold text-lg">₺{(item.unit_price * item.quantity).toLocaleString()}</div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })}

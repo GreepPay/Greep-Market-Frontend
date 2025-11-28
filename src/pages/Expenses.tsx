@@ -20,6 +20,8 @@ import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { ProductSelector } from '../components/ui/ProductSelector';
 import { Product } from '../types';
 import toast from 'react-hot-toast';
+import { normalizeDateToYYYYMMDD } from '../utils/timezoneUtils';
+import { notificationService } from '../services/notificationService';
 
 interface Expense {
   _id: string;
@@ -90,6 +92,8 @@ export const Expenses: React.FC = () => {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showEditExpense, setShowEditExpense] = useState<Expense | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
@@ -99,7 +103,7 @@ export const Expenses: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newExpense, setNewExpense] = useState<NewExpense>({
     store_id: user?.store_id || '',
-    date: new Date().toISOString().split('T')[0],
+    date: normalizeDateToYYYYMMDD(new Date()),
     product_name: '',
     product_id: undefined,
     unit: 'pieces',
@@ -173,34 +177,34 @@ export const Expenses: React.FC = () => {
     switch (range) {
       case 'today':
         return {
-          start_date: today.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0]
+          start_date: normalizeDateToYYYYMMDD(today),
+          end_date: normalizeDateToYYYYMMDD(today)
         };
       case 'yesterday':
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
         return {
-          start_date: yesterday.toISOString().split('T')[0],
-          end_date: yesterday.toISOString().split('T')[0]
+          start_date: normalizeDateToYYYYMMDD(yesterday),
+          end_date: normalizeDateToYYYYMMDD(yesterday)
         };
       case 'this_week':
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
         return {
-          start_date: startOfWeek.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0]
+          start_date: normalizeDateToYYYYMMDD(startOfWeek),
+          end_date: normalizeDateToYYYYMMDD(today)
         };
       case 'this_month':
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         return {
-          start_date: startOfMonth.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0]
+          start_date: normalizeDateToYYYYMMDD(startOfMonth),
+          end_date: normalizeDateToYYYYMMDD(today)
         };
       case 'this_year':
         const startOfYear = new Date(now.getFullYear(), 0, 1);
         return {
-          start_date: startOfYear.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0]
+          start_date: normalizeDateToYYYYMMDD(startOfYear),
+          end_date: normalizeDateToYYYYMMDD(today)
         };
       default:
         return {
@@ -336,6 +340,12 @@ export const Expenses: React.FC = () => {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmitting) {
+      return;
+    }
+    
     // Allow 0 value for expenses - explicitly check for null/undefined, not 0
     if (newExpense.amount === null || newExpense.amount === undefined) {
       toast.error('Please enter an amount');
@@ -345,6 +355,8 @@ export const Expenses: React.FC = () => {
       toast.error('Please select or enter a product name');
       return;
     }
+    
+    setIsSubmitting(true);
     
     try {
       // Normalize unit and category before sending to API
@@ -356,6 +368,13 @@ export const Expenses: React.FC = () => {
       
       // Create the expense
       const createdExpense = await apiService.createExpense(normalizedExpense);
+      
+      // Notify about expense addition
+      notificationService.notifyExpenseAdded(
+        normalizedExpense.amount,
+        normalizedExpense.product_name,
+        normalizedExpense.category
+      );
       
       // If expense is linked to a product, update stock
       if (newExpense.product_id && selectedProduct && selectedProduct._id === newExpense.product_id) {
@@ -377,7 +396,7 @@ export const Expenses: React.FC = () => {
       setSelectedProduct(null);
       setNewExpense({
         store_id: user?.store_id || '',
-        date: new Date().toISOString().split('T')[0],
+        date: normalizeDateToYYYYMMDD(new Date()),
         product_name: '',
         product_id: undefined,
         unit: 'pieces',
@@ -392,6 +411,8 @@ export const Expenses: React.FC = () => {
       loadStats();
     } catch (error) {
       toast.error('Failed to add expense');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -440,6 +461,12 @@ export const Expenses: React.FC = () => {
   };
 
   const handleEditExpense = async (updatedExpense: Expense) => {
+    // Prevent double submission
+    if (isUpdating) {
+      return;
+    }
+    
+    setIsUpdating(true);
     try {
       // Get the original expense to calculate stock difference
       const originalExpense = expenses.find(e => e._id === updatedExpense._id);
@@ -516,12 +543,20 @@ export const Expenses: React.FC = () => {
         toast.success('Expense updated successfully');
       }
       
+      // Notify about expense update
+      notificationService.notifyExpenseUpdated(
+        normalizedExpense.amount,
+        normalizedExpense.product_name
+      );
+      
       setShowEditExpense(null);
       setEditSelectedProduct(null);
       loadExpenses();
       loadStats();
     } catch (error) {
       toast.error('Failed to update expense');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -559,6 +594,14 @@ export const Expenses: React.FC = () => {
         }
       } else {
         toast.success('Expense deleted successfully');
+      }
+      
+      // Notify about expense deletion
+      if (expenseToDelete) {
+        notificationService.notifyExpenseDeleted(
+          expenseToDelete.product_name,
+          expenseToDelete.amount
+        );
       }
       
       setShowDeleteConfirm(null);
@@ -1031,9 +1074,20 @@ export const Expenses: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
+                      disabled={isSubmitting}
+                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-primary-500 disabled:hover:to-primary-600 flex items-center justify-center gap-2"
                     >
-                      Add Expense
+                      {isSubmitting ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Adding...
+                        </>
+                      ) : (
+                        'Add Expense'
+                      )}
                     </button>
                   </div>
                 </form>
@@ -1197,9 +1251,20 @@ export const Expenses: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium"
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-xl shadow-lg transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-primary-500 disabled:hover:to-primary-600 flex items-center justify-center gap-2"
                     >
-                      Update Expense
+                      {isUpdating ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Updating...
+                        </>
+                      ) : (
+                        'Update Expense'
+                      )}
                     </button>
                   </div>
                 </form>

@@ -16,6 +16,130 @@
     }
 }
 
+/* Custom Scrollbar Styles - Dark Mode Compatible */
+@layer utilities {
+    /* Webkit browsers (Chrome, Safari, Edge) */
+    *::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    *::-webkit-scrollbar-track {
+        @apply bg-gray-100 dark:bg-gray-800;
+        border-radius: 4px;
+    }
+
+    *::-webkit-scrollbar-thumb {
+        @apply bg-gray-300 dark:bg-gray-600;
+        border-radius: 4px;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+        @apply bg-gray-400 dark:bg-gray-500;
+    }
+
+    /* Firefox */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(209 213 219) rgb(243 244 246);
+    }
+
+    .dark * {
+        scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+    }
+
+    /* Dashboard Animations */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes scaleIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+    }
+
+    .animate-fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
+    }
+
+    .animate-slide-in-right {
+        animation: slideInRight 0.5s ease-out forwards;
+    }
+
+    .animate-scale-in {
+        animation: scaleIn 0.4s ease-out forwards;
+    }
+
+    .animate-stagger-1 {
+        animation: fadeIn 0.5s ease-out 0.1s forwards;
+        opacity: 0;
+    }
+
+    .animate-stagger-2 {
+        animation: fadeIn 0.5s ease-out 0.2s forwards;
+        opacity: 0;
+    }
+
+    .animate-stagger-3 {
+        animation: fadeIn 0.5s ease-out 0.3s forwards;
+        opacity: 0;
+    }
+
+    .animate-stagger-4 {
+        animation: fadeIn 0.5s ease-out 0.4s forwards;
+        opacity: 0;
+    }
+
+    .animate-stagger-5 {
+        animation: fadeIn 0.5s ease-out 0.5s forwards;
+        opacity: 0;
+    }
+
+    .animate-stagger-6 {
+        animation: fadeIn 0.5s ease-out 0.6s forwards;
+        opacity: 0;
+    }
+}
+
 @layer components {
     .btn-primary {
         @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;

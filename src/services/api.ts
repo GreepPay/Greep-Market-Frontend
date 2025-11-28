@@ -324,32 +324,60 @@ class ApiService {
       throw new Error('Invalid API response structure - no products data found');
     }
     
+    // Map vat to vat_percentage for frontend consistency
+    const products = (data.products || []).map((product: any) => {
+      if (product.vat !== undefined) {
+        product.vat_percentage = product.vat;
+        delete product.vat;
+      }
+      return product;
+    });
+    
     return {
-      products: data.products || [],
+      products,
       total: data.total || 0
     };
   }
 
   async getProduct(id: string): Promise<Product> {
-    const response = await this.privateRequest<Product>(`/products/${id}`);
-    return response.data;
+    const response = await this.privateRequest<any>(`/products/${id}`);
+    const product = response.data;
+    // Map vat to vat_percentage for frontend consistency
+    if (product.vat !== undefined) {
+      product.vat_percentage = product.vat;
+      delete product.vat;
+    }
+    return product;
   }
 
   async getProductByBarcode(barcode: string): Promise<Product> {
-    const response = await this.privateRequest<Product>(`/products/barcode/${barcode}`);
-    return response.data;
+    const response = await this.privateRequest<any>(`/products/barcode/${barcode}`);
+    const product = response.data;
+    // Map vat to vat_percentage for frontend consistency
+    if (product.vat !== undefined) {
+      product.vat_percentage = product.vat;
+      delete product.vat;
+    }
+    return product;
   }
 
   async createProduct(productData: Partial<Product>, images?: File[]): Promise<Product> {
+    // Map vat_percentage to vat for backend compatibility
+    const mappedData: any = { ...productData };
+    if ('vat_percentage' in mappedData && mappedData.vat_percentage !== undefined) {
+      mappedData.vat = mappedData.vat_percentage;
+      delete mappedData.vat_percentage;
+    }
+    
     // If there are images, use FormData, otherwise use JSON
     if (images && images.length > 0) {
       const formData = new FormData();
       
       // Add each product field individually to FormData
-      Object.keys(productData).forEach(key => {
-        const value = productData[key as keyof Product];
+      Object.keys(mappedData).forEach(key => {
+        const value = mappedData[key];
         if (value !== undefined && value !== null) {
-          if (typeof value === 'object') {
+          if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof File)) {
             formData.append(key, JSON.stringify(value));
           } else {
             formData.append(key, String(value));
@@ -362,32 +390,53 @@ class ApiService {
         formData.append(`images`, image);
       });
       
-      const response = await this.privateRequest<Product>('/products', {
+      const response = await this.privateRequest<any>('/products', {
         method: 'POST',
         body: formData,
       });
-      return response.data;
+      // Map vat back to vat_percentage for frontend consistency
+      const product = response.data;
+      if (product.vat !== undefined) {
+        product.vat_percentage = product.vat;
+        delete product.vat;
+      }
+      return product;
     } else {
       // No images, use regular JSON request
-      const response = await this.privateRequest<Product>('/products', {
+      const response = await this.privateRequest<any>('/products', {
         method: 'POST',
-        body: JSON.stringify(productData),
+        body: JSON.stringify(mappedData),
       });
-      return response.data;
+      // Map vat back to vat_percentage for frontend consistency
+      const product = response.data;
+      if (product.vat !== undefined) {
+        product.vat_percentage = product.vat;
+        delete product.vat;
+      }
+      return product;
     }
   }
 
   async updateProduct(id: string, updates: Partial<Product>, images?: File[], replaceImages: boolean = true): Promise<Product> {
+    // Map vat_percentage to vat for backend compatibility
+    const mappedUpdates: any = { ...updates };
+    if ('vat_percentage' in mappedUpdates && mappedUpdates.vat_percentage !== undefined) {
+      mappedUpdates.vat = mappedUpdates.vat_percentage;
+      delete mappedUpdates.vat_percentage;
+    }
+    
     // If there are images, use FormData, otherwise use JSON
     if (images && images.length > 0) {
       const formData = new FormData();
       
       // Add all the product updates as form data
-      Object.entries(updates).forEach(([key, value]) => {
+      Object.entries(mappedUpdates).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           if (key === 'tags' && Array.isArray(value)) {
             // Handle tags array
             formData.append('tags', JSON.stringify(value));
+          } else if (typeof value === 'object' && !(value instanceof File)) {
+            formData.append(key, JSON.stringify(value));
           } else {
             formData.append(key, value.toString());
           }
@@ -407,14 +456,28 @@ class ApiService {
         body: formData,
       });
       
-      return await response.json();
+      const responseData = await response.json();
+      // Extract product from response structure: { success, message, data: { product } }
+      const product = responseData.data || responseData;
+      // Map vat back to vat_percentage for frontend consistency
+      if (product.vat !== undefined) {
+        product.vat_percentage = product.vat;
+        delete product.vat;
+      }
+      return product;
     } else {
       // No images, use regular JSON request
-      const response = await this.privateRequest<Product>(`/products/${id}`, {
+      const response = await this.privateRequest<any>(`/products/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(updates),
+        body: JSON.stringify(mappedUpdates),
       });
-      return response.data;
+      // Map vat back to vat_percentage for frontend consistency
+      const product = response.data;
+      if (product.vat !== undefined) {
+        product.vat_percentage = product.vat;
+        delete product.vat;
+      }
+      return product;
     }
   }
 
@@ -633,6 +696,7 @@ class ApiService {
       quantity: number;
       unit_price: number;
       discount_amount?: number;
+      vat_percentage?: number;
     }>;
     discount_amount?: number;
     payment_method: 'cash' | 'pos_isbank_transfer' | 'naira_transfer' | 'crypto_payment' | 'card';

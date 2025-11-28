@@ -153,31 +153,36 @@ export const IntelligentSearchBar: React.FC<IntelligentSearchBarProps> = ({
     setSelectedSuggestionIndex(-1);
   }, [query, generateSuggestions]);
 
-  // Debounced search function
+  // Debounced search function - reduced debounce for immediate keystroke search
   const debouncedSearch = useCallback((searchQuery: string) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
     
-    if (enableRealTime && searchQuery.trim()) {
+    // For immediate search on every keystroke, use minimal debounce (50ms) or no debounce
+    const immediateDebounce = 50; // Very minimal debounce to prevent excessive calls
+    
+    if (enableRealTime) {
+      // Search immediately for any input (even single characters)
       setIsLoading(true);
       timeoutRef.current = setTimeout(() => {
         onSearch(searchQuery);
         setIsLoading(false);
         timeoutRef.current = null;
-      }, debounceMs);
+      }, immediateDebounce);
     } else if (!searchQuery.trim()) {
       onSearch('');
       setIsLoading(false);
     }
-  }, [onSearch, debounceMs, enableRealTime]);
+  }, [onSearch, enableRealTime]);
 
-  // Handle input changes with real-time search
+  // Handle input changes with real-time search - search on every keystroke
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setQuery(value);
     setShowSuggestions(true);
     
+    // Search immediately on every keystroke (no minimum length requirement)
     if (enableRealTime) {
       debouncedSearch(value);
     }

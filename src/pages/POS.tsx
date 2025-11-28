@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { CreditCard, X, Users, DollarSign } from 'lucide-react';
+import { CreditCard, X, Users, DollarSign, TrendingUp, TrendingDown, Receipt as ReceiptIcon, Star, StarOff, Package } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -16,9 +16,11 @@ import { useAuth } from '../context/AuthContext';
 import { useRiders } from '../context/RiderContext';
 import { useGoals } from '../context/GoalContext';
 import { useNotifications } from '../context/NotificationContext';
-import { TransactionItem } from '../types';
+import { notificationService } from '../services/notificationService';
+import { TransactionItem, Product } from '../types';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import Receipt from '../components/ui/Receipt';
+import { apiService } from '../services/api';
 
 export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts, updateProduct } = useApp();
@@ -36,13 +38,100 @@ export const POS: React.FC = () => {
     silent: true
   });
 
-  // Load all products and riders when POS component mounts
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      loadAllProducts();
-      loadRiders();
+  // Today's summary state
+  const [todaySummary, setTodaySummary] = useState({
+    sales: 0,
+    expenses: 0,
+    profit: 0,
+    transactionCount: 0,
+    loading: true
+  });
+  
+  // Quick access products (pinned products)
+  const [quickAccessProducts, setQuickAccessProducts] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('pos_quick_access_products');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  }, [isAuthenticated, user, loadAllProducts, loadRiders]);
+  });
+  
+  // Load today's summary
+  const loadTodaySummary = async () => {
+    if (!user?.store_id) return;
+    
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStart = today.toISOString().split('T')[0];
+      const todayEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString().split('T')[0];
+      
+      // Fetch today's transactions and expenses
+      const [transactionsResponse, expensesResponse] = await Promise.all([
+        apiService.getTransactions({
+          store_id: user.store_id,
+          start_date: todayStart,
+          end_date: todayEnd,
+          limit: 10000
+        }).catch(() => ({ transactions: [], total: 0 })),
+        apiService.getExpenses({
+          store_id: user.store_id,
+          start_date: todayStart,
+          end_date: todayEnd,
+          limit: 1000
+        }).catch(() => ({ expenses: [] }))
+      ]);
+      
+      const transactions = transactionsResponse.transactions || [];
+      const expenses = expensesResponse.expenses || [];
+      
+      const sales = (transactions as any[]).reduce((sum: number, t: any) => sum + (t.total_amount || 0), 0);
+      const expensesTotal = (expenses as any[]).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+      const profit = sales - expensesTotal;
+      const transactionCount = transactions.length;
+      
+      setTodaySummary({
+        sales,
+        expenses: expensesTotal,
+        profit,
+        transactionCount,
+        loading: false
+      });
+    } catch (error) {
+      console.error('Failed to load today summary:', error);
+      setTodaySummary((prev: { sales: number; expenses: number; profit: number; transactionCount: number; loading: boolean }) => ({ ...prev, loading: false }));
+    }
+  };
+  
+  // Note: Today's summary is refreshed in processPayment after successful transaction
+  
+  // Save quick access products to localStorage
+  useEffect(() => {
+    localStorage.setItem('pos_quick_access_products', JSON.stringify(quickAccessProducts));
+  }, [quickAccessProducts]);
+  
+  // Toggle quick access product
+  const toggleQuickAccess = (productId: string) => {
+    setQuickAccessProducts((prev: string[]) => {
+      if (prev.includes(productId)) {
+        return prev.filter((id: string) => id !== productId);
+      } else if (prev.length < 6) {
+        return [...prev, productId];
+      } else {
+        toast.error('You can only pin up to 6 products');
+        return prev;
+      }
+    });
+  };
+  
+  // Get quick access products
+  const quickAccessProductsList = useMemo(() => {
+    if (!products) return [];
+    return quickAccessProducts
+      .map((id: string) => products.find((p: Product) => p._id === id))
+      .filter((p): p is Product => p !== undefined);
+  }, [products, quickAccessProducts]);
 
   // Auto-focus search field when POS component mounts
   useEffect(() => {
@@ -143,7 +232,10 @@ export const POS: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && user) {
       cartLoadedRef.current = true;
+      // Load today's summary on mount
+      loadTodaySummary();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
   // Save cart to localStorage whenever cartItems or discount changes (but not during initial load)
@@ -221,6 +313,7 @@ export const POS: React.FC = () => {
         quantity: 1,
         unit_price: product.price,
         total_price: product.price,
+        vat_percentage: product.vat_percentage,
         product_image: product.images && product.images.length > 0 
           ? (product.images.find((img: any) => img.is_primary)?.url || product.images[0].url)
           : undefined,
@@ -249,11 +342,19 @@ export const POS: React.FC = () => {
       return;
     }
 
-    const updatedItems = cartItems.map(item => 
-      item.product_id === productId 
-        ? { ...item, quantity, total_price: item.unit_price * quantity }
-        : item
-    );
+    const updatedItems = cartItems.map(item => {
+      if (item.product_id === productId) {
+        // Preserve VAT percentage when updating quantity
+        const product = products?.find(p => p._id === productId);
+        return { 
+          ...item, 
+          quantity, 
+          total_price: item.unit_price * quantity,
+          vat_percentage: product?.vat_percentage || item.vat_percentage
+        };
+      }
+      return item;
+    });
     
     setCartItems(updatedItems);
   };
@@ -298,6 +399,10 @@ export const POS: React.FC = () => {
       const newQuantity = (restockProduct.stock_quantity || 0) + qtyToAdd;
       await updateProduct(restockProduct._id, { stock_quantity: newQuantity });
       await loadAllProducts();
+      
+      // Notify about stock restock
+      notificationService.notifyStockRestocked(restockProduct.name, qtyToAdd, newQuantity);
+      
       toast.success(`Restocked ${restockProduct.name} by ${qtyToAdd}. New stock: ${newQuantity}.`);
     } catch (e) {
       toast.error('Failed to restock product. Please try again.');
@@ -353,8 +458,15 @@ export const POS: React.FC = () => {
   };
 
   const processPayment = async (paymentData: PaymentData) => {
+    // Show loading state immediately - before any validation or processing
+    setIsProcessingPayment(true);
+    
+    // Small delay to ensure loader is visible
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     if (cartItems.length === 0) {
       toast.error('Cart is empty');
+      setIsProcessingPayment(false);
       return;
     }
 
@@ -362,6 +474,7 @@ export const POS: React.FC = () => {
     if (validation.ok === false) {
       const { product, available, needed } = validation;
       toast.error(`Cannot process payment. ${product.name} has insufficient stock. Needed: ${needed}, Available: ${available}.`);
+      setIsProcessingPayment(false);
       openRestockModal(product, 'checkout');
       return;
     }
@@ -369,11 +482,9 @@ export const POS: React.FC = () => {
     // Validate required user data
     if (!user?.id) {
       toast.error('User ID is missing. Please log in again.');
+      setIsProcessingPayment(false);
       return;
     }
-    
-    // Show loading state
-    setIsProcessingPayment(true);
     
     // Use default store if user doesn't have a store_id assigned
     const storeId = user?.store_id || 'default-store';
@@ -395,6 +506,7 @@ export const POS: React.FC = () => {
             product_name: product?.name || item.product_id,
             quantity: item.quantity,
             unit_price: item.unit_price,
+            vat_percentage: product?.vat_percentage, // Include VAT percentage from product
           };
         }),
         discount_amount: parseFloat(discount) || 0,
@@ -427,6 +539,9 @@ export const POS: React.FC = () => {
           }
         })
       ]);
+      
+      // Refresh today's summary after successful transaction
+      loadTodaySummary();
       
       setReceiptTransaction({
         ...transaction,
@@ -465,6 +580,10 @@ export const POS: React.FC = () => {
       console.error('Payment processing failed:', error);
       // Provide a more meaningful message if backend rejects due to stock
       const message = error instanceof Error ? error.message : 'Failed to process payment. Please try again.';
+      
+      // Notify about payment failure
+      notificationService.notifyPaymentFailed(message);
+      
       if (String(message).toLowerCase().includes('stock') || String(message).toLowerCase().includes('inventory')) {
         toast.error('Payment failed due to insufficient stock. Please increase stock for affected products and try again.');
       } else {
@@ -522,77 +641,177 @@ export const POS: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-24">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Modern Header */}
-        <div className="relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 opacity-50"></div>
-          <div className="relative p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div className="space-y-2">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <CreditCard className="h-6 w-6 text-white" />
-                  </div>
-      <div>
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-white">Sales</h1>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Process customer transactions quickly and efficiently</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                  <span className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>{filteredProducts.length} products available</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span>{cartItems.length} items in cart</span>
-                  </span>
-                </div>
+      <div className="max-w-7xl mx-auto space-y-4">
+        {/* Compact Header with Today's Summary */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Left: Title and Stats */}
+            <div className="flex items-center gap-4 flex-1">
+              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-md">
+                <CreditCard className="h-5 w-5 text-white" />
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <SmartNavButton 
-                  to="/riders"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Riders
-                </SmartNavButton>
-                <SmartNavButton 
-                  to="/cash-tracking"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Cash Tracking
-                </SmartNavButton>
-                <Button 
-                  onClick={() => setIsScannerOpen(true)}
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                  Scan Barcode
-                </Button>
-                <Button 
-                  onClick={handleCheckout}
-                  disabled={cartItems.length === 0}
-                  className="w-full sm:w-auto bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-lg"
-                >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Checkout
-                </Button>
+              <div className="flex-1">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">Point of Sale</h1>
+                <div className="flex items-center gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                    {filteredProducts.length} products
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                    {cartItems.length} in cart
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-      </div>
 
-        {/* Search and Products Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Products Section */}
-          <div className="lg:col-span-2 space-y-6">
+            {/* Center: Today's Summary - Compact Cards */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-1.5 border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  <div className="text-xs">
+                    <div className="text-gray-500 dark:text-gray-400">Sales</div>
+                    <div className="font-bold text-green-700 dark:text-green-400">
+                      {todaySummary.loading ? '...' : `₺${todaySummary.sales.toLocaleString()}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-1.5 border border-red-200 dark:border-red-800">
+                <div className="flex items-center gap-1.5">
+                  <TrendingDown className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                  <div className="text-xs">
+                    <div className="text-gray-500 dark:text-gray-400">Expenses</div>
+                    <div className="font-bold text-red-700 dark:text-red-400">
+                      {todaySummary.loading ? '...' : `₺${todaySummary.expenses.toLocaleString()}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className={`rounded-lg px-3 py-1.5 border ${todaySummary.profit >= 0 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'}`}>
+                <div className="flex items-center gap-1.5">
+                  <DollarSign className={`h-3.5 w-3.5 ${todaySummary.profit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`} />
+                  <div className="text-xs">
+                    <div className="text-gray-500 dark:text-gray-400">Profit</div>
+                    <div className={`font-bold ${todaySummary.profit >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-700 dark:text-red-400'}`}>
+                      {todaySummary.loading ? '...' : `₺${todaySummary.profit.toLocaleString()}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg px-3 py-1.5 border border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-1.5">
+                  <ReceiptIcon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                  <div className="text-xs">
+                    <div className="text-gray-500 dark:text-gray-400">Transactions</div>
+                    <div className="font-bold text-purple-700 dark:text-purple-400">
+                      {todaySummary.loading ? '...' : todaySummary.transactionCount}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Action Buttons */}
+            <div className="flex items-center gap-2">
+              <SmartNavButton 
+                to="/riders"
+                variant="outline"
+                className="text-xs px-3 py-1.5"
+              >
+                <Users className="h-3.5 w-3.5 mr-1.5" />
+                Riders
+              </SmartNavButton>
+              <Button 
+                onClick={() => setIsScannerOpen(true)}
+                variant="outline"
+                className="text-xs px-3 py-1.5"
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Scan
+              </Button>
+              <Button 
+                onClick={handleCheckout}
+                disabled={cartItems.length === 0}
+                className="text-xs px-4 py-1.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-md"
+              >
+                <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                Checkout
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Access Products - Pictorial - Tiny */}
+        {quickAccessProductsList.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-md shadow-sm border border-gray-200 dark:border-gray-700 p-1.5">
+            <div className="flex items-center gap-1 mb-1">
+              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+              <h2 className="text-[10px] font-semibold text-gray-900 dark:text-white">Quick Access</h2>
+            </div>
+            <div className="grid grid-cols-6 gap-1.5">
+              {quickAccessProductsList.map((product: Product) => {
+                const images = product.images || [];
+                const primaryImage = images.find((img: any) => img.is_primary) || images[0];
+                const imageUrl = primaryImage?.url;
+                
+                return (
+                  <button
+                    key={product._id}
+                    onClick={() => addToCart(product)}
+                    className="group relative flex-1 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-sm transition-all duration-200 overflow-hidden p-1"
+                    title={`Add ${product.name} to cart`}
+                  >
+                    {/* Remove button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleQuickAccess(product._id);
+                      }}
+                      className="absolute top-0.5 right-0.5 z-10 p-0.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Remove from quick access"
+                    >
+                      <StarOff className="h-2 w-2 text-gray-400 hover:text-red-500" />
+                    </button>
+
+                    {/* Product Image - 1/4 size */}
+                    <div className="flex items-center justify-center mb-1">
+                      <div className="relative w-12 h-12 bg-white dark:bg-gray-700 rounded overflow-hidden flex-shrink-0">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-600">
+                            <Package className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Product Info - Larger text */}
+                    <div className="text-center">
+                      <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-1 mb-0.5 leading-tight">
+                        {product.name}
+                      </h3>
+                      <div className="text-xs font-bold text-primary-600 dark:text-primary-400">
+                        ₺{product.price.toLocaleString()}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Search and Products Section - Full width now */}
+        <div className="space-y-6">
             {/* Enhanced Search Bar */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
               <div className="space-y-4">
@@ -614,18 +833,33 @@ export const POS: React.FC = () => {
               </div>
             </div>
 
-          {/* Products Grid */}
+          {/* Products Grid - Extended to show more products */}
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredProducts.map(product => (
-              <ProductCard
-                key={product._id}
-                product={product}
-                onAddToCart={addToCart}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {filteredProducts.map(product => {
+              const isQuickAccess = quickAccessProducts.includes(product._id);
+              return (
+                <div key={product._id} className="relative">
+                  <ProductCard
+                    product={product}
+                    onAddToCart={addToCart}
                     showActions={true}
-                showStockAlert={true}
-              />
-            ))}
+                    showStockAlert={true}
+                  />
+                  <button
+                    onClick={() => toggleQuickAccess(product._id)}
+                    className="absolute top-2 right-2 z-10 p-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full shadow-md hover:bg-white dark:hover:bg-gray-800 transition-colors"
+                    title={isQuickAccess ? "Remove from quick access" : "Add to quick access (max 6)"}
+                  >
+                    {isQuickAccess ? (
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    ) : (
+                      <Star className="h-4 w-4 text-gray-400 hover:text-yellow-500" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
             ) : (
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-12">
@@ -658,10 +892,22 @@ export const POS: React.FC = () => {
               </div>
           )}
         </div>
+      </div>
 
-          {/* Shopping Cart Section - Sticky */}
-        <div className="lg:col-span-1">
-            <div className="sticky top-20 bottom-20">
+      {/* Shopping Cart Section - Fixed to bottom above navigation (outside max-w-7xl) */}
+      <div className="hidden lg:block fixed bottom-24 right-4 w-96 max-w-md max-h-[calc(100vh-7rem)] overflow-y-auto z-40">
+        <ShoppingCartComponent
+          items={cartItems}
+          onUpdateQuantity={updateCartItemQuantity}
+          onRemoveItem={removeFromCart}
+          onClearCart={clearCart}
+          onCheckout={handleCheckout}
+        />
+      </div>
+      
+      {/* Mobile Shopping Cart - Show at bottom on mobile */}
+      <div className="lg:hidden fixed bottom-20 left-0 right-0 z-40 px-4 pb-4">
+        <div className="max-h-[60vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
           <ShoppingCartComponent
             items={cartItems}
             onUpdateQuantity={updateCartItemQuantity}
@@ -669,8 +915,6 @@ export const POS: React.FC = () => {
             onClearCart={clearCart}
             onCheckout={handleCheckout}
           />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -697,7 +941,7 @@ export const POS: React.FC = () => {
       
       <CheckoutLoader 
         isVisible={isProcessingPayment}
-        message="Processing your order..."
+        message="Processing your payment..."
         onCancel={() => setIsProcessingPayment(false)}
         canCancel={true}
       />

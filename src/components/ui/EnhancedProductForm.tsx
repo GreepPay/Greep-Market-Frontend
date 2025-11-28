@@ -18,6 +18,7 @@ interface ProductFormData {
   description: string;
   sku: string;
   tags: string[];
+  vat_percentage?: string; // VAT percentage (optional, not required for submission)
 }
 
 interface FieldValidation {
@@ -66,6 +67,7 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
     description: '',
     sku: '',
     tags: [],
+    vat_percentage: '',
     ...initialData
   });
 
@@ -466,6 +468,7 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
               value={formData.category}
               onChange={(category: string) => handleInputChange('category', category)}
               existingCategories={existingCategories.filter(cat => cat !== 'all')}
+              products={existingProducts}
               placeholder="Select or add a category"
               required
             />
@@ -585,6 +588,26 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
               </p>
             )}
           </div>
+
+          {/* VAT Percentage */}
+          <div className="relative">
+            <NumberInput
+              label="VAT (%)"
+              value={formData.vat_percentage || ''}
+              onChange={(value) => handleInputChange('vat_percentage', String(value))}
+              placeholder="0"
+              min={0}
+              max={100}
+              precision={2}
+              step={0.01}
+            />
+            <div className="absolute right-3 top-8">
+              <DollarSign className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+            </div>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Optional: VAT percentage for this product (e.g., 16 for 16%)
+            </p>
+          </div>
         </div>
       </div>
 
@@ -599,6 +622,7 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
           value={formData.tags}
           onChange={(tags) => handleInputChange('tags', tags as any)}
           existingTags={existingTags}
+          products={existingProducts}
           placeholder="Add tags..."
           maxTags={10}
         />
