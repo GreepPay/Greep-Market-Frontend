@@ -46,6 +46,17 @@ export const performAuthCheck = async (): Promise<AuthCheckResult> => {
         shouldRedirect: false
       };
     } catch (error: any) {
+      // Don't log "token is missing" errors - they're expected when checking auth
+      // Also check for the isLoginPageError flag
+      if (error.message?.includes('token is missing') || 
+          error.message?.includes('Authentication token is missing') ||
+          error.isLoginPageError) {
+        return {
+          isValid: false,
+          shouldRedirect: true,
+          error: 'No authentication token found'
+        };
+      }
       console.error('Server token validation failed:', error);
       
       // Check if it's an authentication error

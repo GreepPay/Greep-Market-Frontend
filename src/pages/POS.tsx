@@ -21,6 +21,7 @@ import { TransactionItem, Product } from '../types';
 import { usePageRefresh } from '../hooks/usePageRefresh';
 import Receipt from '../components/ui/Receipt';
 import { apiService } from '../services/api';
+import { getTodayRange, normalizeDateToYYYYMMDD } from '../utils/timezoneUtils';
 
 export const POS: React.FC = () => {
   const { products, addTransaction, updateInventory, loadAllProducts, updateProduct } = useApp();
@@ -57,17 +58,17 @@ export const POS: React.FC = () => {
     }
   });
   
-  // Load today's summary
+  // Load today's summary - uses same timezone utilities as Dashboard for consistency
   const loadTodaySummary = async () => {
     if (!user?.store_id) return;
     
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStart = today.toISOString().split('T')[0];
-      const todayEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString().split('T')[0];
+      // Use the same date range calculation as Dashboard for consistency
+      const todayRange = getTodayRange();
+      const todayStart = normalizeDateToYYYYMMDD(todayRange.start);
+      const todayEnd = normalizeDateToYYYYMMDD(todayRange.end);
       
-      // Fetch today's transactions and expenses
+      // Fetch today's transactions and expenses using normalized dates
       const [transactionsResponse, expensesResponse] = await Promise.all([
         apiService.getTransactions({
           store_id: user.store_id,
@@ -83,8 +84,24 @@ export const POS: React.FC = () => {
         }).catch(() => ({ expenses: [] }))
       ]);
       
-      const transactions = transactionsResponse.transactions || [];
-      const expenses = expensesResponse.expenses || [];
+      let transactions = transactionsResponse.transactions || [];
+      let expenses = expensesResponse.expenses || [];
+      
+      // Filter transactions by actual created_at date to ensure consistency
+      // The API might return transactions from a different day due to timezone differences
+      const normalizedToday = normalizeDateToYYYYMMDD(todayRange.start);
+      transactions = transactions.filter((t: any) => {
+        if (!t.created_at) return false;
+        const transactionDate = normalizeDateToYYYYMMDD(new Date(t.created_at));
+        return transactionDate === normalizedToday;
+      });
+      
+      // Filter expenses by actual date to ensure consistency
+      expenses = expenses.filter((e: any) => {
+        if (!e.date) return false;
+        const expenseDate = normalizeDateToYYYYMMDD(new Date(e.date));
+        return expenseDate === normalizedToday;
+      });
       
       const sales = (transactions as any[]).reduce((sum: number, t: any) => sum + (t.total_amount || 0), 0);
       const expensesTotal = (expenses as any[]).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
@@ -146,8 +163,9 @@ export const POS: React.FC = () => {
         } catch (error) {
           // Silently ignore focus errors from browser extensions
           // These are typically harmless and don't affect functionality
+          // The error is from content_script.js (browser extension), not our code
         }
-      }, 100);
+      }, 150);
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, user]);
@@ -443,6 +461,9 @@ export const POS: React.FC = () => {
   };
 
   const handleCheckout = () => {
+    // Prevent multiple clicks
+    if (isProcessingPayment) return;
+    
     if (cartItems.length === 0) {
       toast.error('Cart is empty');
       return;

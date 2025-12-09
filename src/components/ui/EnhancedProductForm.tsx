@@ -11,6 +11,8 @@ interface ProductFormData {
   name: string;
   barcode: string;
   price: string;
+  cost_price?: string; // Cost/purchase price per unit
+  markup_percentage?: string; // Markup percentage for price monitoring
   category: string;
   unit: string;
   stock_quantity: string;
@@ -60,6 +62,8 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
     name: '',
     barcode: '',
     price: '',
+    cost_price: '',
+    markup_percentage: '',
     category: '',
     unit: 'piece',
     stock_quantity: '',
@@ -293,7 +297,24 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
   }, [formData.name, formData.price, formData.category, formData.stock_quantity, formData.min_stock_level, validateName, validatePrice, validateCategory, validateStockQuantity, validateMinStockLevel]);
 
   const handleInputChange = (field: keyof ProductFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Auto-calculate markup_percentage when both cost_price and price are provided
+      if (field === 'cost_price' || field === 'price') {
+        const costPrice = field === 'cost_price' ? parseFloat(value) : parseFloat(prev.cost_price || '0');
+        const sellingPrice = field === 'price' ? parseFloat(value) : parseFloat(prev.price || '0');
+        
+        if (costPrice > 0 && sellingPrice > 0) {
+          const markup = ((sellingPrice - costPrice) / costPrice) * 100;
+          updated.markup_percentage = markup.toFixed(2);
+        } else if (costPrice === 0 || sellingPrice === 0) {
+          updated.markup_percentage = '';
+        }
+      }
+      
+      return updated;
+    });
   };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -523,11 +544,11 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
           Pricing & Inventory
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Price */}
           <div className="relative">
             <NumberInput
-              label="Price (₺) *"
+              label="Selling Price (₺) *"
               value={formData.price}
               onChange={(value) => handleInputChange('price', String(value))}
               placeholder="0.00"
@@ -545,6 +566,33 @@ export const EnhancedProductForm: React.FC<EnhancedProductFormProps> = ({
                 {validation.price.message}
               </p>
             )}
+          </div>
+
+          {/* Cost Price */}
+          <div className="relative">
+            <NumberInput
+              label="Cost Price (₺)"
+              value={formData.cost_price || ''}
+              onChange={(value) => handleInputChange('cost_price', String(value))}
+              placeholder="0.00"
+              precision={2}
+              step={0.01}
+              helperText="Purchase price per unit"
+            />
+          </div>
+
+          {/* Markup Percentage */}
+          <div className="relative">
+            <NumberInput
+              label="Markup (%)"
+              value={formData.markup_percentage || ''}
+              onChange={(value) => handleInputChange('markup_percentage', String(value))}
+              placeholder="Auto-calculated"
+              precision={2}
+              step={0.01}
+              helperText={formData.cost_price && formData.price ? "Auto-calculated from cost and selling price" : "Enter manually or auto-calculate"}
+              disabled={!!(formData.cost_price && formData.price)}
+            />
           </div>
 
           {/* Stock Quantity */}

@@ -24,7 +24,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
 import { SearchBar } from '../components/ui/SearchBar';
-import { Card } from '../components/ui/Card';
+import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { SmartNavButton } from '../components/ui/SmartNavButton';
 import { BackButton } from '../components/ui/BackButton';
@@ -93,6 +93,8 @@ export const SalesHistory: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  const [isSavingTransaction, setIsSavingTransaction] = useState(false);
+  const [isDeletingTransaction, setIsDeletingTransaction] = useState(false);
 
   // Note: Pagination is now handled server-side, so we don't need updatePaginatedSales
 
@@ -212,6 +214,10 @@ export const SalesHistory: React.FC = () => {
 
   // Handle save transaction changes
   const handleSaveTransaction = async (transactionId: string, updates: any) => {
+    // Prevent multiple submissions
+    if (isSavingTransaction) return;
+    
+    setIsSavingTransaction(true);
     try {
       await apiService.updateTransaction(transactionId, updates);
       
@@ -224,11 +230,16 @@ export const SalesHistory: React.FC = () => {
       const errorMessage = error.message || 'Failed to update transaction';
       toast.error(errorMessage);
       throw error;
+    } finally {
+      setIsSavingTransaction(false);
     }
   };
 
   // Handle delete transaction
   const handleDeleteTransaction = async (transactionId: string) => {
+    // Prevent multiple clicks
+    if (isDeletingTransaction) return;
+    
     if (!isAdmin) {
       toast.error('Only admins can delete transactions');
       return;
@@ -240,8 +251,9 @@ export const SalesHistory: React.FC = () => {
 
     if (!confirmed) return;
 
+    setIsDeletingTransaction(true);
+    setDeletingTransactionId(transactionId);
     try {
-      setDeletingTransactionId(transactionId);
       await apiService.deleteTransaction(transactionId);
       
       // Reload sales data to reflect changes
@@ -253,6 +265,7 @@ export const SalesHistory: React.FC = () => {
       const errorMessage = error.message || 'Failed to delete transaction';
       toast.error(errorMessage);
     } finally {
+      setIsDeletingTransaction(false);
       setDeletingTransactionId(null);
     }
   };
@@ -633,6 +646,24 @@ export const SalesHistory: React.FC = () => {
     setSelectedTags([]);
     setSelectedMonth('all');
     setSelectedYear(new Date().getFullYear().toString());
+  };
+
+  // Format currency with proper decimal places (2 decimals, no thousands separator issues)
+  const formatCurrency = (amount: number): string => {
+    // Round to 2 decimal places and format with proper separators
+    const rounded = Math.round(amount * 100) / 100;
+    return rounded.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // Format number without decimals for counts
+  const formatNumber = (num: number): string => {
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
   };
 
   const refreshData = async () => {
@@ -1055,124 +1086,186 @@ export const SalesHistory: React.FC = () => {
 
         {/* Enhanced Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Revenue</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">₺{summaryStats.totalRevenue.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">From {summaryStats.totalTransactions} transactions</p>
-            </div>
-              <div className="p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl">
-                <DollarSign className="h-7 w-7 text-white" />
+          {/* Total Revenue Card */}
+          <Card className="overflow-hidden border-l-4 border-l-green-500 hover hover:shadow-lg" padding="none">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+                    Total Revenue
+                  </CardTitle>
+                  <div className="space-y-1">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white truncate">
+                      ₺{formatCurrency(summaryStats.totalRevenue)}
+                    </p>
+                    <CardDescription className="text-xs mt-1">
+                      From {formatNumber(summaryStats.totalTransactions)} transactions
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-md">
+                  <DollarSign className="h-6 w-6 text-white" />
+                </div>
               </div>
-            </div>
+            </CardContent>
           </Card>
 
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Items Sold</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalQuantity.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Across all categories</p>
+          {/* Items Sold Card */}
+          <Card className="overflow-hidden border-l-4 border-l-blue-500 hover hover:shadow-lg" padding="none">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+                    Items Sold
+                  </CardTitle>
+                  <div className="space-y-1">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white truncate">
+                      {formatNumber(summaryStats.totalQuantity)}
+                    </p>
+                    <CardDescription className="text-xs mt-1">
+                      Across all categories
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-md">
+                  <Package className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl">
-                <Package className="h-7 w-7 text-white" />
-              </div>
-            </div>
+            </CardContent>
           </Card>
 
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Unique Products</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.uniqueProducts}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Different items sold</p>
+          {/* Unique Products Card */}
+          <Card className="overflow-hidden border-l-4 border-l-purple-500 hover hover:shadow-lg" padding="none">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+                    Unique Products
+                  </CardTitle>
+                  <div className="space-y-1">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white truncate">
+                      {formatNumber(summaryStats.uniqueProducts)}
+                    </p>
+                    <CardDescription className="text-xs mt-1">
+                      Different items sold
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-md">
+                  <TrendingUp className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <div className="p-4 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl">
-                <TrendingUp className="h-7 w-7 text-white" />
-              </div>
-            </div>
+            </CardContent>
           </Card>
 
-          <Card className="p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transactions</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">{summaryStats.totalTransactions}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Completed sales</p>
+          {/* Transactions Card */}
+          <Card className="overflow-hidden border-l-4 border-l-orange-500 hover hover:shadow-lg" padding="none">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+                    Transactions
+                  </CardTitle>
+                  <div className="space-y-1">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white truncate">
+                      {formatNumber(summaryStats.totalTransactions)}
+                    </p>
+                    <CardDescription className="text-xs mt-1">
+                      Completed sales
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-md">
+                  <Calendar className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <div className="p-4 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl">
-                <Calendar className="h-7 w-7 text-white" />
-              </div>
-            </div>
+            </CardContent>
           </Card>
         </div>
 
         {/* Payment Method Statistics */}
         <div className="mt-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <DollarSign className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
-            Payment Methods
-          </h3>
+          <CardHeader className="px-0 pb-4">
+            <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+              <DollarSign className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
+              Payment Methods
+            </CardTitle>
+          </CardHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Cash Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Cash</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.cash || 0).toLocaleString()}
-                  </p>
+            <Card className="overflow-hidden border-l-4 border-l-green-500 hover hover:shadow-lg" padding="none">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Cash
+                    </CardTitle>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+                      ₺{formatCurrency(paymentMethodAmounts.cash || 0)}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-md">
+                    <DollarSign className="h-5 w-5 text-white" />
+                  </div>
                 </div>
-                <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-white" />
-                </div>
-              </div>
+              </CardContent>
             </Card>
 
             {/* POS Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">POS</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.pos || 0).toLocaleString()}
-                  </p>
+            <Card className="overflow-hidden border-l-4 border-l-blue-500 hover hover:shadow-lg" padding="none">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      POS
+                    </CardTitle>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+                      ₺{formatCurrency(paymentMethodAmounts.pos || 0)}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-md">
+                    <Package className="h-5 w-5 text-white" />
+                  </div>
                 </div>
-                <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
-                  <Package className="h-5 w-5 text-white" />
-                </div>
-              </div>
+              </CardContent>
             </Card>
 
             {/* Transfer Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-purple-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Transfer</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.transfer || 0).toLocaleString()}
-                  </p>
+            <Card className="overflow-hidden border-l-4 border-l-purple-500 hover hover:shadow-lg" padding="none">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Transfer
+                    </CardTitle>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+                      ₺{formatCurrency(paymentMethodAmounts.transfer || 0)}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md">
+                    <TrendingUp className="h-5 w-5 text-white" />
+                  </div>
                 </div>
-                <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-white" />
-                </div>
-              </div>
+              </CardContent>
             </Card>
 
             {/* Crypto Payments */}
-            <Card className="p-4 hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Crypto</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ₺{(paymentMethodAmounts.crypto || 0).toLocaleString()}
-                  </p>
+            <Card className="overflow-hidden border-l-4 border-l-orange-500 hover hover:shadow-lg" padding="none">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Crypto
+                    </CardTitle>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+                      ₺{formatCurrency(paymentMethodAmounts.crypto || 0)}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 p-2.5 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md">
+                    <Coins className="h-5 w-5 text-white" />
+                  </div>
                 </div>
-                <div className="p-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
-                  <Coins className="h-5 w-5 text-white" />
-                </div>
-              </div>
+              </CardContent>
             </Card>
           </div>
         </div>
@@ -1313,7 +1406,7 @@ export const SalesHistory: React.FC = () => {
                                 e.stopPropagation();
                                 handleDeleteTransaction(transaction._id);
                               }}
-                              disabled={deletingTransactionId === transaction._id}
+                              disabled={deletingTransactionId === transaction._id || isDeletingTransaction}
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>
@@ -1523,7 +1616,7 @@ export const SalesHistory: React.FC = () => {
                 }
               </p>
               {soldProducts.length === 0 ? (
-                <SmartNavButton to="/pos" className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                <SmartNavButton to="/pos" className="bg-gradient-to-r from-primary-500 to-purple-600 hover:from-primary-600 hover:to-purple-700">
                   Go to POS
                 </SmartNavButton>
               ) : (

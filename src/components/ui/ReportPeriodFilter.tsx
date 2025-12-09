@@ -46,6 +46,7 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
 
   const presetOptions: PeriodOption[] = [
     { value: '7d', label: 'Last 7 Days', type: 'preset' },
+    { value: '14d', label: 'Last 14 Days', type: 'preset' },
     { value: '30d', label: 'Last 30 Days', type: 'preset' },
     { value: '90d', label: 'Last 90 Days', type: 'preset' },
     { value: '1y', label: 'Last Year', type: 'preset' },

@@ -28,6 +28,14 @@ export const Wholesalers: React.FC = () => {
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
   const [wholesalerProducts, setWholesalerProducts] = useState<Wholesaler | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isAddingWholesaler, setIsAddingWholesaler] = useState(false);
+  const [isUpdatingWholesaler, setIsUpdatingWholesaler] = useState(false);
+  const [isDeletingWholesaler, setIsDeletingWholesaler] = useState(false);
+  const [isLoadingLowStock, setIsLoadingLowStock] = useState(false);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [isLoadingLinkProducts, setIsLoadingLinkProducts] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -91,6 +99,9 @@ export const Wholesalers: React.FC = () => {
   };
 
   const handleAddWholesaler = async () => {
+    // Prevent multiple submissions
+    if (isAddingWholesaler) return;
+
     if (!formData.name || !formData.phone) {
       toast.error('Please fill in name and phone number');
       return;
@@ -101,6 +112,7 @@ export const Wholesalers: React.FC = () => {
       return;
     }
 
+    setIsAddingWholesaler(true);
     try {
       await apiService.createWholesaler({
         ...formData,
@@ -113,6 +125,8 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to add wholesaler:', error);
       toast.error(error.message || 'Failed to add wholesaler');
+    } finally {
+      setIsAddingWholesaler(false);
     }
   };
 
@@ -130,11 +144,15 @@ export const Wholesalers: React.FC = () => {
   };
 
   const handleUpdateWholesaler = async () => {
+    // Prevent multiple submissions
+    if (isUpdatingWholesaler) return;
+
     if (!editingWholesaler || !formData.name || !formData.phone) {
       toast.error('Please fill in name and phone number');
       return;
     }
 
+    setIsUpdatingWholesaler(true);
     try {
       await apiService.updateWholesaler(editingWholesaler._id, formData);
       toast.success('Wholesaler updated successfully');
@@ -145,6 +163,8 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to update wholesaler:', error);
       toast.error(error.message || 'Failed to update wholesaler');
+    } finally {
+      setIsUpdatingWholesaler(false);
     }
   };
 
@@ -154,8 +174,10 @@ export const Wholesalers: React.FC = () => {
   };
 
   const confirmDeleteWholesaler = async () => {
-    if (!deletingWholesaler) return;
+    // Prevent multiple submissions
+    if (isDeletingWholesaler || !deletingWholesaler) return;
 
+    setIsDeletingWholesaler(true);
     try {
       await apiService.deleteWholesaler(deletingWholesaler._id);
       toast.success('Wholesaler deleted successfully');
@@ -165,11 +187,17 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to delete wholesaler:', error);
       toast.error(error.message || 'Failed to delete wholesaler');
+    } finally {
+      setIsDeletingWholesaler(false);
     }
   };
 
   const handleViewLowStock = async (wholesaler: Wholesaler) => {
+    // Prevent multiple clicks
+    if (isLoadingLowStock) return;
+
     setSelectedWholesaler(wholesaler);
+    setIsLoadingLowStock(true);
     try {
       const products = await apiService.getWholesalerLowStock(wholesaler._id);
       setLowStockProducts(products);
@@ -177,10 +205,16 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to load low stock products:', error);
       toast.error('Failed to load low stock products');
+    } finally {
+      setIsLoadingLowStock(false);
     }
   };
 
   const handleViewProducts = async (wholesaler: Wholesaler) => {
+    // Prevent multiple clicks
+    if (isLoadingProducts) return;
+
+    setIsLoadingProducts(true);
     try {
       const wholesalerWithProducts = await apiService.getWholesalerById(wholesaler._id, true);
       setWholesalerProducts(wholesalerWithProducts);
@@ -188,15 +222,28 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to load products:', error);
       toast.error('Failed to load products');
+    } finally {
+      setIsLoadingProducts(false);
     }
   };
 
   const handleLinkProducts = async (wholesaler: Wholesaler) => {
-    setWholesalerProducts(wholesaler);
-    setSelectedProductIds([]);
-    setProductSearchQuery('');
-    await loadAvailableProducts();
-    setIsLinkProductsModalOpen(true);
+    // Prevent multiple clicks
+    if (isLoadingLinkProducts) return;
+
+    setIsLoadingLinkProducts(true);
+    try {
+      setWholesalerProducts(wholesaler);
+      setSelectedProductIds([]);
+      setProductSearchQuery('');
+      await loadAvailableProducts();
+      setIsLinkProductsModalOpen(true);
+    } catch (error: any) {
+      console.error('Failed to load available products:', error);
+      toast.error('Failed to load available products');
+    } finally {
+      setIsLoadingLinkProducts(false);
+    }
   };
 
   const loadAvailableProducts = async () => {
@@ -285,14 +332,18 @@ export const Wholesalers: React.FC = () => {
   };
 
   const handleWhatsAppLink = async () => {
-    if (!selectedWholesaler) return;
+    // Prevent multiple clicks
+    if (isLoadingWhatsApp || !selectedWholesaler) return;
 
+    setIsLoadingWhatsApp(true);
     try {
       const response = await apiService.getWholesalerWhatsAppLink(selectedWholesaler._id);
       window.open(response.link, '_blank');
     } catch (error: any) {
       console.error('Failed to get WhatsApp link:', error);
       toast.error(error.message || 'Failed to get WhatsApp link');
+    } finally {
+      setIsLoadingWhatsApp(false);
     }
   };
 
@@ -398,8 +449,10 @@ export const Wholesalers: React.FC = () => {
   };
 
   const handleExport = async (format: 'pdf' | 'excel', includeProducts: boolean) => {
-    if (!user?.store_id) return;
+    // Prevent multiple clicks
+    if (isExporting || !user?.store_id) return;
 
+    setIsExporting(true);
     try {
       const blob = await apiService.exportWholesalers({
         format,
@@ -415,6 +468,8 @@ export const Wholesalers: React.FC = () => {
     } catch (error: any) {
       console.error('Export failed:', error);
       toast.error(error.message || 'Export failed');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -486,13 +541,18 @@ export const Wholesalers: React.FC = () => {
         {/* Search Bar */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
           <div className="relative">
+            <label htmlFor="wholesaler-search" className="sr-only">
+              Search wholesalers
+            </label>
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
+              id="wholesaler-search"
               type="text"
               placeholder="Search wholesalers by name, phone, or email..."
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               className="pl-10"
+              aria-label="Search wholesalers by name, phone, or email"
             />
           </div>
         </div>
@@ -535,7 +595,7 @@ export const Wholesalers: React.FC = () => {
                     resetForm();
                     setIsAddModalOpen(true);
                   }}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg"
+                  className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-lg"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Wholesaler
@@ -652,8 +712,12 @@ export const Wholesalers: React.FC = () => {
               >
                 Cancel
               </Button>
-              <Button onClick={handleAddWholesaler}>
-                Add Wholesaler
+              <Button 
+                onClick={handleAddWholesaler}
+                disabled={isAddingWholesaler}
+                loading={isAddingWholesaler}
+              >
+                {isAddingWholesaler ? 'Adding...' : 'Add Wholesaler'}
               </Button>
             </div>
           </div>
@@ -739,8 +803,12 @@ export const Wholesalers: React.FC = () => {
               >
                 Cancel
               </Button>
-              <Button onClick={handleUpdateWholesaler}>
-                Update Wholesaler
+              <Button 
+                onClick={handleUpdateWholesaler}
+                disabled={isUpdatingWholesaler}
+                loading={isUpdatingWholesaler}
+              >
+                {isUpdatingWholesaler ? 'Updating...' : 'Update Wholesaler'}
               </Button>
             </div>
           </div>
@@ -780,8 +848,10 @@ export const Wholesalers: React.FC = () => {
               <Button
                 variant="danger"
                 onClick={confirmDeleteWholesaler}
+                disabled={isDeletingWholesaler}
+                loading={isDeletingWholesaler}
               >
-                Delete
+                {isDeletingWholesaler ? 'Deleting...' : 'Delete'}
               </Button>
             </div>
           </div>
@@ -804,9 +874,11 @@ export const Wholesalers: React.FC = () => {
                 variant="primary"
                 size="sm"
                 className="flex items-center gap-2"
+                disabled={isLoadingLinkProducts}
+                loading={isLoadingLinkProducts}
               >
                 <Link2 className="h-4 w-4" />
-                Link Products
+                {isLoadingLinkProducts ? 'Loading...' : 'Link Products'}
               </Button>
             </div>
             {wholesalerProducts?.products && wholesalerProducts.products.length > 0 ? (
@@ -852,9 +924,11 @@ export const Wholesalers: React.FC = () => {
                     variant="primary"
                     size="sm"
                     className="flex items-center gap-2 mx-auto"
+                    disabled={isLoadingLinkProducts}
+                    loading={isLoadingLinkProducts}
                   >
                     <Link2 className="h-4 w-4" />
-                    Link Products
+                    {isLoadingLinkProducts ? 'Loading...' : 'Link Products'}
                   </Button>
                 )}
               </div>
@@ -876,13 +950,18 @@ export const Wholesalers: React.FC = () => {
           <div className="space-y-4">
             {/* Search Bar */}
             <div className="relative">
+              <label htmlFor="product-search" className="sr-only">
+                Search products
+              </label>
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <Input
+                id="product-search"
                 type="text"
                 placeholder="Search products..."
                 value={productSearchQuery}
                 onChange={(e) => setProductSearchQuery(e.target.value)}
                 className="pl-10"
+                aria-label="Search products"
               />
             </div>
 
@@ -907,11 +986,13 @@ export const Wholesalers: React.FC = () => {
                     >
                       <input
                         type="checkbox"
+                        id={`product-checkbox-${product._id}`}
                         checked={isSelected}
                         disabled={isAlreadyLinked}
                         onChange={() => !isAlreadyLinked && handleToggleProductSelection(product._id)}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${product.name} to link to wholesaler`}
                       />
                       {product.images && product.images.length > 0 && (
                         <img
@@ -971,6 +1052,7 @@ export const Wholesalers: React.FC = () => {
                 <Button
                   onClick={handleConfirmLinkProducts}
                   disabled={selectedProductIds.length === 0 || isLinkingProducts}
+                  loading={isLinkingProducts}
                 >
                   {isLinkingProducts ? 'Linking...' : `Link ${selectedProductIds.length} Product(s)`}
                 </Button>
@@ -1011,9 +1093,11 @@ export const Wholesalers: React.FC = () => {
                       onClick={handleWhatsAppLink}
                       variant="outline"
                       size="sm"
+                      disabled={isLoadingWhatsApp}
+                      loading={isLoadingWhatsApp}
                     >
                       <MessageCircle className="h-4 w-4 mr-2" />
-                      WhatsApp
+                      {isLoadingWhatsApp ? 'Loading...' : 'WhatsApp'}
                     </Button>
                   </div>
                 </div>
@@ -1076,19 +1160,25 @@ export const Wholesalers: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => handleExport('pdf', false)}
-                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors text-left"
+                  disabled={isExporting}
+                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FileText className="h-8 w-8 text-blue-600 mb-2" />
+                  <FileText className="h-8 w-8 text-primary-600 mb-2" />
                   <div className="font-medium text-gray-900 dark:text-white">PDF</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Basic export</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {isExporting ? 'Exporting...' : 'Basic export'}
+                  </div>
                 </button>
                 <button
                   onClick={() => handleExport('excel', false)}
-                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-green-500 dark:hover:border-green-400 transition-colors text-left"
+                  disabled={isExporting}
+                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-green-500 dark:hover:border-green-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileSpreadsheet className="h-8 w-8 text-green-600 mb-2" />
                   <div className="font-medium text-gray-900 dark:text-white">Excel</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Spreadsheet format</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {isExporting ? 'Exporting...' : 'Spreadsheet format'}
+                  </div>
                 </button>
               </div>
             </div>
@@ -1099,19 +1189,25 @@ export const Wholesalers: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => handleExport('pdf', true)}
-                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors text-left"
+                  disabled={isExporting}
+                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FileText className="h-8 w-8 text-blue-600 mb-2" />
+                  <FileText className="h-8 w-8 text-primary-600 mb-2" />
                   <div className="font-medium text-gray-900 dark:text-white">PDF with Products</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Includes product images</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {isExporting ? 'Exporting...' : 'Includes product images'}
+                  </div>
                 </button>
                 <button
                   onClick={() => handleExport('excel', true)}
-                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-green-500 dark:hover:border-green-400 transition-colors text-left"
+                  disabled={isExporting}
+                  className="p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-green-500 dark:hover:border-green-400 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FileSpreadsheet className="h-8 w-8 text-green-600 mb-2" />
                   <div className="font-medium text-gray-900 dark:text-white">Excel with Products</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Full product details</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {isExporting ? 'Exporting...' : 'Full product details'}
+                  </div>
                 </button>
               </div>
             </div>

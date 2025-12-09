@@ -11,9 +11,11 @@ import { RiderProvider } from './context/RiderContext';
 import { NavigationProvider } from './context/NavigationContext';
 import { RefreshProvider } from './context/RefreshContext';
 import { GoalProvider } from './context/GoalContext';
+import { SeasonProvider } from './context/SeasonContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Header } from './components/navigation/Header';
 import { MobileNavigation } from './components/navigation/MobileNavigation';
+import { SeasonalAnimationWrapper } from './components/ui/SeasonalAnimations/SeasonalAnimationWrapper';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
@@ -35,6 +37,41 @@ import { GoalCelebrationManager } from './components/ui/GoalCelebrationManager';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
+  // Global error handler to suppress authentication errors on login page
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      const isLoginPage = window.location.pathname === '/login';
+      if (isLoginPage && (
+        event.message?.includes('token is missing') ||
+        event.message?.includes('Authentication token is missing') ||
+        event.message?.includes('Please sign in again')
+      )) {
+        event.preventDefault();
+        return false;
+      }
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const isLoginPage = window.location.pathname === '/login';
+      if (isLoginPage && event.reason?.message && (
+        event.reason.message.includes('token is missing') ||
+        event.reason.message.includes('Authentication token is missing') ||
+        event.reason.message.includes('Please sign in again')
+      )) {
+        event.preventDefault();
+        return false;
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -47,11 +84,13 @@ function App() {
                     <NotificationProvider>
                       <StoreProvider>
                         <AppProvider>
-                          <GoalProvider>
-                            <RefreshProvider>
-                              <NavigationProvider>
+                          <SeasonProvider>
+                            <GoalProvider>
+                              <RefreshProvider>
+                                <NavigationProvider>
                   <ScrollToTopWrapper>
                   <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+                <SeasonalAnimationWrapper intensity="medium" />
                 <GoalCelebrationManager />
                 <Routes>
               <Route path="/login" element={<Login />} />
@@ -190,6 +229,7 @@ function App() {
                               </NavigationProvider>
                             </RefreshProvider>
                           </GoalProvider>
+                          </SeasonProvider>
                         </AppProvider>
                       </StoreProvider>
                     </NotificationProvider>

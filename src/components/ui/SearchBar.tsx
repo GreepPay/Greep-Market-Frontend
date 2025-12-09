@@ -102,10 +102,16 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(({
           onClick={handleInputClick}
           placeholder={placeholder}
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
           data-lpignore="true"
           data-form-type="other"
           data-1p-ignore="true"
           data-bwignore="true"
+          data-dashlane-ignore="true"
+          data-extension-context="search"
+          aria-label={placeholder}
           className="w-full pl-10 pr-20 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200"
         />
         <div className="absolute inset-y-0 right-0 flex items-center pr-2 space-x-1">

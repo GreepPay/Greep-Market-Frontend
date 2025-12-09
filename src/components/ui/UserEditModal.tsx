@@ -194,7 +194,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       {/* ✅ No changes needed below this line */}
       <div className="space-y-6">
         {/* Tabs */}
-        <div className="border-b border-gray-200">
+        <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="-mb-px flex space-x-8">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -204,8 +204,8 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                   onClick={() => setActiveTab(tab.id as 'profile' | 'password')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                     activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -254,27 +254,33 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
             {/* Store Assignment */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <Building2 className="h-4 w-4 inline mr-1" />
                 Store Assignment
               </label>
               {/* Debug info */}
-              <div className="text-xs text-gray-400 mb-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                 Debug: {stores.length} stores loaded
               </div>
-              <select
-                value={formData.store_id}
-                onChange={(e) => handleInputChange('store_id', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                aria-label="Select store assignment"
-              >
-                <option value="">No Store Assigned</option>
-                {stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name} - {store.address}
-                  </option>
-                ))}
-              </select>
+              {formData.store_id ? (
+                <div className="w-full px-3 py-2 border-2 border-primary-500 dark:border-primary-400 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-gray-900 dark:text-white">
+                  {stores.find(s => s.id === formData.store_id)?.name || 'Unknown Store'} - {stores.find(s => s.id === formData.store_id)?.address || 'Unknown Address'}
+                </div>
+              ) : (
+                <select
+                  value={formData.store_id}
+                  onChange={(e) => handleInputChange('store_id', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  aria-label="Select store assignment"
+                >
+                  <option value="">No Store Assigned</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name} - {store.address}
+                    </option>
+                  ))}
+                </select>
+              )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {formData.store_id 
                   ? 'User is assigned to a specific store' 
@@ -284,15 +290,15 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
             {/* Role Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Role *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Role *</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {roleOptions.map((role) => (
                   <div
                     key={role.value}
                     className={`border rounded-lg p-3 cursor-pointer transition-colors ${
                       formData.role === role.value
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-primary-500 dark:border-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800'
                     }`}
                     onClick={() => handleInputChange('role', role.value)}
                   >
@@ -303,12 +309,12 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                         value={role.value}
                         checked={formData.role === role.value}
                         onChange={() => handleInputChange('role', role.value)}
-                        className="h-4 w-4 text-primary-600"
+                        className="h-4 w-4 text-primary-600 dark:text-primary-400"
                         aria-label={`Select ${role.label} role`}
                       />
                       <div>
-                        <div className="font-medium text-gray-900">{role.label}</div>
-                        <div className="text-sm text-gray-500">{role.description}</div>
+                        <div className="font-medium text-gray-900 dark:text-white">{role.label}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{role.description}</div>
                       </div>
                     </div>
                   </div>
@@ -317,10 +323,10 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
             </div>
 
             {/* Status Toggle */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <div>
-                <h4 className="font-medium text-gray-900">Account Status</h4>
-                <p className="text-sm text-gray-500">
+                <h4 className="font-medium text-gray-900 dark:text-white">Account Status</h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   {formData.is_active ? 'User can log in and access the system' : 'User account is disabled'}
                 </p>
               </div>
@@ -332,40 +338,40 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                   className="sr-only peer"
                   aria-label="Toggle user account status"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600 dark:peer-checked:bg-primary-500"></div>
               </label>
             </div>
 
             {/* User Info Display */}
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <h4 className="font-medium text-gray-900">Account Information</h4>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+              <h4 className="font-medium text-gray-900 dark:text-white">Account Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">User ID:</span>
-                  <span className="ml-2 text-gray-900 font-mono text-xs">{user.id}</span>
+                  <span className="text-gray-500 dark:text-gray-400">User ID:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white font-mono text-xs">{user.id}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Member since:</span>
-                  <span className="ml-2 text-gray-900">
+                  <span className="text-gray-500 dark:text-gray-400">Member since:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
                     {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Last login:</span>
-                  <span className="ml-2 text-gray-900">
+                  <span className="text-gray-500 dark:text-gray-400">Last login:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
                     {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Last updated:</span>
-                  <span className="ml-2 text-gray-900">
+                  <span className="text-gray-500 dark:text-gray-400">Last updated:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
                     {user.updated_at ? new Date(user.updated_at).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 type="button"
                 variant="outline"
@@ -389,16 +395,16 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         {/* Reset Password Tab */}
         {activeTab === 'password' && (
           <form onSubmit={handlePasswordChange} className="space-y-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <Key className="h-5 w-5 text-yellow-400" />
+                  <Key className="h-5 w-5 text-yellow-400 dark:text-yellow-500" />
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">
+                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
                     Reset User Password
                   </h3>
-                  <div className="mt-2 text-sm text-yellow-700">
+                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
                     <p>This will reset the password for <strong>{user.first_name} {user.last_name}</strong>. They will need to use this new password to log in.</p>
                   </div>
                 </div>
@@ -417,7 +423,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-8 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 title={showNewPassword ? "Hide password" : "Show password"}
                 aria-label={showNewPassword ? "Hide password" : "Show password"}
               >
@@ -437,7 +443,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-8 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 title={showConfirmPassword ? "Hide password" : "Show password"}
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
@@ -445,16 +451,16 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               </button>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <Shield className="h-5 w-5 text-blue-400" />
+                  <Shield className="h-5 w-5 text-blue-400 dark:text-blue-500" />
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-blue-800">
+                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
                     Password Requirements
                   </h3>
-                  <div className="mt-2 text-sm text-blue-700">
+                  <div className="mt-2 text-sm text-blue-700 dark:text-blue-400">
                     <ul className="list-disc list-inside space-y-1">
                       <li>At least 8 characters long</li>
                       <li>Contains uppercase and lowercase letters</li>
@@ -466,7 +472,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 type="button"
                 variant="outline"

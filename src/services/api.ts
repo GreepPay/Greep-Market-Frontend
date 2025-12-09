@@ -88,6 +88,74 @@ class ApiService {
     return !!(this.accessToken && this.isTokenValid(this.accessToken));
   }
 
+  // Public method for making unauthenticated requests (login, register, etc.)
+  private async publicRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(url, {
+        ...config,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Check if response has content before trying to parse JSON
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          data = {
+            success: false,
+            error: {
+              message: response.statusText || 'Unknown error occurred',
+              statusCode: response.status
+            }
+          };
+        }
+      } else {
+        data = {
+          success: false,
+          error: {
+            message: response.statusText || 'Unknown error occurred',
+            statusCode: response.status
+          }
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Request failed with status ${response.status}`);
+      }
+
+      return data;
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        } else if (error.message.includes('Failed to fetch')) {
+          throw new Error('Connection issue. Please check your internet connection and try again.');
+        }
+      }
+      throw error;
+    }
+  }
+
   // Public method for making raw requests (for file downloads, etc.)
   public async rawRequest(
     endpoint: string,
@@ -121,9 +189,29 @@ class ApiService {
     const url = `${API_BASE_URL}${endpoint}`;
 
     // Validate access token before making request
-    if (this.accessToken && !this.isTokenValid(this.accessToken)) {
+    if (!this.accessToken) {
+      // Check if we're on the login page - if so, throw a silent error that won't be displayed
+      const isLoginPage = window.location.pathname === '/login';
       this.clearTokensSilently();
-      throw new Error('Authentication token is invalid or expired');
+      
+      // Create an error that can be identified as "expected on login page"
+      const error = new Error('Authentication token is missing. Please sign in again.');
+      (error as any).isLoginPageError = isLoginPage;
+      throw error;
+    }
+    
+    if (!this.isTokenValid(this.accessToken)) {
+      // Try to refresh token if we have a refresh token
+      if (this.refreshToken && this.isTokenValid(this.refreshToken)) {
+        const refreshed = await this.refreshAccessToken();
+        if (!refreshed) {
+          this.clearTokensSilently();
+          throw new Error('Authentication token is invalid or expired');
+        }
+      } else {
+        this.clearTokensSilently();
+        throw new Error('Authentication token is invalid or expired');
+      }
     }
     
     const config: RequestInit = {
@@ -177,21 +265,58 @@ class ApiService {
 
       if (!response.ok) {
         if (response.status === 401) {
+          // Don't try to refresh if the request was aborted
+          if (controller.signal.aborted) {
+            const abortError = new Error('Request was cancelled');
+            abortError.name = 'AbortError';
+            throw abortError;
+          }
+          
           if (this.refreshToken && this.isTokenValid(this.refreshToken)) {
             // Try to refresh token
             const refreshed = await this.refreshAccessToken();
             if (refreshed) {
-              // Retry the original request
-              config.headers = {
-                ...config.headers,
-                Authorization: `Bearer ${this.accessToken}`,
-              };
-              const retryResponse = await fetch(url, config);
-              return await retryResponse.json();
+              // Retry the original request with new token
+              const retryController = new AbortController();
+              const retryTimeoutId = setTimeout(() => retryController.abort(), 10000);
+              
+              try {
+                const retryConfig: RequestInit = {
+                  ...config,
+                  headers: {
+                    ...config.headers,
+                    Authorization: `Bearer ${this.accessToken}`,
+                  },
+                  signal: retryController.signal
+                };
+                const retryResponse = await fetch(url, retryConfig);
+                clearTimeout(retryTimeoutId);
+                
+                if (!retryResponse.ok) {
+                  if (retryResponse.status === 401) {
+                    this.clearTokens();
+                    throw new Error('Authentication failed. Please sign in again.');
+                  }
+                  throw new Error(`Request failed with status ${retryResponse.status}`);
+                }
+                
+                const contentType = retryResponse.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                  return await retryResponse.json();
+                }
+                return { success: true, data: null } as ApiResponse<T>;
+              } catch (retryError) {
+                clearTimeout(retryTimeoutId);
+                if (retryError instanceof Error && retryError.name === 'AbortError') {
+                  throw retryError;
+                }
+                throw new Error('Authentication failed after token refresh');
+              }
             }
           }
           // If refresh fails or no refresh token, clear all tokens and trigger logout
           this.clearTokens();
+          throw new Error('Authentication failed. Please sign in again.');
         }
         throw new Error(data.error?.message || 'Request failed');
       }
@@ -202,7 +327,10 @@ class ApiService {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           // Silently handle abort errors - they're expected when requests are cancelled
-          throw error; // Re-throw to let caller handle it
+          // Don't log as error, just re-throw a more descriptive error
+          const abortError = new Error('Request was cancelled');
+          abortError.name = 'AbortError';
+          throw abortError;
         } else if (error.message.includes('Failed to fetch')) {
           console.error('Network error - server might be down');
           throw new Error('Connection issue. Please try again.');
@@ -253,7 +381,7 @@ class ApiService {
 
   // Authentication
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await this.privateRequest<AuthResponse['data']>('/auth/login', {
+    const response = await this.publicRequest<AuthResponse['data']>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -274,7 +402,7 @@ class ApiService {
     phone?: string;
     store_id?: string;
   }): Promise<AuthResponse> {
-    const response = await this.privateRequest<AuthResponse['data']>('/auth/register', {
+    const response = await this.publicRequest<AuthResponse['data']>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
@@ -778,6 +906,8 @@ class ApiService {
     startDate?: string;
     endDate?: string;
     period?: string;
+    month?: number;
+    year?: number;
   }): Promise<DashboardMetrics> {
     const queryParams = new URLSearchParams();
     if (params?.store_id) queryParams.append('store_id', params.store_id);
@@ -788,6 +918,8 @@ class ApiService {
     if (params?.startDate) queryParams.append('startDate', params.startDate);
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.period) queryParams.append('period', params.period);
+    if (params?.month) queryParams.append('month', params.month.toString());
+    if (params?.year) queryParams.append('year', params.year.toString());
 
     // Add cache-busting parameter to ensure fresh data when filters change
     queryParams.append('_t', Date.now().toString());
@@ -1175,12 +1307,35 @@ class ApiService {
     description?: string;
     receipt_number?: string;
     vendor_name?: string;
-  }): Promise<any> {
-    const response = await this.privateRequest<{ success: boolean; data: any }>('/expenses', {
+  }): Promise<{ data: any; priceSuggestion?: any; message?: string }> {
+    const response = await this.privateRequest<{ 
+      success: boolean; 
+      data: any; 
+      priceSuggestion?: any;
+      message?: string;
+    }>('/expenses', {
       method: 'POST',
       body: JSON.stringify(expenseData),
     });
-    return (response as any).data;
+    return {
+      data: (response as any).data,
+      priceSuggestion: (response as any).priceSuggestion,
+      message: (response as any).message,
+    };
+  }
+
+  async updateProductPriceFromExpense(expenseId: string, data: {
+    product_id: string;
+    updateSellingPrice: boolean;
+  }): Promise<any> {
+    const response = await this.privateRequest<{ success: boolean; data: any; message: string }>(
+      `/expenses/${expenseId}/update-product-price`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return response;
   }
 
   async updateExpense(expenseId: string, expenseData: {
@@ -1381,6 +1536,38 @@ class ApiService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(settings),
+    });
+    return (response as any).data;
+  }
+
+  // Create a new store
+  async createStore(storeData: {
+    name: string;
+    address: string;
+    phone?: string;
+    email?: string;
+    currency?: string;
+    timezone?: string;
+    tax_rate?: number;
+    low_stock_threshold?: number;
+  }): Promise<{
+    id: string;
+    name: string;
+    address: string;
+    phone: string;
+    email: string;
+    currency: string;
+    timezone: string;
+    tax_rate: number;
+    low_stock_threshold: number;
+    is_active: boolean;
+  }> {
+    const response = await this.privateRequest<{ success: boolean; data: any }>('/stores', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(storeData),
     });
     return (response as any).data;
   }
