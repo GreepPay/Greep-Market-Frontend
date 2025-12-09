@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { User } from '../types';
 import { toast } from 'react-hot-toast';
@@ -81,14 +81,21 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if we're on the login page
+  const isLoginPage = location.pathname === '/login';
 
   // Handle token expiration - redirect to login
   const handleTokenExpiration = () => {
     dispatch({ type: 'AUTH_LOGOUT' });
-    toast.error('Your session has expired. Please sign in again.', {
-      duration: 4000,
-      position: 'top-center',
-    });
+    // Only show error if we're not already on the login page
+    if (!isLoginPage) {
+      toast.error('Your session has expired. Please sign in again.', {
+        duration: 4000,
+        position: 'top-center',
+      });
+    }
     // Use the utility function for consistent behavior
     clearAuthAndRedirect();
   };
@@ -106,6 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check for existing authentication on app load
   useEffect(() => {
     const checkAuth = async () => {
+      // Don't check auth if we're already on the login page
+      if (isLoginPage) {
+        dispatch({ type: 'AUTH_LOGOUT' });
+        return;
+      }
       
       try {
         dispatch({ type: 'AUTH_START' });
@@ -129,7 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Failed to get user data:', error);
             // If we get here, the token was valid but we can't get user data
             // This might be a temporary server issue, so we'll clear auth and redirect
-            clearAuthAndRedirect();
+            // Only show error if not on login page
+            if (!isLoginPage) {
+              clearAuthAndRedirect();
+            } else {
+              apiService.clearTokensSilently();
+              dispatch({ type: 'AUTH_LOGOUT' });
+            }
           }
         } else {
           // Token is invalid or authentication failed
@@ -138,10 +156,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Clear tokens and redirect to login
             apiService.clearTokensSilently();
             dispatch({ type: 'AUTH_LOGOUT' });
-            navigate('/login', { replace: true });
+            // Only navigate if we're not already on login page
+            if (!isLoginPage) {
+              navigate('/login', { replace: true });
+            }
           } else {
-            // Don't redirect, but show error
-            dispatch({ type: 'AUTH_FAILURE', payload: authResult.error || 'Authentication failed' });
+            // Don't redirect, but show error only if not on login page
+            if (!isLoginPage) {
+              dispatch({ type: 'AUTH_FAILURE', payload: authResult.error || 'Authentication failed' });
+            }
           }
         }
       } catch (error: any) {
@@ -149,12 +172,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Clear tokens on any unexpected error
         apiService.clearTokensSilently();
         dispatch({ type: 'AUTH_LOGOUT' });
-        navigate('/login', { replace: true });
+        // Only navigate if we're not already on login page
+        if (!isLoginPage) {
+          navigate('/login', { replace: true });
+        }
       }
     };
 
     checkAuth();
-  }, [navigate]);
+  }, [navigate, isLoginPage]);
 
   const login = async (email: string, password: string) => {
     // Prevent multiple simultaneous login attempts
@@ -170,7 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       const errorMessage = error.message || 'Login failed';
       dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
-      toast.error(errorMessage);
+      // Only show toast if we're not on login page (shouldn't happen, but just in case)
+      const isLoginPage = window.location.pathname === '/login';
+      if (!isLoginPage || !errorMessage.includes('token is missing') && !errorMessage.includes('Authentication token is missing')) {
+        toast.error(errorMessage);
+      }
       throw error;
     }
   };

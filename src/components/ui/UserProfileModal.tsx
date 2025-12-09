@@ -142,7 +142,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     >
       <div className="space-y-6">
         {/* Tabs */}
-        <div className="border-b border-gray-200">
+        <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="-mb-px flex space-x-8">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -152,8 +152,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   onClick={() => setActiveTab(tab.id as 'profile' | 'password')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                     activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -202,46 +202,46 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             />
 
             {/* User Info Display */}
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <h4 className="font-medium text-gray-900">Account Information</h4>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
+              <h4 className="font-medium text-gray-900 dark:text-white">Account Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Role:</span>
+                  <span className="text-gray-500 dark:text-gray-400">Role:</span>
                   <span className={`ml-2 px-2 py-1 rounded-full text-xs font-semibold ${
-                    user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                    user.role === 'manager' ? 'bg-blue-100 text-blue-800' :
-                    user.role === 'owner' ? 'bg-purple-100 text-purple-800' :
-                    'bg-green-100 text-green-800'
+                    user.role === 'admin' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
+                    user.role === 'manager' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
+                    user.role === 'owner' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                    'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                   }`}>
                     {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Status:</span>
+                  <span className="text-gray-500 dark:text-gray-400">Status:</span>
                   <span className={`ml-2 px-2 py-1 rounded-full text-xs font-semibold ${
                     user.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                   }`}>
                     {user.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Member since:</span>
-                  <span className="ml-2 text-gray-900">
+                  <span className="text-gray-500 dark:text-gray-400">Member since:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
                     {new Date(user.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Last login:</span>
-                  <span className="ml-2 text-gray-900">
+                  <span className="text-gray-500 dark:text-gray-400">Last login:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">
                     {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 type="button"
                 variant="outline"
@@ -265,16 +265,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         {/* Change Password Tab */}
         {activeTab === 'password' && (
           <form onSubmit={handlePasswordChange} className="space-y-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <Key className="h-5 w-5 text-yellow-400" />
+                  <Key className="h-5 w-5 text-yellow-400 dark:text-yellow-500" />
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">
+                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
                     Password Requirements
                   </h3>
-                  <div className="mt-2 text-sm text-yellow-700">
+                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
                     <ul className="list-disc list-inside space-y-1">
                       <li>At least 8 characters long</li>
                       <li>Contains uppercase and lowercase letters</li>
@@ -298,7 +298,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-8 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 title={showCurrentPassword ? "Hide password" : "Show password"}
                 aria-label={showCurrentPassword ? "Hide password" : "Show password"}
               >
@@ -318,7 +318,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-8 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 title={showNewPassword ? "Hide password" : "Show password"}
                 aria-label={showNewPassword ? "Hide password" : "Show password"}
               >
@@ -338,7 +338,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-8 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 title={showConfirmPassword ? "Hide password" : "Show password"}
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
@@ -346,7 +346,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </button>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 type="button"
                 variant="outline"

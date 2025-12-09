@@ -104,6 +104,10 @@ export const Reports: React.FC = () => {
           calculatedStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
           break;
+        case '14d':
+          calculatedStartDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+          calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
         case '30d':
           calculatedStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           calculatedEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -1563,7 +1567,11 @@ export const Reports: React.FC = () => {
                 {salesData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <CartesianGrid 
+                        strokeDasharray="3 3" 
+                        stroke={isDark ? "#374151" : "#d1d5db"} 
+                        opacity={isDark ? 0.5 : 0.6} 
+                      />
                       <XAxis dataKey="date" stroke="#9CA3AF" />
                       <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                       <Tooltip 
@@ -1714,7 +1722,11 @@ export const Reports: React.FC = () => {
               {salesMetrics.salesByDayOfWeek && salesMetrics.salesByDayOfWeek.some((day: any) => day.sales > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={salesMetrics.salesByDayOfWeek}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#374151" : "#e5e7eb"} />
+                    <CartesianGrid 
+                      strokeDasharray="3 3" 
+                      stroke={isDark ? "#374151" : "#d1d5db"} 
+                      opacity={isDark ? 0.5 : 0.6} 
+                    />
                     <XAxis 
                       dataKey="day" 
                       stroke={isDark ? "#9CA3AF" : "#6b7280"}
@@ -1759,7 +1771,11 @@ export const Reports: React.FC = () => {
               {salesMetrics.salesByHour && salesMetrics.salesByHour.some((hour: any) => hour.sales > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={salesMetrics.salesByHour}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#374151" : "#e5e7eb"} />
+                    <CartesianGrid 
+                      strokeDasharray="3 3" 
+                      stroke={isDark ? "#374151" : "#d1d5db"} 
+                      opacity={isDark ? 0.5 : 0.6} 
+                    />
                     <XAxis 
                       dataKey="hour" 
                       stroke={isDark ? "#9CA3AF" : "#6b7280"}
@@ -2048,7 +2064,11 @@ export const Reports: React.FC = () => {
                   {inventoryMetrics.categoryBreakdown.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={inventoryMetrics.categoryBreakdown}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <CartesianGrid 
+                          strokeDasharray="3 3" 
+                          stroke={isDark ? "#374151" : "#d1d5db"} 
+                          opacity={isDark ? 0.5 : 0.6} 
+                        />
                         <XAxis 
                           dataKey="category" 
                           stroke="#9CA3AF"
@@ -2404,7 +2424,11 @@ export const Reports: React.FC = () => {
                 {topProductsData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topProductsData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <CartesianGrid 
+                        strokeDasharray="3 3" 
+                        stroke={isDark ? "#374151" : "#d1d5db"} 
+                        opacity={isDark ? 0.5 : 0.6} 
+                      />
                       <XAxis dataKey="name" stroke="#9CA3AF" />
                       <YAxis tickFormatter={(value) => `₺${(value / 1000).toFixed(0)}k`} stroke="#9CA3AF" />
                       <Tooltip 

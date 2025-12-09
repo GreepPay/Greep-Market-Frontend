@@ -14,6 +14,7 @@ export interface Product {
   description: string;
   price: number;
   cost_price?: number;
+  markup_percentage?: number;
   category: string;
   sku: string;
   barcode?: string;

@@ -21,6 +21,29 @@ export const ModernToastProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
 
   useEffect(() => {
+    // Intercept toast.error calls to suppress authentication errors on login page
+    const originalToastError = hotToast.error;
+    const wrappedToastError = (message: any, options?: any) => {
+      const isLoginPage = window.location.pathname === '/login';
+      if (isLoginPage && (
+        (typeof message === 'string' && (
+          message.includes('token is missing') ||
+          message.includes('Authentication token is missing') ||
+          message.includes('Please sign in again')
+        )) ||
+        (message?.message && typeof message.message === 'string' && (
+          message.message.includes('token is missing') ||
+          message.message.includes('Authentication token is missing') ||
+          message.message.includes('Please sign in again')
+        ))
+      )) {
+        // Suppress the error toast on login page
+        return '';
+      }
+      return originalToastError(message, options);
+    };
+    hotToast.error = wrappedToastError;
+
     // Listen for modern notification events
     const handleNotification = (event: CustomEvent) => {
       const { id, ...options } = event.detail;
@@ -44,6 +67,8 @@ export const ModernToastProvider: React.FC<{ children: React.ReactNode }> = ({ c
       window.removeEventListener('modern-notification', handleNotification as EventListener);
       window.removeEventListener('modern-notification-dismiss', handleDismiss as EventListener);
       window.removeEventListener('modern-notification-dismiss-all', handleDismissAll);
+      // Restore original toast.error
+      hotToast.error = originalToastError;
     };
   }, []);
 

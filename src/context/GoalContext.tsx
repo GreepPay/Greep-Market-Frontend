@@ -204,7 +204,11 @@ export function GoalProvider({ children }: { children: ReactNode }) {
             } as any;
             // Persist backup immediately so UI shows reliably after hard refresh
             localStorage.setItem(`goal_monthly_${user.store_id}`, JSON.stringify(monthlyGoal));
-          } catch (e) {
+          } catch (e: any) {
+            // Don't log AbortErrors or 401 errors as they're handled elsewhere
+            if (e?.name !== 'AbortError' && e?.message && !e.message.includes('401') && !e.message.includes('Unauthorized')) {
+              console.warn('Failed to create monthly goal from last month:', e);
+            }
             // Try to create from localStorage backup
             try {
               const backupMonthly = localStorage.getItem(`goal_monthly_${user.store_id}`);
@@ -296,14 +300,24 @@ export function GoalProvider({ children }: { children: ReactNode }) {
             store_id: user.store_id
           } as any);
           dailyGoal = createdDaily as any;
-        } catch (e) {
+        } catch (e: any) {
+          // Don't log AbortErrors or 401 errors as they're handled elsewhere
+          if (e?.name !== 'AbortError' && e?.message && !e.message.includes('401') && !e.message.includes('Unauthorized')) {
+            console.warn('Failed to create daily goal from monthly goal:', e);
+          }
         }
       }
 
       // 6) Progress will be updated by a separate effect when goals are present
-    } catch (error) {
-      console.error('Failed to load goals:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load goals' });
+    } catch (error: any) {
+      // Don't log AbortErrors as they're expected when requests are cancelled
+      if (error?.name !== 'AbortError' && !error?.message?.includes('cancelled')) {
+        // Don't log 401 errors as they're handled by the API service
+        if (!error?.message?.includes('401') && !error?.message?.includes('Unauthorized')) {
+          console.error('Failed to load goals:', error);
+          dispatch({ type: 'SET_ERROR', payload: 'Failed to load goals' });
+        }
+      }
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }

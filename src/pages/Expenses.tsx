@@ -18,6 +18,7 @@ import { NumberInput } from '../components/ui/NumberInput';
 import { Modal } from '../components/ui/Modal';
 import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { ProductSelector } from '../components/ui/ProductSelector';
+import { PriceSuggestionModal, PriceSuggestion } from '../components/ui/PriceSuggestionModal';
 import { Product } from '../types';
 import toast from 'react-hot-toast';
 import { normalizeDateToYYYYMMDD } from '../utils/timezoneUtils';
@@ -101,6 +102,11 @@ export const Expenses: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [priceSuggestion, setPriceSuggestion] = useState<PriceSuggestion | null>(null);
+  const [priceSuggestionExpenseId, setPriceSuggestionExpenseId] = useState<string | null>(null);
+  const [showPriceSuggestionModal, setShowPriceSuggestionModal] = useState(false);
+  // Store expense data for stock update when price suggestion is shown
+  const [pendingStockUpdate, setPendingStockUpdate] = useState<{ productId: string; quantity: number } | null>(null);
   const [newExpense, setNewExpense] = useState<NewExpense>({
     store_id: user?.store_id || '',
     date: normalizeDateToYYYYMMDD(new Date()),
@@ -249,6 +255,138 @@ export const Expenses: React.FC = () => {
     }
   };
 
+  // Calculate cost per unit with precision
+  // This ensures accurate division and handles edge cases
+  const calculateCostPerUnit = (amount: number, quantity: number): number => {
+    // Validate inputs
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      return 0;
+    }
+    if (quantity === null || quantity === undefined || isNaN(quantity) || quantity === 0) {
+      return 0;
+    }
+    
+    // Use precise division to avoid floating point errors
+    // Round to 6 decimal places internally for accuracy, then round to 4 for display
+    const result = amount / quantity;
+    
+    // Handle very small numbers
+    if (Math.abs(result) < 0.000001) {
+      return 0;
+    }
+    
+    // Round to 4 decimal places for display (allows for precise unit pricing)
+    return Math.round(result * 10000) / 10000;
+  };
+
+  // Calculate total amount from cost per unit and quantity
+  // This ensures accurate multiplication for financial calculations
+  const calculateTotalAmount = (costPerUnit: number, quantity: number): number => {
+    // Validate inputs
+    if (costPerUnit === null || costPerUnit === undefined || isNaN(costPerUnit)) {
+      return 0;
+    }
+    if (quantity === null || quantity === undefined || isNaN(quantity)) {
+      return 0;
+    }
+    
+    // Use precise multiplication to avoid floating point errors
+    const result = costPerUnit * quantity;
+    
+    // Round to 2 decimal places for currency (standard for financial calculations)
+    const rounded = Math.round(result * 100) / 100;
+    
+    // Ensure we don't return negative amounts
+    return Math.max(0, rounded);
+  };
+
+  // Reset expense form
+  const resetExpenseForm = () => {
+    setNewExpense({
+      store_id: user?.store_id || '',
+      date: normalizeDateToYYYYMMDD(new Date()),
+      product_name: '',
+      product_id: undefined,
+      unit: 'pieces',
+      quantity: 1,
+      amount: 0,
+      currency: 'TRY',
+      payment_method: 'cash',
+      category: 'other',
+      description: ''
+    });
+  };
+
+  // Handle price suggestion modal close (when user skips)
+  const handlePriceSuggestionClose = async () => {
+    // Update stock if there was a pending stock update
+    if (pendingStockUpdate) {
+      try {
+        // Fetch fresh product data before updating stock
+        await loadAllProducts();
+        const product = products.find(p => p._id === pendingStockUpdate.productId);
+        if (product) {
+          const currentStock = product.stock_quantity || 0;
+          const newStock = currentStock + pendingStockUpdate.quantity;
+          await updateProduct(pendingStockUpdate.productId, { stock_quantity: newStock });
+          await loadAllProducts();
+          toast.success(`Stock updated! ${product.name} stock: ${currentStock} → ${newStock}`);
+        }
+      } catch (stockError) {
+        console.error('Failed to update stock:', stockError);
+        toast.error('Expense added but failed to update stock. Please update manually.');
+      }
+      setPendingStockUpdate(null);
+    }
+
+    setShowPriceSuggestionModal(false);
+    setPriceSuggestion(null);
+    setPriceSuggestionExpenseId(null);
+    setShowAddExpense(false);
+    setSelectedProduct(null);
+    resetExpenseForm();
+  };
+
+  // Handle updating product price from price suggestion
+  const handleUpdateProductPrice = async (updateSellingPrice: boolean) => {
+    if (!priceSuggestionExpenseId || !priceSuggestion) {
+      throw new Error('Missing expense ID or price suggestion');
+    }
+
+    try {
+      // Update product price based on suggestion
+      await apiService.updateProductPriceFromExpense(priceSuggestionExpenseId, {
+        product_id: priceSuggestion.product.id,
+        updateSellingPrice,
+      });
+
+      // Refresh products to get updated prices
+      await loadAllProducts();
+
+      // Update stock if there was a pending stock update
+      if (pendingStockUpdate && pendingStockUpdate.productId === priceSuggestion.product.id) {
+        try {
+          // Fetch fresh product data
+          const product = products.find(p => p._id === pendingStockUpdate.productId);
+          if (product) {
+            const currentStock = product.stock_quantity || 0;
+            const newStock = currentStock + pendingStockUpdate.quantity;
+            await updateProduct(pendingStockUpdate.productId, { stock_quantity: newStock });
+            await loadAllProducts();
+            toast.success(`Product price and stock updated! ${product.name} stock: ${currentStock} → ${newStock}`);
+          }
+        } catch (stockError) {
+          console.error('Failed to update stock:', stockError);
+          toast.error('Product price updated but failed to update stock. Please update manually.');
+        }
+        setPendingStockUpdate(null);
+      }
+    } catch (error: any) {
+      console.error('Failed to update product price:', error);
+      throw error;
+    }
+  };
+
   // Normalize unit value to match expense API validation
   const normalizeUnit = (unit: string): string => {
     const unitLower = unit.toLowerCase().trim();
@@ -367,7 +505,8 @@ export const Expenses: React.FC = () => {
       };
       
       // Create the expense
-      const createdExpense = await apiService.createExpense(normalizedExpense);
+      const expenseResponse = await apiService.createExpense(normalizedExpense);
+      const createdExpense = expenseResponse.data;
       
       // Notify about expense addition
       notificationService.notifyExpenseAdded(
@@ -376,37 +515,46 @@ export const Expenses: React.FC = () => {
         normalizedExpense.category
       );
       
-      // If expense is linked to a product, update stock
-      if (newExpense.product_id && selectedProduct && selectedProduct._id === newExpense.product_id) {
-        try {
-          const currentStock = selectedProduct.stock_quantity || 0;
-          const newStock = currentStock + newExpense.quantity;
-          await updateProduct(newExpense.product_id, { stock_quantity: newStock });
-          await loadAllProducts(); // Refresh products list
-          toast.success(`Expense added and stock updated! ${selectedProduct.name} stock: ${currentStock} → ${newStock}`);
-        } catch (stockError) {
-          console.error('Failed to update stock:', stockError);
-          toast.error('Expense added but failed to update stock. Please update manually.');
+      // Check for price suggestion
+      if (expenseResponse.priceSuggestion && expenseResponse.priceSuggestion.hasPriceChange) {
+        setPriceSuggestion(expenseResponse.priceSuggestion);
+        setPriceSuggestionExpenseId(createdExpense._id);
+        // Store expense data for stock update (will be done after price suggestion is handled)
+        if (newExpense.product_id && newExpense.quantity > 0) {
+          setPendingStockUpdate({
+            productId: newExpense.product_id,
+            quantity: newExpense.quantity,
+          });
         }
+        setShowPriceSuggestionModal(true);
+        toast.success('Expense added successfully. Price change detected!', {
+          duration: 5000,
+        });
       } else {
-        toast.success('Expense added successfully');
+        // If expense is linked to a product, update stock
+        if (newExpense.product_id && selectedProduct && selectedProduct._id === newExpense.product_id) {
+          try {
+            // Fetch fresh product data before updating stock
+            await loadAllProducts();
+            const freshProduct = products.find(p => p._id === newExpense.product_id);
+            const currentStock = freshProduct?.stock_quantity || selectedProduct.stock_quantity || 0;
+            const newStock = currentStock + newExpense.quantity;
+            await updateProduct(newExpense.product_id, { stock_quantity: newStock });
+            await loadAllProducts(); // Refresh products list
+            toast.success(`Expense added and stock updated! ${selectedProduct.name} stock: ${currentStock} → ${newStock}`);
+          } catch (stockError) {
+            console.error('Failed to update stock:', stockError);
+            toast.error('Expense added but failed to update stock. Please update manually.');
+          }
+        } else {
+          toast.success('Expense added successfully');
+        }
+        
+        setShowAddExpense(false);
+        setSelectedProduct(null);
+        resetExpenseForm();
       }
       
-      setShowAddExpense(false);
-      setSelectedProduct(null);
-      setNewExpense({
-        store_id: user?.store_id || '',
-        date: normalizeDateToYYYYMMDD(new Date()),
-        product_name: '',
-        product_id: undefined,
-        unit: 'pieces',
-        quantity: 1,
-        amount: 0,
-        currency: 'TRY',
-        payment_method: 'cash',
-        category: 'other',
-        description: ''
-      });
       loadExpenses();
       loadStats();
     } catch (error) {
@@ -972,7 +1120,11 @@ export const Expenses: React.FC = () => {
                         <NumberInput
                           label="Quantity *"
                           value={newExpense.quantity}
-                          onChange={(value) => setNewExpense({ ...newExpense, quantity: typeof value === 'number' ? value : parseFloat(value) || 0 })}
+                          onChange={(value) => {
+                            const qty = typeof value === 'number' ? value : parseFloat(value) || 0;
+                            // When quantity changes, recalculate cost per unit (amount stays the same)
+                            setNewExpense({ ...newExpense, quantity: qty });
+                          }}
                           placeholder="Enter quantity"
                           min={0}
                           step={0.01}
@@ -998,29 +1150,56 @@ export const Expenses: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <NumberInput
-                          label="Amount *"
+                          label="Total Amount *"
                           value={newExpense.amount}
-                          onChange={(value) => setNewExpense({ ...newExpense, amount: typeof value === 'number' ? value : parseFloat(value) || 0 })}
+                          onChange={(value) => {
+                            const amt = typeof value === 'number' ? value : parseFloat(value) || 0;
+                            // When total amount changes, cost per unit is automatically recalculated
+                            setNewExpense({ ...newExpense, amount: amt });
+                          }}
                           placeholder="0.00"
                           min={0}
                           step={0.01}
                           precision={2}
                           required
                         />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Total amount paid for all units
+                        </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency *</label>
-                        <select
-                          value={newExpense.currency}
-                          onChange={(e) => setNewExpense({ ...newExpense, currency: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          aria-label="Select currency"
-                        >
-                          {currencies.map(currency => (
-                            <option key={currency.value} value={currency.value}>{currency.label}</option>
-                          ))}
-                        </select>
+                        <NumberInput
+                          label="Cost per Unit"
+                          value={calculateCostPerUnit(newExpense.amount, newExpense.quantity)}
+                          onChange={(value) => {
+                            const costPerUnit = typeof value === 'number' ? value : parseFloat(value) || 0;
+                            // When cost per unit changes, recalculate total amount
+                            const newAmount = calculateTotalAmount(costPerUnit, newExpense.quantity);
+                            setNewExpense({ ...newExpense, amount: newAmount });
+                          }}
+                          placeholder="0.00"
+                          min={0}
+                          step={0.01}
+                          precision={4}
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Automatically calculated from total amount ÷ quantity
+                        </p>
                       </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency *</label>
+                      <select
+                        value={newExpense.currency}
+                        onChange={(e) => setNewExpense({ ...newExpense, currency: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        aria-label="Select currency"
+                      >
+                        {currencies.map(currency => (
+                          <option key={currency.value} value={currency.value}>{currency.label}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -1149,7 +1328,13 @@ export const Expenses: React.FC = () => {
                         <NumberInput
                           label="Quantity *"
                           value={showEditExpense?.quantity || 0}
-                          onChange={(value) => showEditExpense && setShowEditExpense({ ...showEditExpense, quantity: typeof value === 'number' ? value : parseFloat(String(value)) || 0 })}
+                          onChange={(value) => {
+                            if (showEditExpense) {
+                              const qty = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+                              // When quantity changes, cost per unit is automatically recalculated
+                              setShowEditExpense({ ...showEditExpense, quantity: qty });
+                            }
+                          }}
                           placeholder="Enter quantity"
                           min={0}
                           step={0.01}
@@ -1175,29 +1360,60 @@ export const Expenses: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <NumberInput
-                          label="Amount *"
+                          label="Total Amount *"
                           value={showEditExpense?.amount || 0}
-                          onChange={(value) => showEditExpense && setShowEditExpense({ ...showEditExpense, amount: typeof value === 'number' ? value : parseFloat(String(value)) || 0 })}
+                          onChange={(value) => {
+                            if (showEditExpense) {
+                              const amt = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+                              // When total amount changes, cost per unit is automatically recalculated
+                              setShowEditExpense({ ...showEditExpense, amount: amt });
+                            }
+                          }}
                           placeholder="0.00"
                           min={0}
                           step={0.01}
                           precision={2}
                           required
                         />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Total amount paid for all units
+                        </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency *</label>
-                        <select
-                          value={showEditExpense?.currency || ''}
-                          onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, currency: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          aria-label="Select currency"
-                        >
-                          {currencies.map(currency => (
-                            <option key={currency.value} value={currency.value}>{currency.label}</option>
-                          ))}
-                        </select>
+                        <NumberInput
+                          label="Cost per Unit"
+                          value={showEditExpense ? calculateCostPerUnit(showEditExpense.amount, showEditExpense.quantity) : 0}
+                          onChange={(value) => {
+                            if (showEditExpense) {
+                              const costPerUnit = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+                              // When cost per unit changes, recalculate total amount
+                              const newAmount = calculateTotalAmount(costPerUnit, showEditExpense.quantity);
+                              setShowEditExpense({ ...showEditExpense, amount: newAmount });
+                            }
+                          }}
+                          placeholder="0.00"
+                          min={0}
+                          step={0.01}
+                          precision={4}
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Automatically calculated from total amount ÷ quantity
+                        </p>
                       </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency *</label>
+                      <select
+                        value={showEditExpense?.currency || ''}
+                        onChange={(e) => showEditExpense && setShowEditExpense({ ...showEditExpense, currency: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:border-gray-400 dark:focus:border-gray-500 transition-colors duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        aria-label="Select currency"
+                      >
+                        {currencies.map(currency => (
+                          <option key={currency.value} value={currency.value}>{currency.label}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -1315,6 +1531,15 @@ export const Expenses: React.FC = () => {
         size="lg"
         position="bottom-right"
       />
+
+        {/* Price Suggestion Modal */}
+        <PriceSuggestionModal
+          isOpen={showPriceSuggestionModal}
+          onClose={handlePriceSuggestionClose}
+          suggestion={priceSuggestion}
+          onUpdatePrice={handleUpdateProductPrice}
+          expenseId={priceSuggestionExpenseId || undefined}
+        />
     </>
   );
 };

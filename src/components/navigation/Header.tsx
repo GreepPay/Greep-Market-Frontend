@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, LogOut, Settings } from 'lucide-react';
+import { Bell, User, LogOut, Settings, Store, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useStore } from '../../context/StoreContext';
@@ -12,15 +12,17 @@ import { EnhancedNotificationDropdown } from '../ui/EnhancedNotificationDropdown
 
 export const Header: React.FC = () => {
   const { user, logout, isLoading: authLoading } = useAuth();
-  const { currentStore } = useStore();
+  const { currentStore, stores, switchStore, isLoading: storesLoading } = useStore();
   const { notifications, markAsRead, markAllAsRead, clearAll, toggleExpand, unreadCount, refreshNotifications, isLoading } = useNotifications();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
   
   // Refs for click-outside detection
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const storeSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Handle click outside to close dropdowns
   useEffect(() => {
@@ -34,10 +36,15 @@ export const Header: React.FC = () => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
+      
+      // Close store switcher if clicked outside
+      if (storeSwitcherRef.current && !storeSwitcherRef.current.contains(event.target as Node)) {
+        setShowStoreSwitcher(false);
+      }
     };
 
     // Add event listener when dropdowns are open
-    if (showUserMenu || showNotifications) {
+    if (showUserMenu || showNotifications || showStoreSwitcher) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
@@ -45,7 +52,7 @@ export const Header: React.FC = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showUserMenu, showNotifications]);
+  }, [showUserMenu, showNotifications, showStoreSwitcher]);
 
   const handleLogout = () => {
     logout();
@@ -63,13 +70,77 @@ export const Header: React.FC = () => {
         <div className="flex items-center space-x-3">
           <img src="/icons/GreepMarket-Green_BG-White.svg" alt="Greep Market" className="h-12 w-12 text-white" />
           
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              {currentStore?.name || app.name}
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {currentStore?.address || 'Retail Management System'}
-            </p>
+          <div className="relative" ref={storeSwitcherRef}>
+            <button
+              onClick={() => stores.length > 1 && setShowStoreSwitcher(!showStoreSwitcher)}
+              className={`flex items-center space-x-2 text-left hover:opacity-80 transition-opacity ${
+                stores.length > 1 ? 'cursor-pointer' : 'cursor-default'
+              }`}
+              disabled={stores.length <= 1 || storesLoading}
+            >
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {currentStore?.name || app.name}
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {currentStore?.address || 'Retail Management System'}
+                </p>
+              </div>
+              {stores.length > 1 && (
+                <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${
+                  showStoreSwitcher ? 'transform rotate-180' : ''
+                }`} />
+              )}
+            </button>
+            
+            {/* Store Switcher Dropdown */}
+            {showStoreSwitcher && stores.length > 1 && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+                <div className="p-2">
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                    Switch Store
+                  </div>
+                  {stores.map((store) => (
+                    <button
+                      key={store._id}
+                      onClick={() => {
+                        if (store._id !== currentStore?._id) {
+                          switchStore(store._id);
+                        }
+                        setShowStoreSwitcher(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                        store._id === currentStore?._id
+                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
+                      }`}
+                    >
+                      <div className="font-medium">{store.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {store.address}
+                      </div>
+                      {store._id === currentStore?._id && (
+                        <div className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                          Current Store
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => {
+                        navigate('/settings?tab=store-management');
+                        setShowStoreSwitcher(false);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm flex items-center space-x-2"
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>Manage Stores</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

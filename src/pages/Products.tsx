@@ -44,6 +44,8 @@ export const Products: React.FC = () => {
     name: '',
     barcode: '',
     price: '',
+    cost_price: '',
+    markup_percentage: '',
     category: '',
     unit: 'piece',
     stock_quantity: '',
@@ -59,6 +61,8 @@ export const Products: React.FC = () => {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [isPriceUpdateModalOpen, setIsPriceUpdateModalOpen] = useState(false);
   const [isPriceHistoryModalOpen, setIsPriceHistoryModalOpen] = useState(false);
   const [priceUpdateProduct, setPriceUpdateProduct] = useState<Product | null>(null);
@@ -70,6 +74,8 @@ export const Products: React.FC = () => {
       name: '',
       barcode: '',
       price: '',
+      cost_price: '',
+      markup_percentage: '',
       category: '',
       unit: 'piece',
       stock_quantity: '',
@@ -264,15 +270,24 @@ export const Products: React.FC = () => {
   };
 
   const handleExportProducts = async () => {
+    // Prevent multiple clicks
+    if (isExporting) return;
+    
+    setIsExporting(true);
     try {
       await exportProducts();
     } catch (error) {
       console.error('Export products error:', error);
       // Error message is already shown by the exportProducts function
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const handleImportProducts = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Prevent multiple clicks
+    if (isImporting) return;
+    
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -282,18 +297,23 @@ export const Products: React.FC = () => {
       return;
     }
 
+    setIsImporting(true);
     try {
       await importProducts(file);
     } catch (error) {
       console.error('Import products error:', error);
       // Error message is already shown by the importProducts function
     } finally {
+      setIsImporting(false);
       // Reset the file input
       event.target.value = '';
     }
   };
 
   const handleAddProduct = async (formData: any, images: File[]) => {
+    // Prevent multiple submissions
+    if (isSubmitting) return;
+    
     setIsSubmitting(true);
     try {
       // Generate SKU if not provided
@@ -303,6 +323,8 @@ export const Products: React.FC = () => {
         name: formData.name,
         description: formData.description || '',
         price: parseFloat(formData.price),
+        cost_price: formData.cost_price ? parseFloat(formData.cost_price) : undefined,
+        markup_percentage: formData.markup_percentage ? parseFloat(formData.markup_percentage) : undefined,
         category: normalizeCategoryName(formData.category),
         sku: sku,
         barcode: formData.barcode || undefined,
@@ -373,6 +395,8 @@ export const Products: React.FC = () => {
       name: product.name,
       barcode: product.barcode || '',
       price: product.price.toString(),
+      cost_price: product.cost_price?.toString() || '',
+      markup_percentage: product.markup_percentage?.toString() || '',
       category: product.category,
       unit: product.unit,
       stock_quantity: product.stock_quantity.toString(),
@@ -387,6 +411,9 @@ export const Products: React.FC = () => {
   };
 
   const handleUpdateProduct = async () => {
+    // Prevent multiple submissions
+    if (isSubmitting) return;
+    
     if (!editingProduct || !newProduct.name || !newProduct.price) {
       toast.error('Please fill in all required fields (Name, Price)');
       return;
@@ -398,6 +425,8 @@ export const Products: React.FC = () => {
         name: newProduct.name,
         description: newProduct.description || '',
         price: parseFloat(newProduct.price),
+        cost_price: newProduct.cost_price ? parseFloat(newProduct.cost_price) : undefined,
+        markup_percentage: newProduct.markup_percentage ? parseFloat(newProduct.markup_percentage) : undefined,
         category: normalizeCategoryName(newProduct.category),
         sku: newProduct.sku,
         barcode: newProduct.barcode || undefined,
@@ -551,6 +580,8 @@ export const Products: React.FC = () => {
                   variant="outline"
                     size="md"
                   className="flex-shrink-0"
+                  disabled={isExporting}
+                  loading={isExporting}
                 >
                     <Download className="h-4 w-4 mr-2" />
                     Export
@@ -947,15 +978,56 @@ export const Products: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
               Pricing & Inventory
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <NumberInput
-                label="Price (₺) *"
+                label="Selling Price (₺) *"
                 value={newProduct.price}
-                onChange={(value) => setNewProduct({ ...newProduct, price: String(value) })}
+                onChange={(value) => {
+                  const costPrice = parseFloat(newProduct.cost_price || '0');
+                  const sellingPrice = parseFloat(String(value));
+                  let markup = newProduct.markup_percentage;
+                  
+                  if (costPrice > 0 && sellingPrice > 0) {
+                    markup = (((sellingPrice - costPrice) / costPrice) * 100).toFixed(2);
+                  }
+                  
+                  setNewProduct({ ...newProduct, price: String(value), markup_percentage: markup });
+                }}
                 placeholder="0.00"
                 required
                 precision={2}
                 step={0.01}
+              />
+              <NumberInput
+                label="Cost Price (₺)"
+                value={newProduct.cost_price}
+                onChange={(value) => {
+                  const costPrice = parseFloat(String(value));
+                  const sellingPrice = parseFloat(newProduct.price || '0');
+                  let markup = newProduct.markup_percentage;
+                  
+                  if (costPrice > 0 && sellingPrice > 0) {
+                    markup = (((sellingPrice - costPrice) / costPrice) * 100).toFixed(2);
+                  } else if (costPrice === 0 || sellingPrice === 0) {
+                    markup = '';
+                  }
+                  
+                  setNewProduct({ ...newProduct, cost_price: String(value), markup_percentage: markup });
+                }}
+                placeholder="0.00"
+                precision={2}
+                step={0.01}
+                helperText="Purchase price per unit"
+              />
+              <NumberInput
+                label="Markup (%)"
+                value={newProduct.markup_percentage}
+                onChange={(value) => setNewProduct({ ...newProduct, markup_percentage: String(value) })}
+                placeholder="Auto-calculated"
+                precision={2}
+                step={0.01}
+                helperText={newProduct.cost_price && newProduct.price ? "Auto-calculated" : "Enter manually"}
+                disabled={!!(newProduct.cost_price && newProduct.price)}
               />
               <NumberInput
                 label="Stock Quantity"
@@ -964,6 +1036,8 @@ export const Products: React.FC = () => {
                 placeholder="0"
                 min={0}
               />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <NumberInput
                 label="Minimum Stock Level"
                 value={newProduct.min_stock_level}
